@@ -37,20 +37,24 @@ and pushed**. See `docs/TEST-RESULTS.md` for the full end-to-end test log and
 | Diagnostics speed | ✅ page renders instantly; the 7 checks run in parallel (`/diagnostics/run` JSON) and fill in ~3s (was ~7s serial) |
 | Multi-touch follow-up drip | ✅ cadence measured **from the cold intro** (default days 3/7/14), 1-day floor between touches, breakup email last, auto-stops on any reply or booking |
 | Lead priority score | ✅ optional `Priority` sheet column, else computed; orders the send queue under the daily cap |
-| Run-now panel | ✅ dashboard buttons trigger cold/follow-up/reminder/reply-scan jobs in a background thread + live log tail (follow-ups honour the enable + per-run cap) |
+| Run-now panel | ✅ dashboard buttons trigger cold/follow-up/reminder/reply-scan jobs in a background thread; shows a plain-English **activity feed** (not the raw log) that refreshes after a run |
+| Confirmations | ✅ every "are you sure" is an in-app themed `<dialog>` glass modal (`window.confirmDialog`) — no raw browser `window.confirm` anywhere |
+| Activity log | ✅ `/logs` page + `/activity` JSON: friendly sentences from send history grouped by day, with the raw log tucked into a collapsible "Technical log" |
+| No console flash | ✅ scheduled tasks (frozen) launch via a hidden `run-hidden.vbs` wscript wrapper; `desktop.py` hides the console before the readiness poll |
 | Code review | ✅ full-app review applied — 7 findings fixed (commit `8ae6192`) |
 | Reply handling + auto-booking | ✅ verified live: reply → classify → draft → approve → real Calendar event + confirmation email |
 | `.exe` build | rebuilt on 2026-08-27 with all of the above (`build.ps1`) |
-| Tests | **188 passing**, network-free (`python -m pytest tests/`) |
+| Tests | **199 passing**, network-free (`python -m pytest tests/`) |
 
 ## How it's built (`outreach/` package)
 
 | File | What it does |
 |---|---|
 | `__main__.py` | Single entry point (`python -m outreach` / `FreightOutreach.exe`): no args → native window; `--web` → browser; `--cold` / `--followup` / `--reminders` / `--replies` / `--selfcheck`. |
-| `desktop.py` | Runs the dashboard as a native window: Flask in a daemon thread, pywebview window on the main thread. Fallback chain: pywebview → chromeless Edge/Chrome `--app` → browser tab. Hides the console in GUI mode. |
+| `desktop.py` | Runs the dashboard as a native window: Flask in a daemon thread, pywebview window on the main thread. Fallback chain: pywebview → chromeless Edge/Chrome `--app` → browser tab. Hides the console in GUI mode **immediately after the server thread starts** (before the readiness poll), so a slow cold start doesn't flash a black window. |
+| `schedule_task.py` | Registers the hourly Windows scheduled tasks. Frozen build: writes `run-hidden.vbs` into the data dir and points the task's `/TR` at `wscript.exe //B run-hidden.vbs <flag>` so a `console=True` exe never flashes on fire. Source checkout: `pythonw -m outreach`. |
 | `shortcut.py` | Best-effort Desktop + Start-Menu `.lnk` creation (pywin32), once, on first frozen run. |
-| `web/` | The Flask dashboard - `app.py` (routes + the background "Run now" job runner) + `templates/` (8 pages) + `static/style.css` (self-contained, no CDN). |
+| `web/` | The Flask dashboard - `app.py` (routes + the background "Run now" job runner + `/activity` feed builder `_activity_items` / `_relative_time`) + `templates/` (9 pages, incl. `logs.html`) + `static/style.css` (self-contained, no CDN; `.modal` + `.activity` components). |
 | `core.py` | Shared logic: `cold_candidates` / `reminder_candidates` / `followup_candidates`, the daily-cap trim (`apply_daily_cap` + `priority_sort_key`), and the send loops (`send_cold_batch` / `send_reminder_batch` / `send_followup_batch`). CLI and dashboard both call this. |
 | `scoring.py` | `score_lead()` - a numeric `Priority` cell wins; otherwise a small score from company/phone/notes-keyword rules in `config.json`. |
 | `send_cold.py` / `send_reminders.py` / `send_followups.py` | The headless batch entry points. `--reminders` also runs the follow-up pass. |
