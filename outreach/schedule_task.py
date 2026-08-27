@@ -17,13 +17,38 @@ def _python_for_task():
     return str(pythonw) if pythonw.exists() else str(exe)
 
 
+def _hidden_launcher_path():
+    from outreach.paths import data_dir
+
+    return data_dir() / "run-hidden.vbs"
+
+
+def _write_hidden_launcher(target):
+    """Write a tiny VBScript that launches `target` with no console window.
+
+    Task Scheduler runs the .exe directly otherwise, and a console=True build
+    flashes a black window every time the task fires. wscript running this VBS
+    with `0, False` starts the real process hidden and doesn't wait.
+    """
+    path = _hidden_launcher_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    vbs = (
+        'Set sh = CreateObject("WScript.Shell")\r\n'
+        f'sh.Run """{target}"" " & WScript.Arguments(0), 0, False\r\n'
+    )
+    path.write_text(vbs, encoding="utf-8")
+    return path
+
+
 def _task_command(cli_flag):
     """The command a scheduled task should run to do a headless scan.
 
-    Frozen build: the .exe itself with the flag. Source checkout: pythonw -m outreach.
+    Frozen build: a hidden-launch VBS wrapper around the .exe, so the task never
+    flashes a console. Source checkout: pythonw -m outreach (already console-less).
     """
     if getattr(sys, "frozen", False):
-        return f'"{Path(sys.executable).resolve()}" {cli_flag}'
+        vbs = _write_hidden_launcher(Path(sys.executable).resolve())
+        return f'wscript.exe //nologo //B "{vbs}" {cli_flag}'
     return f'"{_python_for_task()}" -m outreach {cli_flag}'
 
 

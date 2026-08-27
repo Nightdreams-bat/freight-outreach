@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}Activity log{% endblock %}
+{% block content %}
+
+{%- set icons = {
+  "send": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/></svg>',
+  "nudge": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3 21 7l-4 4M3 11V9a4 4 0 0 1 4-4h14M7 21l-4-4 4-4M21 13v2a4 4 0 0 1-4 4H3"/></svg>',
+  "clock": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
+  "reply": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>'
+} -%}
+{%- set tones = {"clock": "amber", "nudge": "slate"} -%}
+
+<p class="subtitle">
+  A plain record of everything the app has done. The technical log at the bottom is
+  timestamped detail for troubleshooting — you don't normally need it.
+</p>
+
+<div class="card">
+  <h2>Activity</h2>
+  {% if not items %}
+  <div class="activity-empty">Nothing has been sent yet.</div>
+  {% else %}
+  <div class="activity">
+    {% set ns = namespace(day="") %}
+    {% for it in items %}
+      {% if it.day != ns.day %}
+        {% set ns.day = it.day %}
+        <div class="activity-day">{{ it.day }}</div>
+      {% endif %}
+      <div class="activity-row">
+        <span class="ic {{ tones.get(it.icon, '') }}">{{ icons.get(it.icon, icons['send'])|safe }}</span>
+        <span class="txt">{{ it.text }}</span>
+        <span class="ago">{{ it.ago }}</span>
+      </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+
+<div class="card">
+  <details>
+    <summary class="muted" style="cursor:pointer;font-size:13px">Technical log</summary>
+    <p class="muted" style="font-size:12px;margin:10px 0">
+      Raw, timestamped detail. Safe to copy and send to whoever set this tool up if
+      something isn't working.
+    </p>
+    <div class="btn-row" style="margin-bottom:8px">
+      <button type="button" class="btn sm" id="copyLog">Copy</button>
+    </div>
+    <pre class="logtail" id="logTail">Loading…</pre>
+  </details>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  var pre = document.getElementById("logTail");
+  var btn = document.getElementById("copyLog");
+  var loaded = false;
+  function load() {
+    if (loaded) return;
+    loaded = true;
+    fetch("{{ url_for('logs_tail') }}").then(function (r) { return r.text(); })
+      .then(function (t) { pre.textContent = t; pre.scrollTop = pre.scrollHeight; })
+      .catch(function () { pre.textContent = "(could not load the log)"; });
+  }
+  var details = pre.closest("details");
+  details.addEventListener("toggle", function () { if (details.open) load(); });
+  btn.addEventListener("click", function () {
+    navigator.clipboard.writeText(pre.textContent).then(function () {
+      btn.textContent = "Copied";
+      setTimeout(function () { btn.textContent = "Copy"; }, 1500);
+    });
+  });
+})();
+</script>
+{% endblock %}

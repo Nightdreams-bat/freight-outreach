@@ -56,7 +56,8 @@ def client(monkeypatch, tmp_path):
 
 
 GET_ROUTES = ["/", "/leads", "/send", "/replies", "/history", "/diagnostics",
-              "/diagnostics/run", "/blocklist", "/settings", "/run/status", "/logs/tail"]
+              "/diagnostics/run", "/blocklist", "/settings", "/run/status", "/logs/tail",
+              "/activity", "/logs"]
 
 POST_ROUTES = [
     ("/leads/2/suppress", {}),
@@ -96,6 +97,33 @@ def test_followup_offsets_parse_ignores_junk_and_sub_one(client):
                 follow_redirects=True)
     # non-numbers and values < 1 dropped; result sorted ascending
     assert web_app.load_config()["followup_offsets_days"] == [2, 5, 9]
+
+
+def test_relative_time_buckets():
+    from datetime import datetime, timedelta
+
+    now = datetime.now()
+    fmt = "%Y-%m-%d %H:%M:%S"
+    assert web_app._relative_time((now - timedelta(seconds=10)).strftime(fmt)) == "just now"
+    assert web_app._relative_time((now - timedelta(minutes=5)).strftime(fmt)) == "5 min ago"
+    assert web_app._relative_time((now - timedelta(hours=3)).strftime(fmt)) == "3 h ago"
+    assert web_app._relative_time((now - timedelta(days=1, hours=2)).strftime(fmt)) == "yesterday"
+    assert web_app._relative_time("garbage") == ""
+
+
+def test_activity_items_friendly_text(monkeypatch):
+    monkeypatch.setattr(web_app, "recent_history", lambda limit=12: [
+        {"timestamp": "2026-08-27 10:00:00", "kind": "followup", "email": "o@x.com",
+         "name": "Owen Reyes", "company": "Tri-State Haul", "subject": "re: lanes"},
+        {"timestamp": "2026-08-27 09:00:00", "kind": "reply", "email": "a@x.com",
+         "name": "Ann", "company": "C", "subject": "Pricing?"},
+    ])
+    items = web_app._activity_items()
+    assert items[0]["text"].startswith("Follow-up nudge sent to Owen Reyes")
+    assert "Tri-State Haul" in items[0]["text"]
+    assert items[0]["icon"] == "nudge"
+    assert items[1]["text"].startswith("Reply handled")
+    assert "Pricing?" in items[1]["text"]
 
 
 def test_run_job_followups_noop_when_drip_disabled(monkeypatch):

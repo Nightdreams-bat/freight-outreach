@@ -8,7 +8,7 @@
     <div class="spacer"></div>
     {% if cold %}
     <form method="post" action="{{ url_for('send_cold_now') }}" class="inline"
-          data-confirm="Send {{ cold|length }} cold intro email(s) now?">
+          data-confirm="This sends the cold intro email to {{ cold|length }} lead(s) right now." data-confirm-ok="Send now">
       <button type="submit" class="btn primary">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/></svg> Send now
       </button>
@@ -39,7 +39,7 @@
     <div class="spacer"></div>
     {% if followups and followup_enabled %}
     <form method="post" action="{{ url_for('send_followups_now') }}" class="inline"
-          data-confirm="Send {{ followups|length }} follow-up nudge(s) now?">
+          data-confirm="This sends a follow-up nudge to {{ followups|length }} lead(s) right now." data-confirm-ok="Send now">
       <button type="submit" class="btn primary">Send follow-ups</button>
     </form>
     {% endif %}
@@ -78,7 +78,7 @@
     <div class="spacer"></div>
     {% if reminders %}
     <form method="post" action="{{ url_for('send_reminders_now') }}" class="inline"
-          data-confirm="Send {{ reminders|length }} reminder(s) now?">
+          data-confirm="This sends a call reminder to {{ reminders|length }} lead(s) right now." data-confirm-ok="Send now">
       <button type="submit" class="btn">Run reminder check</button>
     </form>
     {% endif %}

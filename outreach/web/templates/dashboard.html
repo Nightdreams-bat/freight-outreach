@@ -57,18 +57,27 @@
     <span class="muted" style="font-size:12px">Also runs on the hourly scheduled task</span>
   </div>
   <div class="btn-row" id="runButtons">
-    <button class="btn primary" data-action="cold" data-confirm="Send cold intro emails now?">
+    <button class="btn primary" data-action="cold"
+            data-confirm="This sends the cold intro email to every lead currently queued, right now."
+            data-confirm-ok="Send cold intros">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/></svg> Cold intros
     </button>
-    <button class="btn" data-action="followups" data-confirm="Send due follow-up nudges now?">Follow-ups</button>
+    <button class="btn" data-action="followups"
+            data-confirm="This sends a follow-up nudge to every lead that is due one, right now."
+            data-confirm-ok="Send follow-ups">Follow-ups</button>
     <button class="btn" data-action="reminders">Reminder check</button>
     <button class="btn" data-action="replies">Scan replies</button>
   </div>
   <div class="runstatus" id="runStatus" style="display:none"><span class="pulse"></span> <span id="runStatusText"></span></div>
-  <details id="logBox">
-    <summary class="muted" style="font-size:12px;cursor:pointer;margin-top:6px">Show recent log</summary>
-    <pre class="logtail" id="logTail" style="margin-top:8px">(loading…)</pre>
-  </details>
+
+  <div class="card-head" style="margin-top:18px">
+    <h2 style="font-size:13px">Recent activity</h2>
+    <div class="spacer"></div>
+    <a href="{{ url_for('logs_page') }}" class="muted" style="font-size:12px">Full activity &amp; technical log</a>
+  </div>
+  <div class="activity" id="activityList">
+    <div class="activity-empty">Loading…</div>
+  </div>
 </div>
 
 <div class="card">
@@ -89,18 +98,46 @@
   var buttons = document.querySelectorAll("#runButtons button");
   var statusBox = document.getElementById("runStatus");
   var statusText = document.getElementById("runStatusText");
-  var logTail = document.getElementById("logTail");
-  var logBox = document.getElementById("logBox");
+  var activityList = document.getElementById("activityList");
   var polling = null;
   var startedThisSession = false;
+
+  var ICONS = {
+    send: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/></svg>',
+    nudge: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3 21 7l-4 4M3 11V9a4 4 0 0 1 4-4h14M7 21l-4-4 4-4M21 13v2a4 4 0 0 1-4 4H3"/></svg>',
+    clock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
+    reply: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
+  };
+  var ICON_TONE = { clock: "amber", nudge: "slate" };
 
   function setButtons(disabled) {
     buttons.forEach(function (b) { b.disabled = disabled; });
   }
 
-  function refreshLog() {
-    fetch("{{ url_for('logs_tail') }}").then(function (r) { return r.text(); })
-      .then(function (t) { logTail.textContent = t; logTail.scrollTop = logTail.scrollHeight; });
+  function refreshActivity() {
+    fetch("{{ url_for('activity') }}").then(function (r) { return r.json(); })
+      .then(function (items) {
+        if (!items.length) {
+          activityList.innerHTML = '<div class="activity-empty">Nothing has been sent yet.</div>';
+          return;
+        }
+        activityList.innerHTML = items.slice(0, 6).map(function (it) {
+          var tone = ICON_TONE[it.icon] ? " " + ICON_TONE[it.icon] : "";
+          var row = document.createElement("div");
+          row.className = "activity-row";
+          var txt = document.createElement("span");
+          txt.className = "txt";
+          txt.textContent = it.text;
+          row.innerHTML = '<span class="ic' + tone + '">' + (ICONS[it.icon] || ICONS.send) + '</span>';
+          row.appendChild(txt);
+          var ago = document.createElement("span");
+          ago.className = "ago";
+          ago.textContent = it.ago;
+          row.appendChild(ago);
+          return row.outerHTML;
+        }).join("");
+      })
+      .catch(function () {});
   }
 
   function render(job) {
@@ -117,7 +154,7 @@
       statusText.textContent = (job.summary || job.status) + (job.finished ? "  ·  " + job.finished : "");
       setButtons(false);
       if (polling) { clearInterval(polling); polling = null; }
-      refreshLog();
+      refreshActivity();
     }
   }
 
@@ -125,25 +162,31 @@
     fetch("{{ url_for('run_status') }}").then(function (r) { return r.json(); }).then(render);
   }
 
+  function startRun(btn) {
+    startedThisSession = true;
+    setButtons(true);
+    fetch("/run/" + btn.getAttribute("data-action"), { method: "POST" })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        render(data.job);
+        if (!polling) polling = setInterval(poll, 2000);
+      })
+      .catch(function () { setButtons(false); });
+  }
+
   buttons.forEach(function (btn) {
     btn.addEventListener("click", function () {
       var msg = btn.getAttribute("data-confirm");
-      if (msg && !window.confirm(msg)) return;
-      startedThisSession = true;
-      setButtons(true);
-      fetch("/run/" + btn.getAttribute("data-action"), { method: "POST" })
-        .then(function (r) { return r.json(); })
-        .then(function (data) {
-          render(data.job);
-          logBox.open = true;
-          if (!polling) polling = setInterval(poll, 2000);
-        })
-        .catch(function () { setButtons(false); });
+      if (!msg) { startRun(btn); return; }
+      confirmDialog({
+        body: msg,
+        ok: btn.getAttribute("data-confirm-ok"),
+      }).then(function (go) { if (go) startRun(btn); });
     });
   });
 
   poll();
-  logBox.addEventListener("toggle", function () { if (logBox.open) refreshLog(); });
+  refreshActivity();
 })();
 </script>
 {% endblock %}

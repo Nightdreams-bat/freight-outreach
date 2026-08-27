@@ -120,9 +120,11 @@ def _maybe_create_shortcuts():
 
 def run_desktop():
     thread, url = _start_server()
+    # Hide the console straight away - the server thread is up, and waiting on the
+    # HTTP poll below can take several seconds on a cold start (black window flash).
+    _hide_console()
     if not _wait_until_up(url):
         log.error("Dashboard server didn't come up in time.")
-    _hide_console()
     _maybe_create_shortcuts()
 
     if _try_native_window(url):

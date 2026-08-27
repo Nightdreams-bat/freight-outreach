@@ -61,7 +61,8 @@
 
     <div class="btn-row">
       <form method="post" action="{{ url_for('reply_approve', qid=item.id) }}" class="inline"
-            data-confirm="{% if a.kind == 'book' %}Book the meeting and send the confirmation?{% else %}Send this email now?{% endif %}">
+            data-confirm="{% if a.kind == 'book' %}This creates the calendar event and emails {{ item.lead_name or 'the lead' }} the confirmation.{% else %}This sends the email to {{ item.lead_name or 'the lead' }} now.{% endif %}"
+            data-confirm-ok="{% if a.kind == 'book' %}Approve &amp; book{% elif a.kind == 'propose' %}Send proposal{% else %}Send{% endif %}">
         <button class="btn primary" type="submit">
           {% if a.kind == "book" %}Approve &amp; book{% elif a.kind == "propose" %}Send proposal{% else %}Send{% endif %}
         </button>

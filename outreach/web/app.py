@@ -5,7 +5,7 @@ from datetime import datetime
 
 from flask import Flask, flash, jsonify, redirect, render_template, request, url_for
 
-from outreach import reply_queue
+from outreach import lead_sourcing, reply_queue, templates
 from outreach.config import get as cfg_get
 from outreach.config import load_config, save_config
 from outreach.credentials import get_anthropic_key, set_anthropic_key
@@ -105,6 +105,56 @@ def _run_job(action):
             _JOB["finished"] = datetime.now().strftime("%H:%M:%S")
 
 
+def _relative_time(ts):
+    """'2026-08-27 14:05:01' -> 'just now' / '5 min ago' / '3 h ago' / 'yesterday' / 'Aug 25'."""
+    try:
+        when = datetime.strptime(ts, "%Y-%m-%d %H:%M:%S")
+    except (ValueError, TypeError):
+        return ""
+    delta = datetime.now() - when
+    secs = delta.total_seconds()
+    if secs < 0:
+        return "just now"
+    if secs < 90:
+        return "just now"
+    if secs < 3600:
+        return f"{int(secs // 60)} min ago"
+    if secs < 86400:
+        return f"{int(secs // 3600)} h ago"
+    if secs < 172800:
+        return "yesterday"
+    if secs < 604800:
+        return f"{int(secs // 86400)} days ago"
+    return when.strftime("%b %d")
+
+
+def _activity_items(limit=12):
+    """Human-readable feed built from the send history."""
+    labels = {
+        "cold": ("send", "Cold intro emailed to {who}"),
+        "followup": ("nudge", "Follow-up nudge sent to {who}"),
+        "reminder": ("clock", "Call reminder sent to {who}"),
+        "reply": ("reply", "Reply handled — {subject}"),
+    }
+    out = []
+    for e in recent_history(limit):
+        kind = e.get("kind", "")
+        icon, template = labels.get(kind, ("send", "{who}"))
+        name = (e.get("name") or "").strip()
+        company = (e.get("company") or "").strip()
+        who = name or e.get("email") or "a lead"
+        if company and kind != "reply":
+            who = f"{who} — {company}"
+        text = template.format(who=who, subject=(e.get("subject") or "no subject"))
+        out.append({
+            "icon": icon,
+            "text": text,
+            "ago": _relative_time(e.get("timestamp", "")),
+            "day": (e.get("timestamp") or "")[:10],
+        })
+    return out
+
+
 def create_app():
     app = Flask(
         __name__,
@@ -126,6 +176,7 @@ def create_app():
             "blocklist_page": "blocklist",
             "diagnostics_page": "diagnostics",
             "settings": "settings",
+            "logs_page": "logs",
         }
         active = endpoint_to_active.get(request.endpoint)
         try:
@@ -345,6 +396,14 @@ def create_app():
             return "(no log yet)", 200, {"Content-Type": "text/plain; charset=utf-8"}
         except OSError as e:
             return f"(log unavailable: {e})", 200, {"Content-Type": "text/plain; charset=utf-8"}
+
+    @app.route("/activity")
+    def activity():
+        return jsonify(_activity_items())
+
+    @app.route("/logs")
+    def logs_page():
+        return render_template("logs.html", items=_activity_items(limit=200))
 
     @app.route("/replies")
     def replies_page():

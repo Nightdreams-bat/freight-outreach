@@ -10,6 +10,15 @@
 
   <div id="cursor-glow"></div>
 
+  <dialog id="confirmModal" class="modal">
+    <h2 id="confirmTitle">Please confirm</h2>
+    <p id="confirmBody"></p>
+    <div class="modal-actions">
+      <button type="button" class="btn ghost" data-modal-cancel>Cancel</button>
+      <button type="button" class="btn primary" data-modal-ok>Confirm</button>
+    </div>
+  </dialog>
+
   <aside class="side">
     <div class="brand">
       <span class="mark">
@@ -21,41 +30,41 @@
     <nav class="nav">
       <a class="navitem {{ 'active' if active == 'dashboard' }}" href="{{ url_for('dashboard') }}">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>
-        Dashboard
+        <span class="label">Dashboard</span>
       </a>
       <a class="navitem {{ 'active' if active == 'leads' }}" href="{{ url_for('leads') }}">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-        Leads / CRM
+        <span class="label">Leads / CRM</span>
       </a>
       <a class="navitem {{ 'active' if active == 'send' }}" href="{{ url_for('send_page') }}">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
-        Send
+        <span class="label">Send</span>
       </a>
       <a class="navitem {{ 'active' if active == 'replies' }}" href="{{ url_for('replies_page') }}">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-        Replies
+        <span class="label">Replies</span>
         {% if pending_replies %}<span class="count">{{ pending_replies }}</span>{% endif %}
       </a>
       <a class="navitem {{ 'active' if active == 'history' }}" href="{{ url_for('history') }}">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><path d="M12 7v5l4 2"/></svg>
-        History
+        <span class="label">History</span>
       </a>
       <a class="navitem {{ 'active' if active == 'blocklist' }}" href="{{ url_for('blocklist_page') }}">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m4.5 4.5 15 15"/></svg>
-        Blocklist
+        <span class="label">Blocklist</span>
       </a>
       <a class="navitem {{ 'active' if active == 'diagnostics' }}" href="{{ url_for('diagnostics_page') }}">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
-        Diagnostics
+        <span class="label">Diagnostics</span>
       </a>
       <a class="navitem {{ 'active' if active == 'settings' }}" href="{{ url_for('settings') }}">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>
-        Settings
+        <span class="label">Settings</span>
       </a>
     </nav>
 
     <div class="side-foot">
-      <span class="dot"></span> Local only · 127.0.0.1
+      <span class="dot"></span> <span class="label">Local only · 127.0.0.1</span>
     </div>
   </aside>
 
@@ -130,10 +139,43 @@
       }, { passive: true });
     })();
 
-    // Confirm-on-submit for any form with data-confirm
+    // In-app confirmation modal (replaces window.confirm)
+    window.confirmDialog = function (opts) {
+      var d = document.getElementById("confirmModal");
+      if (!d || !d.showModal) {  // safety net for any environment without <dialog>
+        return Promise.resolve(window.confirm(opts.body || "Are you sure?"));
+      }
+      document.getElementById("confirmTitle").textContent = opts.title || "Please confirm";
+      document.getElementById("confirmBody").textContent = opts.body || "";
+      var ok = d.querySelector("[data-modal-ok]");
+      ok.textContent = opts.ok || "Confirm";
+      ok.className = "btn " + (opts.danger ? "danger" : "primary");
+      return new Promise(function (resolve) {
+        function done(v) {
+          d.removeEventListener("close", onClose);
+          resolve(v);
+        }
+        function onClose() { done(d.returnValue === "ok"); }
+        d.addEventListener("close", onClose, { once: true });
+        d.querySelector("[data-modal-ok]").onclick = function () { d.close("ok"); };
+        d.querySelector("[data-modal-cancel]").onclick = function () { d.close("cancel"); };
+        d.onclick = function (e) { if (e.target === d) d.close("cancel"); };  // backdrop
+        d.returnValue = "cancel";
+        d.showModal();
+      });
+    };
+
     document.querySelectorAll("form[data-confirm]").forEach(function (f) {
       f.addEventListener("submit", function (e) {
-        if (!window.confirm(f.getAttribute("data-confirm"))) e.preventDefault();
+        if (f.dataset.confirmed) { delete f.dataset.confirmed; return; }
+        e.preventDefault();
+        confirmDialog({
+          body: f.dataset.confirm,
+          ok: f.dataset.confirmOk,
+          danger: "confirmDanger" in f.dataset,
+        }).then(function (go) {
+          if (go) { f.dataset.confirmed = "1"; f.requestSubmit(); }
+        });
       });
     });
   </script>

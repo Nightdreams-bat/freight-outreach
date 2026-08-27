@@ -76,3 +76,25 @@ def test_task_status_parses_list_output(monkeypatch):
 
 def test_backcompat_alias():
     assert schedule_task.TASK_NAME == schedule_task.REMINDER_TASK_NAME
+
+
+def test_task_command_source_checkout_uses_pythonw(monkeypatch):
+    monkeypatch.setattr(schedule_task.sys, "frozen", False, raising=False)
+    cmd = schedule_task._task_command("--reminders")
+    assert cmd.endswith("-m outreach --reminders")
+
+
+def test_task_command_frozen_uses_hidden_wrapper(monkeypatch, tmp_path):
+    monkeypatch.setattr(schedule_task.sys, "frozen", True, raising=False)
+    monkeypatch.setattr(schedule_task.sys, "executable", str(tmp_path / "FreightOutreach.exe"))
+    monkeypatch.setattr("outreach.paths.data_dir", lambda: tmp_path)
+
+    cmd = schedule_task._task_command("--replies")
+
+    vbs = tmp_path / "run-hidden.vbs"
+    assert vbs.exists()
+    assert cmd.startswith("wscript.exe //nologo //B ")
+    assert str(vbs) in cmd
+    assert cmd.endswith("--replies")
+    body = vbs.read_text(encoding="utf-8")
+    assert "WScript.Shell" in body and ", 0, False" in body

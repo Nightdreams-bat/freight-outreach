@@ -114,7 +114,7 @@
       {% if task and task.registered %}
         <p style="margin:0 0 6px"><span class="badge done">Enabled</span></p>
         <p class="help" style="margin:0 0 8px">Status: {{ task.status }} · Next run: {{ task.next_run }}</p>
-        <form method="post" action="{{ url_for('automation_disable') }}" class="inline" data-confirm="Turn off automatic reminders?">
+        <form method="post" action="{{ url_for('automation_disable') }}" class="inline" data-confirm="Reminders and follow-ups will stop running automatically until you turn this back on." data-confirm-ok="Turn off" data-confirm-danger>
           <button type="submit" class="btn sm danger">Disable</button>
         </form>
       {% else %}
