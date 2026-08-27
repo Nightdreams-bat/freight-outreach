@@ -1,0 +1,221 @@
+{% extends "base.html" %}
+{% block title %}Settings{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <h1>Settings</h1>
+</div>
+
+<div class="content-card" style="max-width:960px" id="excel-file">
+  <h5 class="mb-3">Excel file</h5>
+  <div class="row align-items-center mb-1">
+    <div class="col-md-6">
+      <div class="d-flex align-items-center gap-2">
+        <code class="flex-grow-1 text-truncate">{{ cfg.excel_path }}</code>
+        <form method="post" action="{{ url_for('browse_excel') }}">
+          <button type="submit" class="btn btn-outline-dark btn-sm text-nowrap"><i class="bi bi-folder2-open"></i> Browse...</button>
+        </form>
+      </div>
+    </div>
+    <div class="col-md-6 text-muted small">
+      <strong>Excel file</strong> is the only place leads live - no database, nothing else to install or manage. Click Browse to point this at any <code>.xlsx</code> on this PC.
+    </div>
+  </div>
+</div>
+
+<div class="content-card" style="max-width:960px">
+  <h5 class="mb-3">Gmail account</h5>
+  <div class="row align-items-center mb-1">
+    <div class="col-md-6">
+      {% if cfg.gmail_address %}
+        <p class="mb-2">Connected as <strong>{{ cfg.gmail_address }}</strong></p>
+      {% else %}
+        <p class="mb-2 text-muted">Not connected yet</p>
+      {% endif %}
+      <form method="post" action="{{ url_for('connect_gmail') }}">
+        <button type="submit" class="btn btn-outline-dark btn-sm">
+          <i class="bi bi-google"></i> {{ "Reconnect" if cfg.gmail_address else "Connect Gmail" }}
+        </button>
+      </form>
+    </div>
+    <div class="col-md-6 text-muted small">
+      Opens the real Google sign-in screen in your browser - log in, click Allow, done.
+      <strong>Nothing is typed here</strong>: no password ever touches this app or this file.
+      Sign in once; it stays connected until you disconnect it.
+    </div>
+  </div>
+</div>
+
+<div class="content-card" style="max-width:960px">
+  <h5 class="mb-3">Automation</h5>
+  <div class="row align-items-start mb-1">
+    <div class="col-md-6">
+      {% if task and task.registered %}
+        <p><span class="badge text-bg-success badge-status mb-2">Enabled</span></p>
+        <p class="text-muted small">Status: {{ task.status }} &middot; Next run: {{ task.next_run }}</p>
+        <form method="post" action="{{ url_for('automation_disable') }}"
+              onsubmit="return confirm('Turn off automatic reminders?');">
+          <button type="submit" class="btn btn-outline-danger btn-sm">Disable</button>
+        </form>
+      {% else %}
+        <p><span class="badge text-bg-secondary badge-status mb-2">Not enabled</span></p>
+        <form method="post" action="{{ url_for('automation_enable') }}">
+          <button type="submit" class="btn btn-outline-success btn-sm">Enable automatic reminders</button>
+        </form>
+      {% endif %}
+    </div>
+    <div class="col-md-6 text-muted small">
+      When <strong>enabled</strong>, this checks every {{ cfg.reminder_interval_hours }} hour(s) for any lead
+      whose meeting is about 24 hours away and emails them a reminder automatically - it doesn't matter
+      whether that meeting was booked yesterday or a month from now, it fires on its own the day before,
+      with no manual step. Runs via Windows Task Scheduler, independent of this dashboard being open.
+    </div>
+  </div>
+</div>
+
+<form method="post">
+<div class="content-card" style="max-width:960px">
+  <h5 class="mb-3">Business details</h5>
+
+  <div class="row mb-3">
+    <div class="col-md-6">
+      <input class="form-control" name="sender_name" placeholder="Sender name" value="{{ cfg.sender_name or '' }}">
+    </div>
+    <div class="col-md-6 text-muted small pt-2">
+      <strong>Sender name</strong> is who the email is from - shows first in the recipient's inbox.
+    </div>
+  </div>
+
+  <div class="row mb-3">
+    <div class="col-md-6">
+      <input class="form-control" name="sender_company" placeholder="Company" value="{{ cfg.sender_company or '' }}">
+    </div>
+    <div class="col-md-6 text-muted small pt-2">
+      <strong>Company</strong> is appended to the From line right after your name (e.g. "Alex Carter - Carter Freight Solutions"), so recipients see the business, not just a bare Gmail address.
+    </div>
+  </div>
+
+  <div class="row mb-3">
+    <div class="col-md-6">
+      <input class="form-control" name="sender_phone" placeholder="Phone (optional)" value="{{ cfg.sender_phone or '' }}">
+    </div>
+    <div class="col-md-6 text-muted small pt-2">
+      <strong>Phone</strong> is entirely optional - leave it blank and it's skipped cleanly everywhere, no empty line left behind in the signature.
+    </div>
+  </div>
+
+  <div class="row mb-1">
+    <div class="col-md-6">
+      <textarea class="form-control" name="sender_pitch" rows="2" placeholder="One-line pitch">{{ cfg.sender_pitch or '' }}</textarea>
+    </div>
+    <div class="col-md-6 text-muted small pt-2">
+      <strong>Pitch</strong> is a short description of what you do - available as a variable in the templates below, not required to use it there.
+    </div>
+  </div>
+
+  <div class="row mt-3">
+    <div class="col-md-6 text-muted small">
+      From line preview: <strong id="fromPreview">-</strong>
+    </div>
+  </div>
+</div>
+
+<div class="content-card" style="max-width:960px">
+  <h5 class="mb-2">Email templates</h5>
+  <p class="text-muted small">
+    This is the actual email - written by you, in full. <strong>Every</strong> "Send Now" click uses exactly
+    this text, merging in each lead's own details. Variables: <code>{{ '{{ name }}' }}</code>, <code>{{ '{{ company }}' }}</code>,
+    <code>{{ '{{ phone }}' }}</code>, <code>{{ '{{ sender_name }}' }}</code>, <code>{{ '{{ sender_company }}' }}</code>,
+    <code>{{ '{{ sender_phone }}' }}</code>, <code>{{ '{{ sender_pitch }}' }}</code>
+    (reminders also get <code>{{ '{{ meeting_time }}' }}</code>). Wrap a line in
+    <code>{% raw %}{% if phone %}...{% endif %}{% endraw %}</code> and it's <strong>skipped entirely</strong> when that lead's field is empty - no blank line left behind.
+  </p>
+
+  <h6 class="mt-4">Cold intro</h6>
+  <div class="row mb-2">
+    <div class="col-md-6">
+      <input class="form-control" name="cold_subject_template" placeholder="Subject" value="{{ cfg.cold_subject_template or '' }}">
+    </div>
+    <div class="col-md-6 text-muted small pt-2">Subject line for the first-contact email to a new lead.</div>
+  </div>
+  <div class="row mb-3">
+    <div class="col-md-6">
+      <textarea class="form-control" name="cold_body_template" rows="10" style="font-family:monospace">{{ cfg.cold_body_template or '' }}</textarea>
+    </div>
+    <div class="col-md-6 text-muted small pt-2">The full message body sent to every lead on "Send Now" (Send page).</div>
+  </div>
+
+  <h6 class="mt-4">Reminder</h6>
+  <div class="row mb-2">
+    <div class="col-md-6">
+      <input class="form-control" name="reminder_subject_template" placeholder="Subject" value="{{ cfg.reminder_subject_template or '' }}">
+    </div>
+    <div class="col-md-6 text-muted small pt-2">Subject line for the automatic 24h-before-meeting reminder.</div>
+  </div>
+  <div class="row mb-3">
+    <div class="col-md-6">
+      <textarea class="form-control" name="reminder_body_template" rows="10" style="font-family:monospace">{{ cfg.reminder_body_template or '' }}</textarea>
+    </div>
+    <div class="col-md-6 text-muted small pt-2">The full reminder message - sent automatically by the automation above, or on demand from the Send page.</div>
+  </div>
+</div>
+
+<div class="content-card" style="max-width:960px">
+  <h5 class="mb-3">Sending limits</h5>
+
+  <div class="row mb-3">
+    <div class="col-md-6">
+      <input class="form-control" type="number" min="1" name="reminder_interval_hours" placeholder="Reminder check interval (hours)" value="{{ cfg.reminder_interval_hours }}">
+    </div>
+    <div class="col-md-6 text-muted small pt-2">
+      <strong>Reminder check interval</strong> - how often the automation wakes up and looks for meetings ~24h away.
+    </div>
+  </div>
+
+  <div class="row mb-3">
+    <div class="col-md-6">
+      <input class="form-control" type="number" min="1" name="reminder_window_hours" placeholder="Reminder window (hours)" value="{{ cfg.reminder_window_hours }}">
+    </div>
+    <div class="col-md-6 text-muted small pt-2">
+      <strong>Reminder window</strong> - how wide that "~24h" net is. Kept equal to the interval so two consecutive checks always overlap and nobody falls through the gap between them.
+    </div>
+  </div>
+
+  <div class="row mb-3">
+    <div class="col-md-6">
+      <input class="form-control" type="number" min="1" name="max_reminders_per_run" placeholder="Max reminders per run" value="{{ cfg.max_reminders_per_run }}">
+    </div>
+    <div class="col-md-6 text-muted small pt-2">
+      <strong>Max reminders per run</strong> - a safety brake. If one scan ever matches more than this, it sends none and warns you instead, in case of a data mistake (e.g. many rows sharing one date).
+    </div>
+  </div>
+
+  <div class="row mb-3">
+    <div class="col-md-6">
+      <input class="form-control" type="number" min="1" name="daily_send_cap" placeholder="Daily send cap" value="{{ cfg.daily_send_cap }}">
+    </div>
+    <div class="col-md-6 text-muted small pt-2">
+      <strong>Daily send cap</strong> - total cold + reminder emails allowed per day, combined. Keeps the account well under Gmail's own daily limit so it doesn't get flagged as spam.
+    </div>
+  </div>
+
+  <button type="submit" class="btn btn-primary">Save Settings</button>
+</div>
+</form>
+
+<script>
+  function updateFromPreview() {
+    const name = document.querySelector('input[name="sender_name"]').value.trim();
+    const company = document.querySelector('input[name="sender_company"]').value.trim();
+    const email = {{ (cfg.gmail_address or "you@example.com") | tojson }};
+    let display = name;
+    if (name && company) display = name + " - " + company;
+    else if (!name && company) display = company;
+    document.getElementById('fromPreview').textContent = (display ? display + " " : "") + "<" + email + ">";
+  }
+  document.querySelector('input[name="sender_name"]').addEventListener('input', updateFromPreview);
+  document.querySelector('input[name="sender_company"]').addEventListener('input', updateFromPreview);
+  updateFromPreview();
+</script>
+
+{% endblock %}

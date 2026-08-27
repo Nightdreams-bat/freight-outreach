@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Send{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <h1>Send</h1>
+</div>
+
+<div class="content-card">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h5 class="mb-0">Cold intros pending &mdash; {{ cold|length }}</h5>
+    {% if cold %}
+    <form method="post" action="{{ url_for('send_cold_now') }}"
+          onsubmit="return confirm('Send {{ cold|length }} cold intro email(s) now?');">
+      <button type="submit" class="btn btn-primary"><i class="bi bi-send"></i> Send Now</button>
+    </form>
+    {% endif %}
+  </div>
+  <div class="table-responsive">
+    <table class="table">
+      <thead><tr><th>Name</th><th>Company</th><th>Email</th></tr></thead>
+      <tbody>
+        {% for row_idx, row in cold %}
+        <tr><td>{{ row.Name or "-" }}</td><td>{{ row.Company or "-" }}</td><td>{{ row.Email }}</td></tr>
+        {% else %}
+        <tr><td colspan="3" class="text-center text-muted py-3">Nothing queued.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="content-card">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h5 class="mb-0">Reminders due this scan &mdash; {{ reminders|length }}</h5>
+    {% if reminders %}
+    <form method="post" action="{{ url_for('send_reminders_now') }}"
+          onsubmit="return confirm('Send {{ reminders|length }} reminder(s) now?');">
+      <button type="submit" class="btn btn-outline-primary"><i class="bi bi-alarm"></i> Run Reminder Check Now</button>
+    </form>
+    {% endif %}
+  </div>
+  <div class="table-responsive">
+    <table class="table">
+      <thead><tr><th>Name</th><th>Company</th><th>Email</th><th>Meeting</th></tr></thead>
+      <tbody>
+        {% for row_idx, row, meeting_time in reminders %}
+        <tr>
+          <td>{{ row.Name or "-" }}</td><td>{{ row.Company or "-" }}</td><td>{{ row.Email }}</td>
+          <td>{{ meeting_time.strftime("%a %b %d, %I:%M %p") }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="4" class="text-center text-muted py-3">Nothing due right now.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="text-muted small">This also runs automatically via the scheduled task; use this button for on-demand testing.</div>
+</div>
+
+{% endblock %}

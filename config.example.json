@@ -1,0 +1,19 @@
+{
+  "sender_name": "Your Name",
+  "sender_company": "Your Company",
+  "sender_phone": "",
+  "sender_pitch": "One or two sentences describing what you offer.",
+  "excel_path": "C:/path/to/clients.xlsx",
+  "column_aliases": {},
+  "gmail_address": "you@gmail.com",
+  "reminder_interval_hours": 2,
+  "reminder_window_hours": 2,
+  "max_reminders_per_run": 25,
+  "daily_send_cap": 150,
+  "disallowed_domains": [],
+  "disallowed_emails": [],
+  "cold_subject_template": "{{ company }} freight - quick question",
+  "cold_body_template": "Hi {{ name }},\n\n{{ sender_name }} here, with {{ sender_company }}. {{ sender_pitch }}\n\nI thought {{ company }} might be worth connecting with - happy to share more if you're open to a short call sometime this week.\n\nIf this isn't useful to you right now, no worries at all, just let me know and I won't follow up again.\n\nBest,\n{{ sender_name }}\n{{ sender_company }}\n{% if sender_phone %}{{ sender_phone }}{% endif %}\n",
+  "reminder_subject_template": "Our call {{ meeting_time }}",
+  "reminder_body_template": "Hi {{ name }},\n\nJust a quick reminder that we've got a call scheduled for {{ meeting_time }}. Looking forward to speaking with you about {{ company }}'s freight needs.\n\nLet me know if anything's changed on your end.\n\nBest,\n{{ sender_name }}\n{{ sender_company }}\n{% if sender_phone %}{{ sender_phone }}{% endif %}\n"
+}

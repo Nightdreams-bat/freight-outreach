@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}Leads{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <h1>Leads / CRM</h1>
+  <input id="leadSearch" type="search" class="form-control" style="max-width:260px"
+         placeholder="Search anything...">
+</div>
+
+<div class="text-muted small mb-3">
+  Reading from <code>{{ excel_path }}</code> &middot;
+  <a href="{{ url_for('settings') }}#excel-file">change Excel file</a>
+</div>
+
+<div class="content-card">
+  <div class="table-responsive">
+    <table class="table align-middle" id="leadsTable">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Company</th>
+          <th>Email</th>
+          <th>Phone</th>
+          <th>Meeting</th>
+          <th>Cold Sent</th>
+          <th>Reminded</th>
+          <th>Notes</th>
+          <th>Status</th>
+          <th class="text-end">Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in rows %}
+        <tr>
+          <td>{{ r.v.Name or "-" }}</td>
+          <td>{{ r.v.Company or "-" }}</td>
+          <td>{{ r.v.Email }}</td>
+          <td>{{ r.v.Phone or "-" }}</td>
+          <td>{{ r.v.MeetingDateTime or "-" }}</td>
+          <td>{{ r.v.ColdEmailSentAt or "-" }}</td>
+          <td>{{ r.v.ReminderSentAt or "-" }}</td>
+          <td class="text-truncate" style="max-width:180px">{{ r.v.Notes or "-" }}</td>
+          <td>
+            {% if r.reason == "suppressed" %}
+              <span class="badge text-bg-secondary badge-status">Suppressed</span>
+            {% elif r.reason == "blocked" %}
+              <span class="badge text-bg-dark badge-status">Blocklisted</span>
+            {% else %}
+              {% if r.v.ColdEmailSentAt %}<span class="badge text-bg-info badge-status me-1">Cold Sent</span>{% endif %}
+              {% if r.v.ReminderSentAt %}<span class="badge text-bg-success badge-status">Reminded</span>{% endif %}
+              {% if not r.v.ColdEmailSentAt and not r.v.ReminderSentAt %}
+                <span class="badge text-bg-warning badge-status">New</span>
+              {% endif %}
+            {% endif %}
+          </td>
+          <td class="text-end">
+            {% if r.reason != "blocked" %}
+            <form method="post" action="{{ url_for('toggle_suppress', row_idx=r.row_idx) }}" class="d-inline">
+              {% if r.reason == "suppressed" %}
+                <button class="btn btn-sm btn-outline-success" type="submit">Unsuppress</button>
+              {% else %}
+                <button class="btn btn-sm btn-outline-secondary" type="submit">Suppress</button>
+              {% endif %}
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="10" class="text-center text-muted py-4">No leads yet - add rows to clients.xlsx.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+  document.getElementById("leadSearch").addEventListener("input", function () {
+    const q = this.value.toLowerCase();
+    document.querySelectorAll("#leadsTable tbody tr").forEach(function (row) {
+      row.style.display = row.textContent.toLowerCase().includes(q) ? "" : "none";
+    });
+  });
+</script>
+{% endblock %}

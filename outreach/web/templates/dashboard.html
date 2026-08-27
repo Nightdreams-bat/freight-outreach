@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <h1>Dashboard</h1>
+  <div class="text-muted">{{ cfg.sender_company }}</div>
+</div>
+
+<div class="row g-3 mb-2">
+  <div class="col-6 col-xl-3">
+    <div class="stat-card bg-grad-purple">
+      <i class="bi bi-people-fill stat-icon"></i>
+      <div class="stat-value">{{ stats.total_leads }}</div>
+      <div class="stat-label">Total leads</div>
+    </div>
+  </div>
+  <div class="col-6 col-xl-3">
+    <div class="stat-card bg-grad-teal">
+      <i class="bi bi-envelope-check-fill stat-icon"></i>
+      <div class="stat-value">{{ stats.sent_today }} / {{ stats.daily_cap }}</div>
+      <div class="stat-label">Sent today (of daily cap)</div>
+    </div>
+  </div>
+  <div class="col-6 col-xl-3">
+    <div class="stat-card bg-grad-orange">
+      <i class="bi bi-send-fill stat-icon"></i>
+      <div class="stat-value">{{ stats.cold_pending }}</div>
+      <div class="stat-label">Cold intros pending</div>
+    </div>
+  </div>
+  <div class="col-6 col-xl-3">
+    <div class="stat-card bg-grad-pink">
+      <i class="bi bi-alarm-fill stat-icon"></i>
+      <div class="stat-value">{{ stats.reminders_due }}</div>
+      <div class="stat-label">Reminders due this scan</div>
+    </div>
+  </div>
+</div>
+
+<div class="content-card">
+  <h5 class="mb-3">Quick actions</h5>
+  <a href="{{ url_for('send_page') }}" class="btn btn-primary me-2"><i class="bi bi-send"></i> Go to Send</a>
+  <a href="{{ url_for('leads') }}" class="btn btn-outline-secondary me-2"><i class="bi bi-people"></i> View Leads</a>
+  <a href="{{ url_for('blocklist_page') }}" class="btn btn-outline-secondary">
+    <i class="bi bi-shield-slash"></i> Blocklist ({{ stats.blocklist_count }})
+  </a>
+</div>
+
+{% endblock %}

@@ -1,0 +1,8 @@
+config.json
+client_secret.json
+clients.xlsx
+outreach.log*
+send_log.json
+send_history.jsonl
+__pycache__/
+*.pyc

@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}History{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <h1>Send History</h1>
+</div>
+
+<div class="content-card">
+  <div class="table-responsive">
+    <table class="table">
+      <thead>
+        <tr><th>When</th><th>Type</th><th>Name</th><th>Company</th><th>Email</th><th>Subject</th></tr>
+      </thead>
+      <tbody>
+        {% for e in entries %}
+        <tr>
+          <td>{{ e.timestamp }}</td>
+          <td>
+            {% if e.kind == "cold" %}
+              <span class="badge text-bg-info badge-status">Cold Intro</span>
+            {% else %}
+              <span class="badge text-bg-success badge-status">Reminder</span>
+            {% endif %}
+          </td>
+          <td>{{ e.name or "-" }}</td>
+          <td>{{ e.company or "-" }}</td>
+          <td>{{ e.email }}</td>
+          <td class="text-truncate" style="max-width:280px">{{ e.subject }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="text-center text-muted py-4">No emails sent yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}
