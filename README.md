@@ -60,7 +60,7 @@ the user's own Gmail account over a real Google sign-in (OAuth), not SMTP or app
 | **Excel column auto-detection** | Matches your own headers — `Surname`, `Organisation`, `E-mail Address`, a split first/last name — to the logical fields, with a manual override per field in Settings. A row with only an email address still works (name from the local part, company from the domain). |
 | **Scheduled tasks** | Two optional Windows Task Scheduler jobs run the reminder + follow-up scan and the reply scan hands-off, whether or not the dashboard is open. |
 | **Native desktop app** | `python -m outreach` or a double-click opens a real application window via pywebview and the WebView2 runtime already built into Windows 11 — no bundled Chromium. `--web` forces a browser tab. |
-| **Offline dashboard** | Black / white / green, light and dark mode, all styling served locally — no CDN, works with no internet. |
+| **Offline dashboard** | A dark, spring-green interface — all styling and fonts served locally, no CDN, works with no internet. |
 
 ---
 

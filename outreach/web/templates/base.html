@@ -117,6 +117,19 @@
       })();
     })();
 
+    // Specular sheen that tracks the cursor across glass surfaces
+    (function () {
+      if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+      var sel = ".card, .tile, .reply-card";
+      document.addEventListener("pointermove", function (e) {
+        var el = e.target.closest && e.target.closest(sel);
+        if (!el) return;
+        var r = el.getBoundingClientRect();
+        el.style.setProperty("--mx", ((e.clientX - r.left) / r.width * 100) + "%");
+        el.style.setProperty("--my", ((e.clientY - r.top) / r.height * 100) + "%");
+      }, { passive: true });
+    })();
+
     // Confirm-on-submit for any form with data-confirm
     document.querySelectorAll("form[data-confirm]").forEach(function (f) {
       f.addEventListener("submit", function (e) {
