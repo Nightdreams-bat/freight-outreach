@@ -1,6 +1,6 @@
 """Wave 3: scheduling.plan_action routing - every branch, no network."""
 
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import pytest
 
@@ -150,6 +150,52 @@ def test_yes_unparseable_proposed_time_still_proposes(monkeypatch):
     )
     assert action["kind"] == "propose"
     assert cal.calls == ["find_open_slots"]
+
+
+def test_yes_proposed_time_in_the_past_proposes_not_books(monkeypatch):
+    cal = FakeCal(free=True)
+    monkeypatch.setattr(scheduling, "calendar_api", cal)
+    past = datetime(2020, 1, 2, 10, 0).isoformat()
+    action = scheduling.plan_action(
+        {"intent": "yes", "proposed_start": past, "summary": "yes"}, LEAD, CFG, "me@x.com"
+    )
+    assert action["kind"] == "propose"
+    assert "slot_is_free" not in cal.calls  # never even checked the bogus time
+
+
+def test_yes_proposed_time_beyond_window_proposes_not_books(monkeypatch):
+    cal = FakeCal(free=True)
+    monkeypatch.setattr(scheduling, "calendar_api", cal)
+    now = datetime(2026, 6, 1, 9, 0)
+    far = (now.replace(hour=10) + timedelta(days=90)).isoformat()
+    action = scheduling.plan_action(
+        {"intent": "yes", "proposed_start": far, "summary": "yes"}, LEAD, CFG, "me@x.com", now=now,
+    )
+    assert action["kind"] == "propose"
+    assert cal.calls == ["find_open_slots"]
+
+
+def test_yes_proposed_time_outside_business_hours_proposes(monkeypatch):
+    cal = FakeCal(free=True)
+    monkeypatch.setattr(scheduling, "calendar_api", cal)
+    now = datetime(2026, 6, 1, 9, 0)  # Monday
+    evening = datetime(2026, 6, 3, 21, 0).isoformat()  # Wed 21:00, past business end
+    action = scheduling.plan_action(
+        {"intent": "yes", "proposed_start": evening, "summary": "yes"}, LEAD, CFG, "me@x.com", now=now,
+    )
+    assert action["kind"] == "propose"
+
+
+def test_yes_in_bounds_still_books(monkeypatch):
+    cal = FakeCal(free=True)
+    monkeypatch.setattr(scheduling, "calendar_api", cal)
+    now = datetime(2026, 6, 1, 9, 0)  # Monday
+    good = datetime(2026, 6, 3, 14, 0).isoformat()  # Wed 14:00, ~2 days out
+    action = scheduling.plan_action(
+        {"intent": "yes", "proposed_start": good, "summary": "yes"}, LEAD, CFG, "me@x.com", now=now,
+    )
+    assert action["kind"] == "book"
+    assert action["start"] == datetime(2026, 6, 3, 14, 0)
 
 
 def test_custom_templates_from_config_are_used(monkeypatch):

@@ -16,7 +16,7 @@ batches: if the cap is spent, the item stays pending and approve() returns
 
 import json
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from outreach import calendar_api
 from outreach.config import get as cfg_get
@@ -222,7 +222,21 @@ def approve(qid, *, overrides=None, cfg=None, store=None, mailer=None):
         if kind == "book":
             start = _parse_dt(action["start"])
             duration = int(cfg_get(cfg, "meeting_duration_minutes"))
+            tz = calendar_api.resolve_timezone(cfg)
             if not event_id:
+                # Days can pass between drafting and Approve - re-check the slot is
+                # still open (Calendar has no "insert if free"). If it filled up,
+                # do nothing and leave the item pending.
+                if not calendar_api.slot_is_free(
+                    gmail_address, cfg_get(cfg, "calendar_id"), start, duration, tz=tz
+                ):
+                    return {
+                        "status": "error",
+                        "message": (
+                            "That time was taken since this was drafted - reject and "
+                            "re-scan, or pick another slot."
+                        ),
+                    }
                 event_id = calendar_api.create_event(
                     gmail_address,
                     cfg_get(cfg, "calendar_id"),
@@ -231,8 +245,9 @@ def approve(qid, *, overrides=None, cfg=None, store=None, mailer=None):
                     start=start,
                     duration_minutes=duration,
                     attendee_email=to_addr,
-                    timezone=calendar_api.local_tz_name(),
+                    timezone=tz,
                     send_updates=True,
+                    ical_uid=f"freight-{qid}@freightoutreach",
                 )
                 # Persist immediately so a send failure below can't cause a rebook.
                 _patch_record(qid, {"event_id": event_id})
@@ -242,6 +257,12 @@ def approve(qid, *, overrides=None, cfg=None, store=None, mailer=None):
                 store.set_value(row_idx, "MeetingDateTime", start.strftime(_TS))
                 store.set_value(row_idx, "MeetingEventId", event_id)
                 store.set_value(row_idx, "ReplyStatus", "booked")
+                # If the meeting is already inside the 24h reminder horizon, stamp
+                # ReminderSentAt now so the lead isn't pinged "call tomorrow" an
+                # hour after this confirmation (min_notice_hours vs reminder window).
+                window_h = float(cfg.get("reminder_window_hours", 2))
+                if start - datetime.now() <= timedelta(hours=24 + window_h):
+                    store.set_value(row_idx, "ReminderSentAt", datetime.now().strftime(_TS))
             message = f"Booked {start.strftime('%b %d, %H:%M')} and emailed {to_addr}."
 
         elif kind == "propose":

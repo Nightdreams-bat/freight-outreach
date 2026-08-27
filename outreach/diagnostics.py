@@ -21,6 +21,7 @@ CHECK_NAMES = [
     "Business details",
     "Postal address",
     "Leads spreadsheet",
+    "Time zone",
     "Gmail - account & token",
     "Gmail - read replies",
     "Google Calendar",
@@ -134,6 +135,25 @@ def _stale_token_note(gmail_address):
     return None
 
 
+def _check_timezone(cfg, _gmail):
+    name = str(cfg.get("timezone") or "").strip()
+    if not name:
+        from outreach.config import detect_timezone
+
+        guess = detect_timezone()
+        if guess:
+            return _warn("Time zone", f"Not set - would auto-detect '{guess}'. Set it in Settings.")
+        return _warn("Time zone", "Not set and can't be auto-detected - set an IANA name in Settings "
+                                  "(e.g. Europe/Chisinau). Calendar bookings will fail without it.")
+    try:
+        from zoneinfo import ZoneInfo
+
+        ZoneInfo(name)
+    except Exception as e:  # noqa: BLE001
+        return _warn("Time zone", f"'{name}' is not a valid IANA name ({e}). Fix it in Settings.")
+    return _ok("Time zone", name)
+
+
 def _check_gmail_send(cfg, gmail):
     if not (cfg.get("gmail_address") or "").strip():
         return _fail("Gmail - account & token", "No sending account connected (Settings -> Connect Gmail).")
@@ -219,6 +239,7 @@ _CHECKS = [
     _check_config,
     _check_postal_address,
     _check_excel,
+    _check_timezone,
     _check_gmail_send,
     _check_gmail_read,
     _check_calendar,

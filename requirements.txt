@@ -5,4 +5,7 @@ google-auth
 google-auth-oauthlib
 google-api-python-client
 anthropic==1.0.0
+tzdata                                                  # IANA time-zone database (calendar bookings / reminders; no system zoneinfo on Windows)
+tzlocal                                                 # best-effort machine time-zone detection for the default config
 pywebview            ; sys_platform == "win32"   # native desktop window (uses Windows' built-in WebView2)
+ddgs                                                    # keyless DuckDuckGo search for the "Find leads" (beta) feature

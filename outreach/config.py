@@ -3,12 +3,54 @@ import json
 from outreach import templates
 from outreach.paths import CONFIG_PATH, DEFAULT_EXCEL_PATH
 
+try:  # Python 3.9+
+    from zoneinfo import ZoneInfo
+except ImportError:  # pragma: no cover
+    ZoneInfo = None
+
+
+def detect_timezone():
+    """Best-effort IANA time zone name for this machine, or "" if it can't be
+    determined. Uses tzlocal when installed, then $TZ, then the OS tzinfo key."""
+    try:
+        import tzlocal
+
+        name = tzlocal.get_localzone_name()
+        if name:
+            return name
+    except Exception:  # noqa: BLE001 - tzlocal missing or detection failed
+        pass
+
+    import os
+    from datetime import datetime
+
+    tz = os.environ.get("TZ")
+    if tz and _is_valid_tz(tz):
+        return tz
+    key = getattr(datetime.now().astimezone().tzinfo, "key", None)
+    return key or ""
+
+
+def _is_valid_tz(name):
+    if not name or ZoneInfo is None:
+        return False
+    try:
+        ZoneInfo(name)
+        return True
+    except Exception:  # noqa: BLE001
+        return False
+
 # Defaults for the reply-handling / auto-scheduling feature. Everything here is
 # optional in config.json - an older config that predates the feature still loads
 # fine, and callers read these values through `get(cfg, key)` (or `cfg.get(key,
 # DEFAULTS[key])`) so a missing key falls back to the default below.
 DEFAULTS = {
     "reply_scan_enabled": False,
+    # IANA time zone name (e.g. "Europe/Chisinau") used for every calendar
+    # booking and reminder. Detected from the machine on install / migration;
+    # editable on Settings. Empty or invalid -> Diagnostics warns and the
+    # calendar code raises rather than guessing a fixed offset.
+    "timezone": "",
     "llm_model": "claude-haiku-4-5-20251001",
     "meeting_duration_minutes": 30,
     "business_hours": {"start": 9, "end": 17},
@@ -73,6 +115,7 @@ def default_config(lang=None):
         "disallowed_emails": [],
         **templates.defaults(lang),
         **DEFAULTS,
+        "timezone": detect_timezone(),
         "template_language": lang,
     }
 
@@ -104,6 +147,18 @@ def _migrate(cfg):
         if key not in cfg:
             cfg[key] = value
             changed = True
+
+    # Validate a stored time zone; on a bad value fall back to fresh detection
+    # rather than carrying an unusable name into the calendar code.
+    stored_tz = str(cfg.get("timezone") or "").strip()
+    if stored_tz and not _is_valid_tz(stored_tz):
+        from outreach.logging_setup import get_logger
+
+        get_logger("config").warning(
+            "Configured timezone %r is not a valid IANA name - re-detecting.", stored_tz
+        )
+        cfg["timezone"] = detect_timezone()
+        changed = True
 
     return cfg, changed
 

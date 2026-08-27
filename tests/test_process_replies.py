@@ -35,7 +35,8 @@ class FakeStore:
 
 
 @pytest.fixture
-def wired(monkeypatch):
+def wired(monkeypatch, tmp_path):
+    monkeypatch.setattr(process_replies, "REPLY_FAILURES_PATH", tmp_path / "reply_failures.json")
     """Patch process_replies' collaborators; return a dict the test tweaks."""
     state = {
         "cfg": dict(BASE_CFG),

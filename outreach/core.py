@@ -92,6 +92,16 @@ def reminder_candidates(store, window_hours):
     return candidates
 
 
+def cap_reminders_per_run(candidates, max_per_run):
+    """Apply the per-run reminder brake: never go silent on a busy day - sort by
+    soonest meeting, send the first `max_per_run`, and let the caller log the
+    overflow. Returns (trimmed_candidates, overflow_count)."""
+    if len(candidates) <= max_per_run:
+        return candidates, 0
+    ordered = sorted(candidates, key=lambda c: c[2])  # soonest meeting first
+    return ordered[:max_per_run], len(candidates) - max_per_run
+
+
 def followup_candidates(store, cfg, now=None):
     """Leads that got a cold intro, never replied, have no meeting booked, and are
     due for their next follow-up nudge.

@@ -16,7 +16,7 @@ Nothing here sends an email or books anything - that happens later in
 or None if there is genuinely nothing to do.
 """
 
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from outreach import calendar_api
 from outreach.config import get as cfg_get
@@ -56,6 +56,35 @@ def _parse_iso(value):
 
 def _fmt(dt):
     return dt.strftime(MEETING_TIME_FMT)
+
+
+def _resolve_tz(cfg):
+    """Configured IANA zone for calendar work, or None (machine zone) if it can't
+    be resolved - the hard guard against a missing zone lives in reply_queue."""
+    try:
+        return calendar_api.resolve_timezone(cfg)
+    except (getattr(calendar_api, "CalendarError", Exception), AttributeError):
+        return None
+
+
+def _proposed_time_ok(dt, cfg, now):
+    """True if an LLM-proposed start is sane to auto-book: within
+    [now + min_notice_hours, now + scheduling_window_days] and inside the
+    configured business hours / days. Otherwise we fall through to 'propose'."""
+    if dt is None:
+        return False
+    min_notice = float(cfg_get(cfg, "min_notice_hours"))
+    window_days = float(cfg_get(cfg, "scheduling_window_days"))
+    if dt < now + timedelta(hours=min_notice):
+        return False
+    if dt > now + timedelta(days=window_days):
+        return False
+    hours = cfg_get(cfg, "business_hours") or {"start": 9, "end": 17}
+    if dt.weekday() not in (cfg_get(cfg, "business_days") or [0, 1, 2, 3, 4]):
+        return False
+    if dt.hour < int(hours["start"]) or dt.hour >= int(hours["end"]):
+        return False
+    return True
 
 
 def _tmpl(cfg, key, fallback):
@@ -111,9 +140,10 @@ def _book(lead, cfg, start):
     }
 
 
-def plan_action(classification, lead, cfg, gmail_address):
+def plan_action(classification, lead, cfg, gmail_address, now=None):
     if not classification:
         return None
+    now = now or datetime.now()
 
     intent = (classification.get("intent") or "").strip().lower()
 
@@ -133,11 +163,16 @@ def plan_action(classification, lead, cfg, gmail_address):
     # --- intent == "yes" -----------------------------------------------------
     duration = int(cfg_get(cfg, "meeting_duration_minutes"))
     calendar_id = cfg_get(cfg, "calendar_id")
+    tz = _resolve_tz(cfg)
     proposed = _parse_iso(classification.get("proposed_start"))
+    if proposed is not None and not _proposed_time_ok(proposed, cfg, now):
+        log.info("Lead's proposed time %s is out of bounds (past / too far / off-hours) "
+                 "- offering alternatives instead of booking", proposed)
+        proposed = None
 
     try:
         if proposed is not None and calendar_api.slot_is_free(
-            gmail_address, calendar_id, proposed, duration
+            gmail_address, calendar_id, proposed, duration, tz=tz
         ):
             return _book(lead, cfg, proposed)
 
@@ -153,6 +188,7 @@ def plan_action(classification, lead, cfg, gmail_address):
             window_days=cfg_get(cfg, "scheduling_window_days"),
             min_notice_hours=cfg_get(cfg, "min_notice_hours"),
             count=SLOTS_TO_OFFER,
+            tz=tz,
         )
     except calendar_api.CalendarError as e:
         log.error("Calendar lookup failed, routing to manual: %s", e)

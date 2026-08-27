@@ -14,6 +14,7 @@ from outreach.paths import LOG_PATH, resource_path
 from outreach.core import (
     apply_daily_cap,
     build_mailer,
+    cap_reminders_per_run,
     cold_candidates,
     followup_candidates,
     priority_sort_key,
@@ -37,6 +38,16 @@ from outreach.scoring import score_lead
 from outreach.send_tracker import recent_history, remaining_today, sent_today
 
 SUPPRESSED_TRUE_VALUES = ("1", "true", "yes", "y")
+
+
+def _is_valid_timezone(name):
+    try:
+        from zoneinfo import ZoneInfo
+
+        ZoneInfo(name)
+        return True
+    except Exception:  # noqa: BLE001
+        return False
 
 # Hostnames the dashboard is ever legitimately reached on. The port varies
 # (_pick_port), so only the host part is checked.
@@ -113,15 +124,27 @@ def _run_job(action):
                     summary = f"{r['sent']} follow-up(s) sent"
         elif action == "reminders":
             cands = reminder_candidates(store, cfg.get("reminder_window_hours", 2))
-            cands, _, _ = apply_daily_cap(cands, cfg.get("daily_send_cap", 150), sort_key=lambda c: c[2])
+            cands, overflow = cap_reminders_per_run(
+                cands, cfg_get(cfg, "max_reminders_per_run")
+            )
+            cands, _, deferred = apply_daily_cap(
+                cands, cfg.get("daily_send_cap", 150), sort_key=lambda c: c[2]
+            )
             r = send_reminder_batch(cfg, store, build_mailer(cfg), cands) if cands else {"sent": 0, "errors": []}
             summary = f"{r['sent']} reminder(s) sent"
+            if overflow:
+                summary += f", {overflow} held for the next run (per-run cap)"
+            if deferred:
+                summary += f", {deferred} deferred (daily cap)"
         else:  # replies
             from outreach.process_replies import main as scan_replies
 
-            scan_replies([])
-            r = {"errors": []}
-            summary = "Reply scan finished - check the Replies page"
+            r = scan_replies([]) or {"errors": []}
+            if isinstance(r, dict) and "classified" in r:
+                summary = (f"Reply scan: {r['classified']} classified, {r['enqueued']} queued, "
+                           f"{r['flagged']} flagged for manual, {r['failed']} gave up")
+            else:
+                summary = "Reply scan finished - check the Replies page"
 
         errs = r.get("errors") or []
         with _JOB_LOCK:
@@ -386,14 +409,10 @@ def create_app():
     def send_reminders_now():
         cfg, store = get_config_and_store()
         candidates = reminder_candidates(store, cfg.get("reminder_window_hours", 2))
-        max_per_run = cfg.get("max_reminders_per_run", 25)
-        if len(candidates) > max_per_run:
-            flash(
-                f"{len(candidates)} reminders matched, over the safety cap of {max_per_run}. "
-                f"Sent none - check clients.xlsx for a data problem.",
-                "danger",
-            )
-            return redirect(url_for("send_page"))
+        # Per-run brake: send the soonest N rather than going silent on a busy day.
+        candidates, overflow = cap_reminders_per_run(
+            candidates, cfg_get(cfg, "max_reminders_per_run")
+        )
 
         candidates, _, deferred = apply_daily_cap(
             candidates, cfg.get("daily_send_cap", 150), sort_key=lambda c: c[2]
@@ -406,9 +425,12 @@ def create_app():
         result = send_reminder_batch(cfg, store, mailer, candidates, dry_run=False)
 
         msg = f"Sent {result['sent']} reminder(s)."
+        if overflow:
+            msg += (f" {overflow} held for the next run (over the per-run cap of "
+                    f"{cfg_get(cfg, 'max_reminders_per_run')}) - check clients.xlsx if unexpected.")
         if deferred:
             msg += f" {deferred} could NOT be sent (daily cap) - raise daily_send_cap if this matters."
-        flash(msg, "warning" if (result["errors"] or deferred) else "success")
+        flash(msg, "warning" if (result["errors"] or deferred or overflow) else "success")
         return redirect(url_for("send_page"))
 
     # ---- Run now (background jobs) ---------------------------------------
@@ -596,6 +618,16 @@ def create_app():
                         flash("Follow-up cadence must be whole days of 1 or more.", "warning")
                 if offsets:
                     cfg["followup_offsets_days"] = sorted(offsets)
+
+            if "timezone" in request.form:
+                tz_raw = (request.form.get("timezone") or "").strip()
+                if not tz_raw:
+                    cfg["timezone"] = ""
+                elif _is_valid_timezone(tz_raw):
+                    cfg["timezone"] = tz_raw
+                else:
+                    flash(f"'{tz_raw}' is not a valid IANA time zone name - kept the previous value.",
+                          "warning")
 
             lang = request.form.get("template_language")
             if lang in ("en", "ro"):

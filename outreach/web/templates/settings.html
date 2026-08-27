@@ -308,6 +308,11 @@
 
 <div class="card">
   <h2>Sending limits</h2>
+  <div class="setrow">
+    <div><label class="lab">Time zone</label>
+      <input class="field" name="timezone" value="{{ cfg.timezone or '' }}" placeholder="Europe/Chisinau"></div>
+    <div class="help">IANA name like <code>Europe/Chisinau</code>; used for all calendar bookings and reminders. Leave blank to auto-detect from this PC (Diagnostics warns if it can't).</div>
+  </div>
   {% for f in [
       ("reminder_interval_hours", "Reminder check interval (hours)", "How often the automation wakes up and looks for meetings ~24h away."),
       ("reminder_window_hours", "Reminder window (hours)", "How wide the \"~24h\" net is. Kept equal to the interval so consecutive checks overlap."),

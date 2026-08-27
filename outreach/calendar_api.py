@@ -5,15 +5,18 @@ Uses the same OAuth credentials as Gmail (see outreach/gmail_oauth.py). The
 `calendar.events` and `calendar.freebusy` scopes must be granted - the client
 re-runs "Connect Gmail" once after the feature is enabled.
 
-All datetimes crossing this module's public API are naive and in the machine's
-local wall-clock time. Conversions to/from the RFC3339 strings the Google API
-expects happen internally, attaching the local UTC offset.
+All datetimes crossing this module's public API are naive wall-clock times, read
+in the configured IANA time zone (`resolve_timezone(cfg)`), which callers pass in
+as `tz`. Conversions to/from the RFC3339 strings the Google API expects happen
+internally.
 """
 
-import os
+import random
+import time
 from datetime import datetime, timedelta
 
 from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
 
 from outreach.gmail_oauth import get_credentials
 from outreach.logging_setup import get_logger
@@ -41,40 +44,57 @@ def _service(gmail_address, service=None):
 # --- timezone helpers ------------------------------------------------------------
 
 def local_tz_name():
-    """Best-effort IANA timezone name for the machine's local time.
+    """Best-effort IANA time zone name for this machine, or "" if none can be
+    determined. Detection only - no fixed-offset 'Etc/GMT' fallback (that has no
+    DST and silently books meetings an hour off across a transition)."""
+    from outreach.config import detect_timezone
 
-    Tries $TZ, then falls back to a fixed-offset 'Etc/GMT<n>' zone (valid IANA,
-    accepted by Google Calendar). Half-hour offsets fall back to plain UTC labels
-    with a warning - not a case that matters for this tool's users.
+    return detect_timezone()
+
+
+def resolve_timezone(cfg):
+    """The IANA time zone name to use for all calendar work.
+
+    `cfg["timezone"]` wins; if empty, fall back to machine detection. Raises
+    CalendarError if nothing valid is resolvable - never guesses a fixed offset.
     """
-    tz = os.environ.get("TZ")
-    if tz and ZoneInfo is not None:
-        try:
-            ZoneInfo(tz)
-            return tz
-        except Exception:
-            pass
-
-    key = getattr(datetime.now().astimezone().tzinfo, "key", None)
-    if key:
-        return key
-
-    offset = datetime.now().astimezone().utcoffset() or timedelta(0)
-    total_minutes = int(offset.total_seconds() // 60)
-    if total_minutes == 0:
-        return "UTC"
-    hours, minutes = divmod(abs(total_minutes), 60)
-    if minutes:
-        log.warning("Local timezone has a %d-min offset; using UTC for the Calendar API.", total_minutes)
-        return "UTC"
-    # 'Etc/GMT' zones use the POSIX sign convention (inverted): Etc/GMT-3 == UTC+3.
-    sign = "-" if total_minutes > 0 else "+"
-    return f"Etc/GMT{sign}{hours}"
+    name = ""
+    if isinstance(cfg, dict):
+        name = str(cfg.get("timezone") or "").strip()
+    if not name:
+        name = local_tz_name()
+    if not name:
+        raise CalendarError(
+            "No time zone configured. Set 'Time zone' on the Settings page "
+            "(an IANA name like Europe/Chisinau)."
+        )
+    if ZoneInfo is None:  # pragma: no cover - zoneinfo is stdlib on the target
+        raise CalendarError("zoneinfo is unavailable in this Python build.")
+    try:
+        ZoneInfo(name)
+    except Exception as e:  # noqa: BLE001
+        raise CalendarError(
+            f"Configured time zone {name!r} is not a valid IANA name."
+        ) from e
+    return name
 
 
-def _to_rfc3339(dt):
-    """Naive-local (or aware) datetime -> RFC3339 string with a UTC offset."""
-    aware = dt.astimezone() if dt.tzinfo is None else dt
+def _zone(tz):
+    """ZoneInfo for an IANA name, or None to mean 'the machine's local zone'."""
+    if not tz:
+        return None
+    if ZoneInfo is None:  # pragma: no cover
+        raise CalendarError("zoneinfo is unavailable in this Python build.")
+    return ZoneInfo(tz)
+
+
+def _to_rfc3339(dt, tz=None):
+    """Naive (wall-clock, in `tz` or the machine zone) or aware datetime ->
+    RFC3339 string with an explicit UTC offset."""
+    if dt.tzinfo is not None:
+        return dt.isoformat()
+    zone = _zone(tz)
+    aware = dt.replace(tzinfo=zone) if zone is not None else dt.astimezone()
     return aware.isoformat()
 
 
@@ -82,13 +102,41 @@ def _parse_rfc3339(s):
     return datetime.fromisoformat(s.replace("Z", "+00:00"))
 
 
-def _to_naive_local(aware_dt):
-    return aware_dt.astimezone().replace(tzinfo=None)
+def _to_naive_local(aware_dt, tz=None):
+    """Aware datetime -> naive wall-clock in `tz` (or the machine zone)."""
+    return aware_dt.astimezone(_zone(tz)).replace(tzinfo=None)
 
 
 def _overlaps(start, end, intervals):
     """True if [start, end) overlaps any [is, ie) in intervals (all naive-local)."""
     return any(start < ie and end > is_ for is_, ie in intervals)
+
+
+# --- transient-error backoff --------------------------------------------------
+# Mirrors mailer.py: retry 429/500/503 with exponential backoff + jitter so a
+# blip on free/busy or events.insert doesn't surface as "Failed" to the client.
+
+_RETRY_STATUSES = (429, 500, 503)
+_MAX_BACKOFF = 30
+
+
+def _retry_google(call, *, attempts=4):
+    last = None
+    for attempt in range(attempts):
+        try:
+            return call()
+        except HttpError as e:
+            status = e.resp.status if e.resp is not None else None
+            if status not in _RETRY_STATUSES:
+                raise
+            last = e
+        if attempt < attempts - 1:
+            delay = min(2 ** attempt + random.uniform(0, 1), _MAX_BACKOFF)
+            log.warning("Calendar API %s, retrying in %.1fs (attempt %d/%d)",
+                        getattr(getattr(last, "resp", None), "status", "?"),
+                        delay, attempt + 1, attempts)
+            time.sleep(delay)
+    raise last
 
 
 # --- public API ----------------------------------------------------------------
@@ -102,7 +150,7 @@ def busy_intervals(gmail_address, calendar_id, start_iso, end_iso, *, service=No
         "timeMax": end_iso,
         "items": [{"id": calendar_id}],
     }
-    resp = svc.freebusy().query(body=body).execute()
+    resp = _retry_google(lambda: svc.freebusy().query(body=body).execute())
     cal = resp.get("calendars", {}).get(calendar_id, {})
     errors = cal.get("errors")
     if errors:
@@ -110,22 +158,27 @@ def busy_intervals(gmail_address, calendar_id, start_iso, end_iso, *, service=No
     return [(b["start"], b["end"]) for b in cal.get("busy", [])]
 
 
-def _busy_local(gmail_address, calendar_id, start, end, service=None):
+def _busy_local(gmail_address, calendar_id, start, end, service=None, tz=None):
     raw = busy_intervals(
-        gmail_address, calendar_id, _to_rfc3339(start), _to_rfc3339(end), service=service
+        gmail_address, calendar_id,
+        _to_rfc3339(start, tz), _to_rfc3339(end, tz), service=service,
     )
-    return [(_to_naive_local(_parse_rfc3339(s)), _to_naive_local(_parse_rfc3339(e))) for s, e in raw]
+    return [(_to_naive_local(_parse_rfc3339(s), tz), _to_naive_local(_parse_rfc3339(e), tz))
+            for s, e in raw]
 
 
-def slot_is_free(gmail_address, calendar_id, start, duration_minutes, *, service=None):
-    """True if nothing on the calendar overlaps [start, start+duration)."""
+def slot_is_free(gmail_address, calendar_id, start, duration_minutes, *, service=None, tz=None):
+    """True if nothing on the calendar overlaps [start, start+duration).
+
+    `start` is wall-clock in `tz` (the configured IANA zone); pass tz=None only
+    in tests to mean the machine's local zone."""
     end = start + timedelta(minutes=duration_minutes)
-    return not _overlaps(start, end, _busy_local(gmail_address, calendar_id, start, end, service))
+    return not _overlaps(start, end, _busy_local(gmail_address, calendar_id, start, end, service, tz))
 
 
 def find_open_slots(gmail_address, calendar_id, *, duration_minutes, business_hours,
                     business_days, window_days, min_notice_hours, count=3,
-                    now=None, service=None):
+                    now=None, service=None, tz=None):
     """Up to `count` slot-start datetimes (naive-local) that are:
       - on a weekday in `business_days` (Python weekday(): Mon=0),
       - fully inside [business_hours['start'], business_hours['end']) wall-clock,
@@ -138,7 +191,7 @@ def find_open_slots(gmail_address, calendar_id, *, duration_minutes, business_ho
     earliest = now + timedelta(hours=min_notice_hours)
     window_end = now + timedelta(days=window_days)
 
-    busy = _busy_local(gmail_address, calendar_id, now, window_end, service)
+    busy = _busy_local(gmail_address, calendar_id, now, window_end, service, tz)
 
     step = timedelta(minutes=duration_minutes)
     start_h = business_hours["start"]
@@ -159,9 +212,13 @@ def find_open_slots(gmail_address, calendar_id, *, duration_minutes, business_ho
 
 
 def create_event(gmail_address, calendar_id, *, summary, description, start, duration_minutes,
-                 attendee_email, timezone, send_updates=True, service=None):
+                 attendee_email, timezone, send_updates=True, service=None, ical_uid=None):
     """events.insert - creates the meeting and (with send_updates) emails the
-    attendee a real Google Calendar invitation. Returns the created event id."""
+    attendee a real Google Calendar invitation. Returns the created event id.
+
+    Pass `ical_uid` (a stable string derived from the queue id) so a retry after
+    a lost insert response collides with the first event instead of double-booking.
+    """
     svc = _service(gmail_address, service)
     end = start + timedelta(minutes=duration_minutes)
     body = {
@@ -171,9 +228,11 @@ def create_event(gmail_address, calendar_id, *, summary, description, start, dur
         "end": {"dateTime": end.strftime("%Y-%m-%dT%H:%M:%S"), "timeZone": timezone},
         "attendees": [{"email": attendee_email}],
     }
-    created = svc.events().insert(
+    if ical_uid:
+        body["iCalUID"] = ical_uid
+    created = _retry_google(lambda: svc.events().insert(
         calendarId=calendar_id,
         body=body,
         sendUpdates="all" if send_updates else "none",
-    ).execute()
+    ).execute())
     return created["id"]

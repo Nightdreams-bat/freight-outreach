@@ -202,9 +202,50 @@ def test_create_event_send_updates_none():
     assert svc.events().captured["body"]["end"]["dateTime"] == "2026-09-01T15:45:00"
 
 
-# --- local_tz_name -----------------------------------------------------------
+# --- timezone resolution ----------------------------------------------------
 
-def test_local_tz_name_is_loadable_or_etc_gmt():
+def test_local_tz_name_is_detection_only():
     name = calendar_api.local_tz_name()
-    assert isinstance(name, str) and name
-    assert name == "UTC" or name.startswith("Etc/GMT") or "/" in name
+    # detection-only now: a valid IANA name or "" (never a fixed Etc/GMT offset)
+    assert isinstance(name, str)
+    assert name == "" or "/" in name or name == "UTC"
+    assert not name.startswith("Etc/GMT")
+
+
+def test_resolve_timezone_uses_config_value():
+    assert calendar_api.resolve_timezone({"timezone": "Europe/Chisinau"}) == "Europe/Chisinau"
+
+
+def test_resolve_timezone_rejects_invalid():
+    with pytest.raises(calendar_api.CalendarError):
+        calendar_api.resolve_timezone({"timezone": "Mars/Olympus_Mons"})
+
+
+def test_resolve_timezone_raises_when_unresolvable(monkeypatch):
+    monkeypatch.setattr(calendar_api, "local_tz_name", lambda: "")
+    with pytest.raises(calendar_api.CalendarError):
+        calendar_api.resolve_timezone({"timezone": ""})
+
+
+def test_create_event_uses_configured_zone_for_conversion():
+    # busy interval given in UTC; with tz=America/New_York the slot check must
+    # compare against New York wall-clock, not the test host's local zone.
+    svc = FakeService(busy=[{"start": "2026-01-15T14:00:00+00:00", "end": "2026-01-15T15:00:00+00:00"}])
+    # 14:00 UTC == 09:00 New York (EST). A 09:30 NY meeting overlaps; 10:00 doesn't.
+    assert calendar_api.slot_is_free(
+        "me@x.com", "primary", datetime(2026, 1, 15, 9, 30), 30, service=svc, tz="America/New_York"
+    ) is False
+    svc2 = FakeService(busy=[{"start": "2026-01-15T14:00:00+00:00", "end": "2026-01-15T15:00:00+00:00"}])
+    assert calendar_api.slot_is_free(
+        "me@x.com", "primary", datetime(2026, 1, 15, 10, 0), 30, service=svc2, tz="America/New_York"
+    ) is True
+
+
+def test_create_event_sets_deterministic_ical_uid():
+    svc = FakeService()
+    calendar_api.create_event(
+        "me@x.com", "primary", summary="s", description="d",
+        start=datetime(2026, 9, 1, 15, 0), duration_minutes=30,
+        attendee_email="a@b.com", timezone="UTC", service=svc, ical_uid="freight-abc123@freightoutreach",
+    )
+    assert svc.events().captured["body"]["iCalUID"] == "freight-abc123@freightoutreach"

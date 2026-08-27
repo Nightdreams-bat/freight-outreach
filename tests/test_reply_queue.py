@@ -39,6 +39,7 @@ def isolate(tmp_path, monkeypatch):
     monkeypatch.setattr(reply_queue, "remaining_today", lambda cap: 50)
     monkeypatch.setattr(reply_queue.calendar_api, "create_event", lambda *a, **k: "evt_test123")
     monkeypatch.setattr(reply_queue.calendar_api, "local_tz_name", lambda: "UTC")
+    monkeypatch.setattr(reply_queue.calendar_api, "slot_is_free", lambda *a, **k: True)
 
 
 def _enqueue_book():
@@ -102,6 +103,42 @@ def test_approve_book_creates_event_sends_and_writes_sheet():
     assert store.values[(5, "ReplyStatus")] == "booked"
     assert reply_queue.get(qid)["status"] == "done"
     assert reply_queue.pending() == []
+
+
+def test_approve_book_blocked_when_slot_taken_since_draft(monkeypatch):
+    monkeypatch.setattr(reply_queue.calendar_api, "slot_is_free", lambda *a, **k: False)
+    created = []
+    monkeypatch.setattr(reply_queue.calendar_api, "create_event",
+                        lambda *a, **k: created.append(1) or "evt_x")
+    qid = _enqueue_book()
+    result = reply_queue.approve(qid, cfg=CFG, store=FakeStore(), mailer=FakeMailer())
+    assert result["status"] == "error"
+    assert "taken" in result["message"]
+    assert created == []
+    assert reply_queue.get(qid)["status"] == "pending"
+
+
+def test_approve_book_passes_deterministic_ical_uid(monkeypatch):
+    seen = {}
+    monkeypatch.setattr(reply_queue.calendar_api, "create_event",
+                        lambda *a, **k: seen.update(k) or "evt_ical")
+    qid = _enqueue_book()
+    reply_queue.approve(qid, cfg=CFG, store=FakeStore(), mailer=FakeMailer())
+    assert seen["ical_uid"] == f"freight-{qid}@freightoutreach"
+
+
+def test_approve_book_soon_meeting_suppresses_reminder():
+    from datetime import timedelta
+
+    soon = datetime.now() + timedelta(hours=20)
+    qid = reply_queue.enqueue(
+        {"kind": "book", "start": soon, "email_subject": "Confirmed", "email_body": "see you",
+         "event_summary": "s", "event_description": "d"},
+        lead_row_idx=9, lead_email="s@x.test", lead_name="S", lead_company="Z",
+    )
+    store = FakeStore()
+    reply_queue.approve(qid, cfg=CFG, store=store, mailer=FakeMailer())
+    assert (9, "ReminderSentAt") in store.values
 
 
 # --- approve: propose / decline_ack -----------------------------------

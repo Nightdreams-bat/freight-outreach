@@ -11,6 +11,7 @@ queueing or touching the sheet).
 """
 
 import argparse
+import json
 from datetime import datetime
 
 from outreach import gmail_read, llm, reply_queue, scheduling
@@ -20,11 +21,36 @@ from outreach.excel_store import ExcelFileLocked, ExcelStore
 from outreach.lead_fields import lead_company, lead_name
 from outreach.llm import LLMNotConfigured
 from outreach.logging_setup import get_logger
+from outreach.paths import REPLY_FAILURES_PATH
 
 log = get_logger("process_replies")
 
 # A lead in one of these reply states is done - don't keep scanning their thread.
 TERMINAL_REPLY_STATES = {"booked", "no"}
+
+# Give up classifying a single message after this many failures (encoding, size,
+# an API edge) - mark it processed and log once for manual review.
+MAX_CLASSIFY_ATTEMPTS = 3
+
+
+def _load_failures():
+    try:
+        data = json.loads(REPLY_FAILURES_PATH.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def _save_failures(counts):
+    try:
+        REPLY_FAILURES_PATH.write_text(json.dumps(counts, indent=0), encoding="utf-8")
+    except OSError as e:  # noqa: BLE001
+        log.warning("Couldn't persist reply-failure counts: %s", e)
+
+
+def _bump_failure(counts, message_id):
+    counts[message_id] = int(counts.get(message_id, 0)) + 1
+    return counts[message_id]
 
 
 def _awaiting_reply(store):
@@ -102,7 +128,8 @@ def main(argv=None):
     now_iso = datetime.now().isoformat(timespec="minutes")
     sender_company = cfg.get("sender_company") or ""
 
-    queued = flagged = skipped = 0
+    queued = flagged = skipped = classified = failed = 0
+    failures = _load_failures()
 
     for reply in replies:
         email = reply["email"].strip().lower()
@@ -110,6 +137,7 @@ def main(argv=None):
         if not match:
             continue
         row_idx, values = match
+        message_id = str(reply["message_id"])
 
         text = (reply.get("text") or "").strip()
         if not text:
@@ -123,12 +151,27 @@ def main(argv=None):
             )
         except LLMNotConfigured:
             log.error("No Anthropic API key set - add one in Settings to classify replies.")
-            return
+            _save_failures(failures)
+            return _summary(classified, queued, flagged, failed, skipped)
         except Exception as e:  # noqa: BLE001
-            log.error("Could not classify the reply from %s (%s) - skipping.", email, e)
-            skipped += 1
+            attempts = _bump_failure(failures, message_id)
+            if attempts >= MAX_CLASSIFY_ATTEMPTS:
+                log.error(
+                    "Giving up on the reply from %s after %d failed classification "
+                    "attempts (%s) - marking it processed. Review it by hand in Gmail.",
+                    email, attempts, e,
+                )
+                gmail_read.mark_processed([message_id])
+                failures.pop(message_id, None)
+                failed += 1
+            else:
+                log.error("Could not classify the reply from %s (attempt %d/%d: %s) - will retry.",
+                          email, attempts, MAX_CLASSIFY_ATTEMPTS, e)
+                skipped += 1
             continue
 
+        classified += 1
+        failures.pop(message_id, None)
         intent = classification.get("intent") or ""
         summary = classification.get("summary") or ""
         action = scheduling.plan_action(classification, values, cfg, gmail_address)
@@ -166,14 +209,26 @@ def main(argv=None):
         except ExcelFileLocked as e:
             log.warning("Couldn't update the sheet for %s: %s", email, e)
 
-        gmail_read.mark_processed([reply["message_id"]])
+        gmail_read.mark_processed([message_id])
 
+    _save_failures(failures)
     log.info(
-        "Reply scan complete: %d queued for approval, %d flagged for manual scheduling, %d skipped.",
-        queued,
-        flagged,
-        skipped,
+        "Reply scan complete: %d classified, %d queued for approval, %d flagged for "
+        "manual scheduling, %d gave up, %d skipped (will retry).",
+        classified, queued, flagged, failed, skipped,
     )
+    return _summary(classified, queued, flagged, failed, skipped)
+
+
+def _summary(classified, queued, flagged, failed, skipped):
+    return {
+        "classified": classified,
+        "enqueued": queued,
+        "flagged": flagged,
+        "failed": failed,
+        "skipped": skipped,
+        "errors": [],
+    }
 
 
 if __name__ == "__main__":

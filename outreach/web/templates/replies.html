@@ -29,7 +29,7 @@
   </div>
 
   {% if item.reply_summary %}
-  <div class="quote">{{ item.reply_summary }}</div>
+  <div class="quote">{{ item.reply_summary | replace('\n', ' ') | replace('\r', ' ') }}</div>
   {% endif %}
 
   {% if a.kind == "manual" %}

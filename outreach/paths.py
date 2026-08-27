@@ -42,4 +42,8 @@ DEFAULT_EXCEL_PATH = data_dir() / "clients.xlsx"
 # Reply-handling feature: which inbound messages have already been classified,
 # and the queue of drafted actions awaiting the client's approval.
 PROCESSED_REPLIES_PATH = data_dir() / "processed_replies.json"
+# Per-message classification-failure counts, so a message that reliably breaks
+# the classifier is given up on (and marked processed) after a few tries instead
+# of costing an API call every scan forever.
+REPLY_FAILURES_PATH = data_dir() / "reply_failures.json"
 REPLY_QUEUE_PATH = data_dir() / "reply_queue.jsonl"

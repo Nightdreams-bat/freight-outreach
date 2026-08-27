@@ -1,7 +1,13 @@
 import argparse
 
 from outreach.config import load_config
-from outreach.core import apply_daily_cap, build_mailer, reminder_candidates, send_reminder_batch
+from outreach.core import (
+    apply_daily_cap,
+    build_mailer,
+    cap_reminders_per_run,
+    reminder_candidates,
+    send_reminder_batch,
+)
 from outreach.excel_store import ExcelFileLocked, ExcelStore
 from outreach.logging_setup import get_logger
 from outreach.optout_scan import scan_optouts
@@ -43,12 +49,8 @@ def main():
         return
 
     max_per_run = cfg.get("max_reminders_per_run", 60)
-    if len(candidates) > max_per_run:
-        # Don't go silent on a busy day - send the soonest N and let the next run
-        # pick up the rest, but log loudly in case it's a data problem.
-        candidates.sort(key=lambda c: c[2])  # soonest meeting first
-        overflow = len(candidates) - max_per_run
-        candidates = candidates[:max_per_run]
+    candidates, overflow = cap_reminders_per_run(candidates, max_per_run)
+    if overflow:
         log.critical(
             f"{max_per_run + overflow} reminders matched this run, over the per-run cap of "
             f"{max_per_run}. Sending the {max_per_run} with the soonest meetings; the other "
