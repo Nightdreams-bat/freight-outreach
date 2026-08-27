@@ -15,3 +15,6 @@ release/
 
 # Added by ggshield
 .cache_ggshield
+
+# seeded design-canvas payload (regenerated from Main.dc.html)
+design-mockup/freight-outreach-dashboard.html
