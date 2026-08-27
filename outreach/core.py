@@ -109,10 +109,20 @@ def followup_candidates(store, cfg, now=None):
         if stage >= len(offsets):
             continue
 
-        last_touch = parse_meeting_time(row.get("FollowupSentAt")) or cold_at
-        due_after = timedelta(days=float(offsets[stage]))
-        if now - last_touch >= due_after:
-            candidates.append((row_idx, row, stage))
+        # The cadence is measured from the cold intro: touch N goes out once
+        # `offsets[N]` days have passed since ColdEmailSentAt (so [3, 7, 14] means
+        # days 3, 7, 14 - not 3, 10, 24).
+        if now - cold_at < timedelta(days=float(offsets[stage])):
+            continue
+
+        # Floor: never send two touches less than a day apart. Guards against a
+        # drip that was switched on after weeks of silence firing every stage at
+        # once, and against a re-send if a mid-batch sheet lock skipped the stage bump.
+        last_sent = parse_meeting_time(row.get("FollowupSentAt"))
+        if last_sent is not None and now - last_sent < timedelta(days=1):
+            continue
+
+        candidates.append((row_idx, row, stage))
     return candidates
 
 
@@ -309,8 +319,11 @@ def send_followup_batch(cfg, store, mailer, candidates, dry_run=False):
 
         try:
             mailer.send(email, subject, body)
-            store.set_value(row_idx, "FollowupStage", stage + 1)
+            # Stamp the timestamp first: if the sheet is locked between these two
+            # saves, next run re-sends this same nudge (one duplicate, caught by
+            # the 1-day floor in followup_candidates) rather than skipping ahead.
             store.mark_sent(row_idx, "FollowupSentAt")
+            store.set_value(row_idx, "FollowupStage", stage + 1)
             record_sent(1)
             record_send_history("followup", email, row.get("Name"), row.get("Company"), subject)
             log.info(f"Sent follow-up #{stage + 1} to {email} (row {row_idx})")

@@ -90,9 +90,21 @@ def test_post_route_no_5xx(client, route, data):
     assert client.post(route, data=data, follow_redirects=True).status_code < 500
 
 
-def test_followup_offsets_parse_ignores_junk(client):
+def test_followup_offsets_parse_ignores_junk_and_sub_one(client):
     client.post("/settings", data={"followup_settings": "1", "followup_enabled": "on",
-                                   "followup_offsets_days": "2, 5, bad, 9"},
+                                   "followup_offsets_days": "9, 2, bad, 0, -3, 5"},
                 follow_redirects=True)
-    # load_config returns a fresh dict each call; check the shared cfg got updated
+    # non-numbers and values < 1 dropped; result sorted ascending
     assert web_app.load_config()["followup_offsets_days"] == [2, 5, 9]
+
+
+def test_run_job_followups_noop_when_drip_disabled(monkeypatch):
+    cfg = dict(BASE_CFG)
+    cfg["followup_enabled"] = False
+    monkeypatch.setattr(web_app, "load_config", lambda: dict(cfg))
+    monkeypatch.setattr(web_app, "ExcelStore", lambda *a, **k: FakeStore())
+    sent = []
+    monkeypatch.setattr(web_app, "send_followup_batch", lambda *a, **k: sent.append(1) or {"sent": 1, "errors": []})
+    web_app._run_job("followups")
+    assert sent == []
+    assert "off" in web_app._JOB["summary"].lower()

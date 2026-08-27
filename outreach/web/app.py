@@ -65,12 +65,22 @@ def _run_job(action):
             if deferred:
                 summary += f", {deferred} deferred (daily cap)"
         elif action == "followups":
-            cands, _, deferred = apply_daily_cap(
-                followup_candidates(store, cfg), cfg.get("daily_send_cap", 150),
-                sort_key=priority_sort_key(cfg),
-            )
-            r = send_followup_batch(cfg, store, build_mailer(cfg), cands) if cands else {"sent": 0, "errors": []}
-            summary = f"{r['sent']} follow-up(s) sent"
+            if not cfg_get(cfg, "followup_enabled"):
+                r = {"sent": 0, "errors": []}
+                summary = "Follow-up drip is off - turn it on in Settings first"
+            else:
+                raw = followup_candidates(store, cfg)
+                max_per_run = cfg_get(cfg, "max_followups_per_run")
+                if len(raw) > max_per_run:
+                    r = {"sent": 0, "errors": []}
+                    summary = (f"{len(raw)} follow-ups matched, over the safety cap of "
+                               f"{max_per_run} - sent none, check clients.xlsx")
+                else:
+                    cands, _, deferred = apply_daily_cap(
+                        raw, cfg.get("daily_send_cap", 150), sort_key=priority_sort_key(cfg),
+                    )
+                    r = send_followup_batch(cfg, store, build_mailer(cfg), cands) if cands else {"sent": 0, "errors": []}
+                    summary = f"{r['sent']} follow-up(s) sent"
         elif action == "reminders":
             cands = reminder_candidates(store, cfg.get("reminder_window_hours", 2))
             cands, _, _ = apply_daily_cap(cands, cfg.get("daily_send_cap", 150), sort_key=lambda c: c[2])
@@ -333,6 +343,8 @@ def create_app():
             return ("\n".join(lines[-200:]) or "(log is empty)"), 200, {"Content-Type": "text/plain; charset=utf-8"}
         except FileNotFoundError:
             return "(no log yet)", 200, {"Content-Type": "text/plain; charset=utf-8"}
+        except OSError as e:
+            return f"(log unavailable: {e})", 200, {"Content-Type": "text/plain; charset=utf-8"}
 
     @app.route("/replies")
     def replies_page():
@@ -461,11 +473,16 @@ def create_app():
                     if not part:
                         continue
                     try:
-                        offsets.append(int(float(part)))
+                        n = int(float(part))
                     except ValueError:
                         flash(f"Ignored non-number in the follow-up cadence: '{part}'.", "warning")
+                        continue
+                    if n >= 1:
+                        offsets.append(n)
+                    else:
+                        flash("Follow-up cadence must be whole days of 1 or more.", "warning")
                 if offsets:
-                    cfg["followup_offsets_days"] = offsets
+                    cfg["followup_offsets_days"] = sorted(offsets)
 
             if "scoring_keywords" in request.form:
                 kws = [k.strip() for k in request.form["scoring_keywords"].split(",") if k.strip()]

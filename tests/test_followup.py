@@ -100,6 +100,29 @@ def test_stage_exhausted_drops_out():
     assert core.followup_candidates(store, CFG, now=NOW) == []
 
 
+def test_cadence_is_measured_from_the_cold_intro_not_the_last_touch():
+    # stage 1, cold intro 6 days ago, offsets[1] = 7 -> NOT due even though the
+    # last touch was long ago (old "gap from previous touch" logic would fire).
+    store = FakeStore([_lead(cold_days_ago=6, FollowupStage=1,
+                             FollowupSentAt=_ts(NOW - timedelta(days=3)))])
+    assert core.followup_candidates(store, CFG, now=NOW) == []
+    # cold intro 8 days ago -> now past offsets[1]=7 -> due.
+    store = FakeStore([_lead(cold_days_ago=8, FollowupStage=1,
+                             FollowupSentAt=_ts(NOW - timedelta(days=3)))])
+    assert [(i, s) for i, _, s in core.followup_candidates(store, CFG, now=NOW)] == [(2, 1)]
+
+
+def test_one_day_floor_between_touches():
+    # every offset satisfied (cold 30d ago) but the last touch was 3 hours ago.
+    store = FakeStore([_lead(cold_days_ago=30, FollowupStage=1,
+                             FollowupSentAt=_ts(NOW - timedelta(hours=3)))])
+    assert core.followup_candidates(store, CFG, now=NOW) == []
+    # ... and once a full day has passed it's due again.
+    store = FakeStore([_lead(cold_days_ago=30, FollowupStage=1,
+                             FollowupSentAt=_ts(NOW - timedelta(days=2)))])
+    assert [(i, s) for i, _, s in core.followup_candidates(store, CFG, now=NOW)] == [(2, 1)]
+
+
 # --- sending -----------------------------------------------------------
 
 def test_send_bumps_stage_and_stamps_time():

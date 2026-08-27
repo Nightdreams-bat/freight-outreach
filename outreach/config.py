@@ -34,7 +34,7 @@ DEFAULTS = {
     # Multi-touch follow-up drip (outreach/send_followups.py). Off until the
     # client turns it on in Settings.
     "followup_enabled": False,
-    "followup_offsets_days": [3, 7, 14],  # days after the cold intro for touch 1, 2, 3...
+    "followup_offsets_days": [3, 7, 14],  # touch N goes out this many days after the cold intro
     "max_followups_per_run": 25,
     # Rules-based lead priority (outreach/scoring.py) - used to order the send
     # queue when the daily cap trims it. A numeric "Priority" cell in the sheet

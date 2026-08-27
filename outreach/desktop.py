@@ -159,10 +159,16 @@ def _try_native_window(url):
             window.events.loaded += lambda: loaded.__setitem__("ok", True)
         except Exception:  # noqa: BLE001 - older pywebview: skip the probe
             loaded["ok"] = True
+        t0 = time.time()
         webview.start()  # blocks until the window is closed
     except Exception as e:  # noqa: BLE001
         log.info("pywebview failed to start: %s", e)
         return False
+    # If start() blocked for a while the user had a real window and closed it -
+    # don't pop a browser window behind them. Only fall back when start()
+    # returned almost immediately (the window never actually opened).
+    if time.time() - t0 > 5:
+        return True
     return loaded["ok"]
 
 

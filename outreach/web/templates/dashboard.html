@@ -92,6 +92,7 @@
   var logTail = document.getElementById("logTail");
   var logBox = document.getElementById("logBox");
   var polling = null;
+  var startedThisSession = false;
 
   function setButtons(disabled) {
     buttons.forEach(function (b) { b.disabled = disabled; });
@@ -104,6 +105,9 @@
 
   function render(job) {
     if (!job || job.status === "idle") { statusBox.style.display = "none"; setButtons(false); return; }
+    // Don't surface a finished job from an earlier visit - only show the banner
+    // for a run started on this page load.
+    if (job.status !== "running" && !startedThisSession) { statusBox.style.display = "none"; setButtons(false); return; }
     statusBox.style.display = "flex";
     statusBox.className = "runstatus " + job.status;
     if (job.status === "running") {
@@ -125,6 +129,7 @@
     btn.addEventListener("click", function () {
       var msg = btn.getAttribute("data-confirm");
       if (msg && !window.confirm(msg)) return;
+      startedThisSession = true;
       setButtons(true);
       fetch("/run/" + btn.getAttribute("data-action"), { method: "POST" })
         .then(function (r) { return r.json(); })
