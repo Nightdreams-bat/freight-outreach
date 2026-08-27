@@ -56,7 +56,7 @@ def client(monkeypatch, tmp_path):
 
 
 GET_ROUTES = ["/", "/leads", "/send", "/replies", "/history", "/diagnostics",
-              "/blocklist", "/settings", "/run/status", "/logs/tail"]
+              "/diagnostics/run", "/blocklist", "/settings", "/run/status", "/logs/tail"]
 
 POST_ROUTES = [
     ("/leads/2/suppress", {}),

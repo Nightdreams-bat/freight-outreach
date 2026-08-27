@@ -21,7 +21,7 @@ from outreach.core import (
     send_followup_batch,
     send_reminder_batch,
 )
-from outreach.diagnostics import run_checks
+from outreach.diagnostics import CHECK_NAMES, run_checks
 from outreach.excel_store import ExcelFileLocked, ExcelStore, sheet_headers
 from outreach.column_map import detect as detect_columns
 from outreach.gmail_oauth import run_oauth_flow
@@ -377,8 +377,13 @@ def create_app():
 
     @app.route("/diagnostics")
     def diagnostics_page():
-        cfg = load_config()
-        return render_template("diagnostics.html", checks=run_checks(cfg))
+        # The page shell renders instantly; the checks (live network round-trips)
+        # are fetched from /diagnostics/run and filled in client-side.
+        return render_template("diagnostics.html", check_names=CHECK_NAMES)
+
+    @app.route("/diagnostics/run")
+    def diagnostics_run():
+        return jsonify(run_checks(load_config()))
 
     @app.route("/blocklist")
     def blocklist_page():

@@ -1,21 +1,19 @@
 {% extends "base.html" %}
 {% block title %}Diagnostics{% endblock %}
 {% block topbar_actions %}
-  <a href="{{ url_for('diagnostics_page') }}" class="btn sm">Re-run</a>
+  <button class="btn sm" id="rerunBtn" type="button">Re-run</button>
 {% endblock %}
 {% block content %}
 
 <p class="subtitle">Live checks of every connection the tool needs. Re-run after connecting Gmail or changing settings.</p>
 
-<div class="card">
-  {% for c in checks %}
-  <div class="diag-row {{ 'ok' if c.status == 'ok' else ('warn' if c.status == 'warn' else 'fail') }}">
+<div class="card" id="diagCard">
+  {% for name in check_names %}
+  <div class="diag-row checking" data-name="{{ name }}">
     <span class="lamp"></span>
     <div>
-      <div class="name">{{ c.name }}
-        <span class="badge {{ 'ok' if c.status == 'ok' else ('new' if c.status == 'warn' else 'danger') }}">{{ c.status|upper }}</span>
-      </div>
-      {% if c.detail %}<div class="detail">{{ c.detail }}</div>{% endif %}
+      <div class="name">{{ name }} <span class="badge off">checking…</span></div>
+      <div class="detail"></div>
     </div>
   </div>
   {% endfor %}
@@ -26,4 +24,40 @@
   not a failure. <strong>FAIL</strong> is something that will stop a real send or booking.
 </p>
 
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  var btn = document.getElementById("rerunBtn");
+  var rows = {};
+  document.querySelectorAll(".diag-row").forEach(function (r) { rows[r.getAttribute("data-name")] = r; });
+
+  function setRow(r, status, detail) {
+    r.className = "diag-row " + ({ ok: "ok", warn: "warn", fail: "fail" }[status] || "checking");
+    var badgeClass = { ok: "ok", warn: "new", fail: "danger" }[status] || "off";
+    r.querySelector(".name .badge").className = "badge " + badgeClass;
+    r.querySelector(".name .badge").textContent = status ? status.toUpperCase() : "checking…";
+    r.querySelector(".detail").textContent = detail || "";
+  }
+
+  function run() {
+    btn.disabled = true;
+    Object.values(rows).forEach(function (r) { setRow(r, null, ""); });
+    fetch("{{ url_for('diagnostics_run') }}")
+      .then(function (res) { return res.json(); })
+      .then(function (checks) {
+        checks.forEach(function (c) { if (rows[c.name]) setRow(rows[c.name], c.status, c.detail); });
+        btn.disabled = false;
+      })
+      .catch(function (e) {
+        Object.values(rows).forEach(function (r) { setRow(r, "fail", "could not run: " + e); });
+        btn.disabled = false;
+      });
+  }
+
+  btn.addEventListener("click", run);
+  run();
+})();
+</script>
 {% endblock %}
