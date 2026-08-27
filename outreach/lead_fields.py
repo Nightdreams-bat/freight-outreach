@@ -32,6 +32,17 @@ _SECOND_LEVEL = {"co", "com", "org", "net", "gov", "edu", "ac"}
 
 _SPLIT_RE = re.compile(r"[.\-_+]+")
 
+_EMAIL_RE = re.compile(r"^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$")
+
+
+def valid_email(addr):
+    """Syntactic-only check (no network / MX lookup). Lower-cases the domain."""
+    text = str(addr or "").strip()
+    if not text or len(text) > 254 or "@" not in text:
+        return False
+    local, _, domain = text.rpartition("@")
+    return bool(_EMAIL_RE.match(f"{local}@{domain.lower()}"))
+
 
 def derive_name(email):
     """Best-effort first name from an email's local part, or None."""

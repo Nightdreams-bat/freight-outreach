@@ -214,3 +214,52 @@ class ExcelStore:
     def mark_sent(self, row_idx, logical_timestamp_col, when=None):
         when = when or datetime.now()
         self.set_value(row_idx, logical_timestamp_col, when.strftime("%Y-%m-%d %H:%M:%S"))
+
+    # --- appending new leads (lead sourcing, BETA) -------------------
+    # This is the only non-state write. It's exempt from the state-column guard
+    # because it adds a brand-new row - it never mutates a cell the client owns.
+
+    def existing_emails(self):
+        """Lower-cased set of every email already in the sheet."""
+        return {
+            str(v["Email"]).strip().lower()
+            for _, v, _ in self.all_rows()
+            if str(v.get("Email") or "").strip()
+        }
+
+    def _append_col_for(self, logical):
+        """Column index to write a new-lead field to. Name/Company/Email/Phone use
+        the resolved map; Website/Address only if the sheet already has such a
+        column (mapped or a header of that literal name). Never creates a header."""
+        col = self.col_index.get(logical)
+        if isinstance(col, int):
+            return col
+        target = self.effective_map.get(logical) or (logical if logical in self.headers else None)
+        if isinstance(target, str):
+            return self._col_for_header(target)
+        return None
+
+    def add_lead(self, data):
+        """Append a lead row. Returns the new row index, or None if the email is
+        blank / invalid / already present. Only writes fields that are mapped to a
+        real column - never invents a header."""
+        from outreach.lead_fields import valid_email
+
+        email = str(data.get("Email") or "").strip()
+        if not valid_email(email) or email.lower() in self.existing_emails():
+            return None
+
+        row_idx = self.ws.max_row + 1
+        wrote_any = False
+        for logical in ("Name", "Company", "Email", "Phone", "Website", "Address"):
+            value = data.get(logical)
+            if value in (None, ""):
+                continue
+            col = self._append_col_for(logical)
+            if isinstance(col, int):
+                self.ws.cell(row=row_idx, column=col, value=value)
+                wrote_any = True
+        if not wrote_any:
+            return None
+        self._save()
+        return row_idx

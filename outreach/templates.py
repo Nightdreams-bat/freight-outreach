@@ -114,6 +114,135 @@ Best,
 """
 
 
+# --- Romanian template set ------------------------------------------------
+# The tool is used mainly in Romanian. Same Jinja variables and {% if sender_phone %}
+# guards as the English constants above; natural business Romanian.
+
+COLD_INTRO_SUBJECT_RO = "Transport {{ company }} - o întrebare scurtă"
+
+COLD_INTRO_BODY_RO = """Bună ziua {{ name }},
+
+Sunt {{ sender_name }}, de la {{ sender_company }}. {{ sender_pitch }}
+
+M-am gândit că ar putea fi util să discutăm despre transportul {{ company }} - vă pot oferi mai multe detalii dacă sunteți deschis unui apel scurt săptămâna aceasta.
+
+Dacă acest lucru nu vă este util acum, nicio problemă, spuneți-mi și nu voi mai reveni.
+
+Cu stimă,
+{{ sender_name }}
+{{ sender_company }}
+{% if sender_phone %}{{ sender_phone }}{% endif %}
+"""
+
+FOLLOWUP_SUBJECT_RO = "Revin - transport {{ company }}"
+
+FOLLOWUP_BODY_RO = """Bună ziua {{ name }},
+
+Revin la mesajul meu anterior despre transportul {{ company }}. Știu că inboxul se aglomerează, așa că nu vă presez - am vrut doar să mă asigur că mesajul nu s-a pierdut.
+
+Dacă un apel scurt v-ar fi util, mă adaptez programului dumneavoastră. Iar dacă nu este momentul potrivit, spuneți-mi și mă opresc aici.
+
+Cu stimă,
+{{ sender_name }}
+{{ sender_company }}
+{% if sender_phone %}{{ sender_phone }}{% endif %}
+"""
+
+FOLLOWUP_BREAKUP_BODY_RO = """Bună ziua {{ name }},
+
+V-am contactat de câteva ori în legătură cu transportul {{ company }} fără să primesc un răspuns, așa că mă opresc aici și nu vă voi mai încărca inboxul.
+
+Dacă situația se schimbă pe viitor, îmi puteți scrie oricând - v-aș ajuta cu plăcere.
+
+Cu stimă,
+{{ sender_name }}
+{{ sender_company }}
+{% if sender_phone %}{{ sender_phone }}{% endif %}
+"""
+
+REMINDER_SUBJECT_RO = "Apelul nostru {{ meeting_time }}"
+
+REMINDER_BODY_RO = """Bună ziua {{ name }},
+
+Un scurt memento că avem un apel programat pentru {{ meeting_time }}. Aștept cu interes să discutăm despre nevoile de transport ale {{ company }}.
+
+Spuneți-mi dacă s-a schimbat ceva între timp.
+
+Cu stimă,
+{{ sender_name }}
+{{ sender_company }}
+{% if sender_phone %}{{ sender_phone }}{% endif %}
+"""
+
+MEETING_CONFIRM_SUBJECT_RO = "Confirmat - apelul nostru {{ meeting_time }}"
+
+MEETING_CONFIRM_BODY_RO = """Bună ziua {{ name }},
+
+Perfect - am rezervat {{ meeting_time }} și am trimis o invitație în calendar, ca să fie în agenda amândurora.
+
+Aștept cu interes să discutăm despre nevoile de transport ale {{ company }}. Dacă se schimbă ceva în programul dumneavoastră, spuneți-mi.
+
+Cu stimă,
+{{ sender_name }}
+{{ sender_company }}
+{% if sender_phone %}{{ sender_phone }}{% endif %}
+"""
+
+PROPOSE_TIMES_SUBJECT_RO = "Câteva intervale disponibile - {{ company }}"
+
+PROPOSE_TIMES_BODY_RO = """Bună ziua {{ name }},
+
+Mă bucur că sunteți deschis unui apel. Iată câteva intervale care îmi convin:
+
+{% for slot in slots %}  - {{ slot }}
+{% endfor %}
+Spuneți-mi care vă convine și trimit o invitație în calendar. Dacă niciunul nu se potrivește, spuneți-mi aproximativ când sunteți disponibil și mă adaptez.
+
+Cu stimă,
+{{ sender_name }}
+{{ sender_company }}
+{% if sender_phone %}{{ sender_phone }}{% endif %}
+"""
+
+DECLINE_ACK_SUBJECT_RO = "Mulțumesc pentru răspuns - {{ company }}"
+
+DECLINE_ACK_BODY_RO = """Bună ziua {{ name }},
+
+Am înțeles și vă mulțumesc că mi-ați spus. Nu voi mai reveni.
+
+Dacă nevoile de transport ale {{ company }} se schimbă pe viitor, îmi puteți scrie oricând.
+
+Cu stimă,
+{{ sender_name }}
+{{ sender_company }}
+"""
+
+
+# config key -> (English, Romanian). One source of truth for config.py seeding,
+# core.py's fallback, and the Settings "reset templates" action.
+_TEMPLATE_KEYS = {
+    "cold_subject_template": (COLD_INTRO_SUBJECT, COLD_INTRO_SUBJECT_RO),
+    "cold_body_template": (COLD_INTRO_BODY, COLD_INTRO_BODY_RO),
+    "followup_subject_template": (FOLLOWUP_SUBJECT, FOLLOWUP_SUBJECT_RO),
+    "followup_body_template": (FOLLOWUP_BODY, FOLLOWUP_BODY_RO),
+    "followup_breakup_body_template": (FOLLOWUP_BREAKUP_BODY, FOLLOWUP_BREAKUP_BODY_RO),
+    "reminder_subject_template": (REMINDER_SUBJECT, REMINDER_SUBJECT_RO),
+    "reminder_body_template": (REMINDER_BODY, REMINDER_BODY_RO),
+    "meeting_confirm_subject_template": (MEETING_CONFIRM_SUBJECT, MEETING_CONFIRM_SUBJECT_RO),
+    "meeting_confirm_body_template": (MEETING_CONFIRM_BODY, MEETING_CONFIRM_BODY_RO),
+    "propose_times_subject_template": (PROPOSE_TIMES_SUBJECT, PROPOSE_TIMES_SUBJECT_RO),
+    "propose_times_body_template": (PROPOSE_TIMES_BODY, PROPOSE_TIMES_BODY_RO),
+    "decline_ack_subject_template": (DECLINE_ACK_SUBJECT, DECLINE_ACK_SUBJECT_RO),
+    "decline_ack_body_template": (DECLINE_ACK_BODY, DECLINE_ACK_BODY_RO),
+}
+
+
+def defaults(lang="en"):
+    """{config_key: template_text} for every template key, in the given language."""
+    idx = 1 if lang == "ro" else 0
+    return {key: pair[idx] for key, pair in _TEMPLATE_KEYS.items()}
+
+
 _JINJA_ENV = jinja2.Environment(trim_blocks=True, lstrip_blocks=True)
 
 

@@ -36,6 +36,10 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
         <span class="label">Leads / CRM</span>
       </a>
+      <a class="navitem {{ 'active' if active == 'find_leads' }}" href="{{ url_for('find_leads') }}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-5.686 7-11a7 7 0 0 0-14 0c0 5.314 7 11 7 11Z"/><circle cx="12" cy="10" r="2.4"/></svg>
+        <span class="label">Find leads <span class="beta">beta</span></span>
+      </a>
       <a class="navitem {{ 'active' if active == 'send' }}" href="{{ url_for('send_page') }}">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
         <span class="label">Send</span>

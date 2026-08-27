@@ -1,30 +1,20 @@
-import re
 import time
 from datetime import datetime, timedelta
 
 import jinja2
 
 from outreach.excel_store import ExcelFileLocked
-from outreach.lead_fields import lead_company, lead_name
+from outreach.lead_fields import lead_company, lead_name, valid_email
 from outreach.logging_setup import get_logger
 from outreach.mailer import Mailer
 from outreach.send_tracker import record_send_history, record_sent, remaining_today
 from outreach.config import get as cfg_get
 from outreach.scoring import score_lead
-from outreach.templates import (
-    COLD_INTRO_BODY,
-    COLD_INTRO_SUBJECT,
-    FOLLOWUP_BODY,
-    FOLLOWUP_BREAKUP_BODY,
-    FOLLOWUP_SUBJECT,
-    REMINDER_BODY,
-    REMINDER_SUBJECT,
-    render,
-)
+from outreach import templates
+from outreach.templates import render
 
 log = get_logger("core")
 
-EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 SEND_DELAY_SECONDS = 3  # spread sends out a bit; avoids looking like a mail blast
 MEETING_TIME_FORMATS = ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%m/%d/%Y %H:%M")
 
@@ -35,6 +25,7 @@ _DUMMY_CONTEXT = {
     "sender_phone": "555-0100", "sender_pitch": "Sample pitch.",
     "meeting_time": "Monday, Jan 1 at 10:00 AM",
     "stage": 1, "is_last": False,
+    "slots": ["Mon 10:00 AM", "Tue 2:00 PM"],
 }
 
 
@@ -161,12 +152,25 @@ def _check_template(subject_tmpl, body_tmpl):
         return f"Template error: {e}"
 
 
+def _tmpl_defaults(cfg):
+    """Language-correct template fallback for a config that predates a template key."""
+    return templates.defaults(cfg_get(cfg, "template_language"))
+
+
+def _abort_note(n):
+    return f"aborted: {n} consecutive send failures"
+
+
 def send_cold_batch(cfg, store, mailer, candidates, dry_run=False):
     """Sends the cold-intro email to each candidate row. Returns a summary dict."""
     result = {"sent": 0, "skipped": [], "errors": [], "preview": []}
 
-    subject_tmpl = cfg.get("cold_subject_template") or COLD_INTRO_SUBJECT
-    body_tmpl = cfg.get("cold_body_template") or COLD_INTRO_BODY
+    tmpl = _tmpl_defaults(cfg)
+    subject_tmpl = cfg.get("cold_subject_template") or tmpl["cold_subject_template"]
+    body_tmpl = cfg.get("cold_body_template") or tmpl["cold_body_template"]
+
+    abort_threshold = cfg_get(cfg, "send_failure_abort_threshold")
+    consecutive_failures = 0
 
     template_error = _check_template(subject_tmpl, body_tmpl)
     if template_error:
@@ -176,7 +180,7 @@ def send_cold_batch(cfg, store, mailer, candidates, dry_run=False):
 
     for row_idx, row in candidates:
         email = str(row["Email"]).strip()
-        if not EMAIL_RE.match(email):
+        if not valid_email(email):
             log.warning(f"Skipping row {row_idx}: '{email}' doesn't look like a valid email address")
             result["skipped"].append(email)
             continue
@@ -204,13 +208,21 @@ def send_cold_batch(cfg, store, mailer, candidates, dry_run=False):
             record_send_history("cold", email, row.get("Name"), row.get("Company"), subject)
             log.info(f"Sent cold intro to {email} (row {row_idx})")
             result["sent"] += 1
+            consecutive_failures = 0
             time.sleep(SEND_DELAY_SECONDS)
         except ExcelFileLocked as e:
+            # The mail already went out - this is not a send failure.
             log.critical(f"Email to {email} was sent but could not be marked as sent: {e}")
             result["errors"].append(str(e))
         except Exception as e:
             log.error(f"Failed to send to {email} (row {row_idx}): {e}")
             result["errors"].append(str(e))
+            consecutive_failures += 1
+            if consecutive_failures >= abort_threshold:
+                log.critical(f"Aborting cold batch after {consecutive_failures} consecutive "
+                             f"send failures; last error: {e}")
+                result["errors"].append(_abort_note(consecutive_failures))
+                break
 
     return result
 
@@ -219,8 +231,12 @@ def send_reminder_batch(cfg, store, mailer, candidates, dry_run=False):
     """Sends the reminder email to each (row_idx, row, meeting_time) candidate. Returns a summary dict."""
     result = {"sent": 0, "skipped": [], "errors": [], "preview": []}
 
-    subject_tmpl = cfg.get("reminder_subject_template") or REMINDER_SUBJECT
-    body_tmpl = cfg.get("reminder_body_template") or REMINDER_BODY
+    tmpl = _tmpl_defaults(cfg)
+    subject_tmpl = cfg.get("reminder_subject_template") or tmpl["reminder_subject_template"]
+    body_tmpl = cfg.get("reminder_body_template") or tmpl["reminder_body_template"]
+
+    abort_threshold = cfg_get(cfg, "send_failure_abort_threshold")
+    consecutive_failures = 0
 
     template_error = _check_template(subject_tmpl, body_tmpl)
     if template_error:
@@ -230,7 +246,7 @@ def send_reminder_batch(cfg, store, mailer, candidates, dry_run=False):
 
     for row_idx, row, meeting_time in candidates:
         email = str(row["Email"]).strip()
-        if not EMAIL_RE.match(email):
+        if not valid_email(email):
             log.warning(f"Skipping row {row_idx}: '{email}' doesn't look like a valid email address")
             result["skipped"].append(email)
             continue
@@ -258,6 +274,7 @@ def send_reminder_batch(cfg, store, mailer, candidates, dry_run=False):
             record_send_history("reminder", email, row.get("Name"), row.get("Company"), subject)
             log.info(f"Sent reminder to {email} (row {row_idx})")
             result["sent"] += 1
+            consecutive_failures = 0
             time.sleep(SEND_DELAY_SECONDS)
         except ExcelFileLocked as e:
             log.critical(f"Reminder to {email} was sent but could not be marked as sent: {e}")
@@ -265,6 +282,12 @@ def send_reminder_batch(cfg, store, mailer, candidates, dry_run=False):
         except Exception as e:
             log.error(f"Failed to send reminder to {email} (row {row_idx}): {e}")
             result["errors"].append(str(e))
+            consecutive_failures += 1
+            if consecutive_failures >= abort_threshold:
+                log.critical(f"Aborting reminder batch after {consecutive_failures} consecutive "
+                             f"send failures; last error: {e}")
+                result["errors"].append(_abort_note(consecutive_failures))
+                break
 
     return result
 
@@ -280,9 +303,13 @@ def send_followup_batch(cfg, store, mailer, candidates, dry_run=False):
     offsets = list(cfg_get(cfg, "followup_offsets_days") or [])
     last_stage = len(offsets) - 1
 
-    subject_tmpl = cfg.get("followup_subject_template") or FOLLOWUP_SUBJECT
-    body_tmpl = cfg.get("followup_body_template") or FOLLOWUP_BODY
-    breakup_tmpl = cfg.get("followup_breakup_body_template") or FOLLOWUP_BREAKUP_BODY
+    tmpl = _tmpl_defaults(cfg)
+    subject_tmpl = cfg.get("followup_subject_template") or tmpl["followup_subject_template"]
+    body_tmpl = cfg.get("followup_body_template") or tmpl["followup_body_template"]
+    breakup_tmpl = cfg.get("followup_breakup_body_template") or tmpl["followup_breakup_body_template"]
+
+    abort_threshold = cfg_get(cfg, "send_failure_abort_threshold")
+    consecutive_failures = 0
 
     for tmpl in (body_tmpl, breakup_tmpl):
         template_error = _check_template(subject_tmpl, tmpl)
@@ -293,7 +320,7 @@ def send_followup_batch(cfg, store, mailer, candidates, dry_run=False):
 
     for row_idx, row, stage in candidates:
         email = str(row["Email"]).strip()
-        if not EMAIL_RE.match(email):
+        if not valid_email(email):
             log.warning(f"Skipping row {row_idx}: '{email}' doesn't look like a valid email address")
             result["skipped"].append(email)
             continue
@@ -328,6 +355,7 @@ def send_followup_batch(cfg, store, mailer, candidates, dry_run=False):
             record_send_history("followup", email, row.get("Name"), row.get("Company"), subject)
             log.info(f"Sent follow-up #{stage + 1} to {email} (row {row_idx})")
             result["sent"] += 1
+            consecutive_failures = 0
             time.sleep(SEND_DELAY_SECONDS)
         except ExcelFileLocked as e:
             log.critical(f"Follow-up to {email} was sent but could not be marked: {e}")
@@ -335,5 +363,11 @@ def send_followup_batch(cfg, store, mailer, candidates, dry_run=False):
         except Exception as e:
             log.error(f"Failed to send follow-up to {email} (row {row_idx}): {e}")
             result["errors"].append(str(e))
+            consecutive_failures += 1
+            if consecutive_failures >= abort_threshold:
+                log.critical(f"Aborting follow-up batch after {consecutive_failures} consecutive "
+                             f"send failures; last error: {e}")
+                result["errors"].append(_abort_note(consecutive_failures))
+                break
 
     return result

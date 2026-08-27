@@ -1,4 +1,33 @@
-from outreach.lead_fields import derive_company, derive_name, lead_company, lead_name
+import pytest
+
+from outreach.lead_fields import (
+    derive_company,
+    derive_name,
+    lead_company,
+    lead_name,
+    valid_email,
+)
+
+
+@pytest.mark.parametrize("addr,ok", [
+    ("john.doe@example.com", True),
+    ("a+b%c-d_e@sub.example.co.uk", True),
+    ("UPPER@Example.COM", True),
+    ("has space@example.com", False),
+    ("no-tld@example", False),
+    ("trailing.dot@example.com.", False),
+    ("double@@example.com", False),
+    ("naïve@example.com", False),
+    ("", False),
+    ("@example.com", False),
+    ("john@.com", False),
+])
+def test_valid_email_truth_table(addr, ok):
+    assert valid_email(addr) is ok
+
+
+def test_valid_email_rejects_overlong():
+    assert valid_email("a" * 250 + "@example.com") is False
 
 
 def test_derive_name_from_dotted_local_part():

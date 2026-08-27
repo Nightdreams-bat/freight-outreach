@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Find leads{% endblock %}
+{% block content %}
+
+<p class="subtitle">
+  <span class="beta">beta</span>
+  Pulls businesses from OpenStreetMap (free, no account) and tries to find a contact
+  email on their website. Lower yield than a paid data provider, but it costs nothing.
+</p>
+
+<div class="card">
+  <form method="post" action="{{ url_for('find_leads_search') }}" class="setrow">
+    <div>
+      <label class="lab">Business type</label>
+      <input class="field" name="what" value="{{ what or '' }}" placeholder="transport, logistics, warehouse…" required>
+      <label class="lab" style="margin-top:10px">City / region</label>
+      <input class="field" name="where" value="{{ where or '' }}" placeholder="Chișinău" required>
+      <label class="check" style="margin-top:10px">
+        <input type="checkbox" name="scrape" {{ 'checked' if scrape is not defined or scrape }}>
+        Try to find email addresses on company websites
+      </label>
+      <div style="margin-top:12px"><button class="btn primary" type="submit">Search</button></div>
+    </div>
+    <div class="help">Searches can take up to a minute — OpenStreetMap is rate-limited and we pause between requests to stay within its fair-use policy.</div>
+  </form>
+</div>
+
+{% if results is not none %}
+<div class="card pad-tight">
+  {% if not results %}
+    <p class="help" style="margin:12px">No businesses found. Try a broader type or a larger region.</p>
+  {% else %}
+  <form method="post" action="{{ url_for('find_leads_import') }}">
+    <div class="table-wrap">
+      <table class="grid">
+        <thead>
+          <tr><th></th><th>Company</th><th>Email</th><th>Phone</th><th>Website</th><th>Address</th></tr>
+        </thead>
+        <tbody>
+          {% for r in results %}
+          <tr {{ 'class=muted' if r.duplicate }}>
+            <td>
+              {% if r.duplicate %}<span class="badge cold">already in sheet</span>
+              {% else %}<input type="checkbox" name="pick" value="{{ loop.index0 }}" {{ 'checked' if r.lead.Email }}>{% endif %}
+            </td>
+            <td>{{ r.lead.Company }}</td>
+            <td>{{ r.lead.Email or '—' }}</td>
+            <td>{{ r.lead.Phone or '—' }}</td>
+            <td>{% if r.lead.Website %}<a href="{{ r.lead.Website }}" target="_blank" rel="noopener">link</a>{% else %}—{% endif %}</td>
+            <td>{{ r.lead.Address or '—' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div style="margin-top:12px"><button class="btn primary" type="submit">Import selected</button></div>
+  </form>
+  {% endif %}
+</div>
+{% endif %}
+
+{% endblock %}

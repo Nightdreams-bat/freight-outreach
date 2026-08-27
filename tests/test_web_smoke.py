@@ -23,6 +23,12 @@ class FakeStore:
     def set_value(self, *a, **k):
         pass
 
+    def existing_emails(self):
+        return {"lead@acme.test"}
+
+    def add_lead(self, data):
+        return 3
+
 
 @pytest.fixture
 def client(monkeypatch, tmp_path):
@@ -49,6 +55,11 @@ def client(monkeypatch, tmp_path):
     monkeypatch.setattr(web_app, "unregister_task", lambda *a, **k: (True, "ok"))
     monkeypatch.setattr(web_app, "run_oauth_flow", lambda: "sender@test.com")
     monkeypatch.setattr(web_app, "_run_job", lambda action: None)
+    monkeypatch.setattr(web_app.lead_sourcing, "search_businesses",
+                        lambda what, where, **k: [{"Name": "", "Company": "Found SRL",
+                                                   "Email": "hi@found.test", "Phone": "",
+                                                   "Website": "", "Address": "", "Source": "OSM"}])
+    monkeypatch.setattr(web_app.lead_sourcing, "enrich", lambda b, **k: b)
 
     application = web_app.create_app()
     application.config.update(TESTING=True)
@@ -57,7 +68,7 @@ def client(monkeypatch, tmp_path):
 
 GET_ROUTES = ["/", "/leads", "/send", "/replies", "/history", "/diagnostics",
               "/diagnostics/run", "/blocklist", "/settings", "/run/status", "/logs/tail",
-              "/activity", "/logs"]
+              "/activity", "/logs", "/find-leads"]
 
 POST_ROUTES = [
     ("/leads/2/suppress", {}),
@@ -71,6 +82,10 @@ POST_ROUTES = [
     ("/blocklist/email", {"email": "a@x.com"}),
     ("/blocklist/email/a@x.com/remove", {}),
     ("/settings", {"sender_name": "Al"}),
+    ("/settings", {"template_language": "ro"}),
+    ("/settings/templates/reset", {}),
+    ("/find-leads/search", {"what": "transport", "where": "Chisinau", "scrape": "on"}),
+    ("/find-leads/import", {"pick": "0"}),
     ("/settings", {"followup_settings": "1", "followup_enabled": "on",
                    "followup_offsets_days": "2, 5, bad, 9"}),
     ("/settings/connect-gmail", {}),
@@ -124,6 +139,23 @@ def test_activity_items_friendly_text(monkeypatch):
     assert items[0]["icon"] == "nudge"
     assert items[1]["text"].startswith("Reply handled")
     assert "Pricing?" in items[1]["text"]
+
+
+def test_find_leads_sidebar_link_and_beta_badge(client):
+    html = client.get("/find-leads").get_data(as_text=True)
+    assert "/find-leads" in html
+    assert 'class="beta"' in html
+
+
+def test_find_leads_search_then_import(client):
+    r = client.post("/find-leads/search",
+                    data={"what": "transport", "where": "Chisinau", "scrape": "on"})
+    assert r.status_code == 200
+    body = r.get_data(as_text=True)
+    assert "Found SRL" in body
+    imp = client.post("/find-leads/import", data={"pick": "0"}, follow_redirects=True)
+    assert imp.status_code == 200
+    assert "Added 1" in imp.get_data(as_text=True)
 
 
 def test_run_job_followups_noop_when_drip_disabled(monkeypatch):

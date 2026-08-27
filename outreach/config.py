@@ -1,21 +1,7 @@
 import json
 
+from outreach import templates
 from outreach.paths import CONFIG_PATH, DEFAULT_EXCEL_PATH
-from outreach.templates import (
-    COLD_INTRO_BODY,
-    COLD_INTRO_SUBJECT,
-    DECLINE_ACK_BODY,
-    DECLINE_ACK_SUBJECT,
-    FOLLOWUP_BODY,
-    FOLLOWUP_BREAKUP_BODY,
-    FOLLOWUP_SUBJECT,
-    MEETING_CONFIRM_BODY,
-    MEETING_CONFIRM_SUBJECT,
-    PROPOSE_TIMES_BODY,
-    PROPOSE_TIMES_SUBJECT,
-    REMINDER_BODY,
-    REMINDER_SUBJECT,
-)
 
 # Defaults for the reply-handling / auto-scheduling feature. Everything here is
 # optional in config.json - an older config that predates the feature still loads
@@ -41,12 +27,23 @@ DEFAULTS = {
     # always wins; otherwise this is the fallback score.
     "scoring_rules": {"has_company": 2, "has_phone": 1, "keyword_hit": 3},
     "scoring_keywords": ["urgent", "asap", "quote", "rfp", "rfq", "lane", "dedicated", "contract"],
+    # Abort a batch send after this many consecutive failures (revoked token,
+    # rate-limit) instead of throwing once per lead through the whole list.
+    "send_failure_abort_threshold": 5,
+    # Language a fresh install's templates are seeded in ("en" or "ro"). An
+    # existing config keeps whatever it already has; migration back-fills "en".
+    "template_language": "en",
 }
 
+# New installs are seeded in Romanian (the tool's primary use); the DEFAULTS
+# fallback above stays "en" so an older config / a bare cfg dict is legacy-safe.
+NEW_INSTALL_LANGUAGE = "ro"
 
-def default_config():
+
+def default_config(lang=None):
     """A complete config.json for a brand-new install. Every field is editable on
     the dashboard's Settings page - there is no setup wizard."""
+    lang = lang or NEW_INSTALL_LANGUAGE
     return {
         "sender_name": "",
         "sender_company": "",
@@ -63,20 +60,9 @@ def default_config():
         "daily_send_cap": 150,
         "disallowed_domains": [],
         "disallowed_emails": [],
-        "cold_subject_template": COLD_INTRO_SUBJECT,
-        "cold_body_template": COLD_INTRO_BODY,
-        "followup_subject_template": FOLLOWUP_SUBJECT,
-        "followup_body_template": FOLLOWUP_BODY,
-        "followup_breakup_body_template": FOLLOWUP_BREAKUP_BODY,
-        "reminder_subject_template": REMINDER_SUBJECT,
-        "reminder_body_template": REMINDER_BODY,
-        "meeting_confirm_subject_template": MEETING_CONFIRM_SUBJECT,
-        "meeting_confirm_body_template": MEETING_CONFIRM_BODY,
-        "propose_times_subject_template": PROPOSE_TIMES_SUBJECT,
-        "propose_times_body_template": PROPOSE_TIMES_BODY,
-        "decline_ack_subject_template": DECLINE_ACK_SUBJECT,
-        "decline_ack_body_template": DECLINE_ACK_BODY,
+        **templates.defaults(lang),
         **DEFAULTS,
+        "template_language": lang,
     }
 
 
@@ -92,9 +78,16 @@ def _migrate(cfg):
         cfg.pop("column_aliases")
         changed = True
 
+    # An existing config predates the Romanian switch - keep it on English so we
+    # don't silently rewrite templates the user may have customised.
+    if "template_language" not in cfg:
+        cfg["template_language"] = "en"
+        changed = True
+
     # Back-fill any keys added since this file was written, without clobbering
-    # the user's own edits (templates, business details, limits).
-    for key, value in default_config().items():
+    # the user's own edits (templates, business details, limits). Back-fill uses
+    # English template text for the same reason.
+    for key, value in default_config("en").items():
         if key not in cfg:
             cfg[key] = value
             changed = True

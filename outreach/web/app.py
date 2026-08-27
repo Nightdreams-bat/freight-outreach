@@ -44,6 +44,10 @@ _JOB = {"status": "idle", "action": None, "started": None, "finished": None, "su
 _JOB_LOCK = threading.Lock()
 _RUN_ACTIONS = ("cold", "followups", "reminders", "replies")
 
+# Last /find-leads result, so the import step doesn't re-run the search. Single
+# user, one search at a time - a module-level slot is enough.
+_LEADS_LAST = {"what": "", "where": "", "scrape": True, "leads": []}
+
 
 def _run_job(action):
     cfg = load_config()
@@ -177,6 +181,8 @@ def create_app():
             "diagnostics_page": "diagnostics",
             "settings": "settings",
             "logs_page": "logs",
+            "find_leads": "find_leads",
+            "find_leads_search": "find_leads",
         }
         active = endpoint_to_active.get(request.endpoint)
         try:
@@ -548,6 +554,10 @@ def create_app():
                 if offsets:
                     cfg["followup_offsets_days"] = sorted(offsets)
 
+            lang = request.form.get("template_language")
+            if lang in ("en", "ro"):
+                cfg["template_language"] = lang
+
             if "scoring_keywords" in request.form:
                 kws = [k.strip() for k in request.form["scoring_keywords"].split(",") if k.strip()]
                 cfg["scoring_keywords"] = kws
@@ -678,6 +688,70 @@ def create_app():
             "success" if ok else "danger",
         )
         return redirect(url_for("settings"))
+
+    @app.route("/settings/templates/reset", methods=["POST"])
+    def reset_templates():
+        cfg = load_config()
+        lang = cfg_get(cfg, "template_language")
+        cfg.update(templates.defaults(lang))
+        save_config(cfg)
+        flash(f"All templates reset to the {'Romanian' if lang == 'ro' else 'English'} defaults.", "success")
+        return redirect(url_for("settings"))
+
+    # ---- Find leads (BETA) ---------------------------------------------
+    @app.route("/find-leads")
+    def find_leads():
+        return render_template("find_leads.html", results=None,
+                               what=_LEADS_LAST["what"], where=_LEADS_LAST["where"],
+                               scrape=_LEADS_LAST["scrape"])
+
+    @app.route("/find-leads/search", methods=["POST"])
+    def find_leads_search():
+        cfg, store = get_config_and_store()
+        what = (request.form.get("what") or "").strip()
+        where = (request.form.get("where") or "").strip()
+        scrape = request.form.get("scrape") == "on"
+        if not what or not where:
+            flash("Enter both a business type and a city / region.", "warning")
+            return redirect(url_for("find_leads"))
+
+        try:
+            leads = lead_sourcing.search_businesses(what, where)
+            lead_sourcing.enrich(leads, do_scrape=scrape)
+        except Exception as e:  # noqa: BLE001 - sourcing is best-effort
+            flash(f"Search failed: {e}", "danger")
+            return redirect(url_for("find_leads"))
+
+        _LEADS_LAST.update(what=what, where=where, scrape=scrape, leads=leads)
+        existing = store.existing_emails()
+        results = [
+            {"lead": lead,
+             "duplicate": bool(lead.get("Email")) and lead["Email"].lower() in existing}
+            for lead in leads
+        ]
+        if not leads:
+            flash("No businesses found. Try a broader type or a larger region.", "warning")
+        return render_template("find_leads.html", results=results,
+                               what=what, where=where, scrape=scrape)
+
+    @app.route("/find-leads/import", methods=["POST"])
+    def find_leads_import():
+        _, store = get_config_and_store()
+        picks = request.form.getlist("pick")
+        leads = _LEADS_LAST["leads"]
+        added = skipped = 0
+        for raw in picks:
+            try:
+                lead = leads[int(raw)]
+            except (ValueError, IndexError):
+                continue
+            if store.add_lead(lead) is not None:
+                added += 1
+            else:
+                skipped += 1
+        flash(f"Added {added} lead(s), skipped {skipped} (duplicates / no email).",
+              "success" if added else "warning")
+        return redirect(url_for("leads"))
 
     return app
 

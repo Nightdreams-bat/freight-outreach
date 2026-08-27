@@ -218,6 +218,17 @@
     Wrap a line in <code>{% raw %}{% if phone %}…{% endif %}{% endraw %}</code> to skip it when a field is empty.
   </p>
 
+  <div class="setrow">
+    <div><label class="lab">Template language</label>
+      <select class="field" name="template_language">
+        <option value="en" {{ 'selected' if cfg.template_language != 'ro' }}>English</option>
+        <option value="ro" {{ 'selected' if cfg.template_language == 'ro' }}>Română</option>
+      </select>
+    </div>
+    <div class="help">Language of the built-in defaults. Changing this here does not rewrite the text below —
+      use the reset button beneath this card for that.</div>
+  </div>
+
   <h3 class="section">Cold intro</h3>
   <div class="setrow">
     <div><label class="lab">Subject</label>
@@ -308,6 +319,18 @@
   <button type="submit" class="btn primary">Save settings</button>
 </div>
 </form>
+
+<div class="card">
+  <h2>Reset templates</h2>
+  <div class="setrow">
+    <form method="post" action="{{ url_for('reset_templates') }}"
+          data-confirm="This overwrites every template above with the built-in {{ 'Romanian' if cfg.template_language == 'ro' else 'English' }} defaults. Any edits you made are lost."
+          data-confirm-ok="Reset templates" data-confirm-danger>
+      <button type="submit" class="btn danger">Reset all templates to {{ 'Romanian' if cfg.template_language == 'ro' else 'English' }} defaults</button>
+    </form>
+    <div class="help">Save the language selection first, then use this to replace all template text with that language's defaults.</div>
+  </div>
+</div>
 
 {% endblock %}
 

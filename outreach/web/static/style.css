@@ -280,6 +280,20 @@ code {
 }
 .navitem.active .count { background: var(--accent-ink); color: var(--accent); box-shadow: none; }
 
+.beta {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 5px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  vertical-align: middle;
+}
+
 .side-foot {
   padding: 14px var(--pad-x) 18px;
   border-top: 1px solid var(--side-line);

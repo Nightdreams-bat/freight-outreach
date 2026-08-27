@@ -89,6 +89,46 @@ def test_sheet_headers_helper(tmp_path):
     assert sheet_headers(tmp_path / "nope.xlsx") == []
 
 
+def test_add_lead_appends_and_returns_index(tmp_path):
+    p = _make(tmp_path / "leads.xlsx", ["Name", "Company", "Email", "Phone"],
+              ["Jane", "Acme", "jane@acme.test", "1"])
+    store = ExcelStore(p)
+    idx = store.add_lead({"Name": "New", "Company": "NewCo", "Email": "new@newco.test"})
+    assert idx == 3
+    reopened = ExcelStore(p)
+    emails = {v["Email"] for _, v, _ in reopened.all_rows()}
+    assert "new@newco.test" in emails
+
+
+def test_add_lead_rejects_duplicate_and_invalid(tmp_path):
+    p = _make(tmp_path / "leads.xlsx", ["Name", "Company", "Email", "Phone"],
+              ["Jane", "Acme", "jane@acme.test", "1"])
+    store = ExcelStore(p)
+    assert store.add_lead({"Company": "X", "Email": "JANE@acme.test"}) is None  # dup, case-insensitive
+    assert store.add_lead({"Company": "X", "Email": "not-an-email"}) is None
+    assert store.add_lead({"Company": "X", "Email": ""}) is None
+
+
+def test_add_lead_writes_website_address_only_when_mapped(tmp_path):
+    p = _make(tmp_path / "leads.xlsx", ["Name", "Company", "Email", "Phone"],
+              ["Jane", "Acme", "jane@acme.test", "1"])
+    store = ExcelStore(p)
+    store.add_lead({"Company": "NoWeb", "Email": "a@noweb.test",
+                    "Website": "https://noweb.test", "Address": "Somewhere"})
+    headers = [c.value for c in openpyxl.load_workbook(p).active[1]]
+    assert "Website" not in headers and "Address" not in headers
+
+    p2 = _make(tmp_path / "leads2.xlsx", ["Company", "Email", "Website", "Address"],
+               ["Acme", "jane@acme.test", "", ""])
+    store2 = ExcelStore(p2)
+    idx = store2.add_lead({"Company": "WithWeb", "Email": "b@withweb.test",
+                           "Website": "https://withweb.test", "Address": "Main St"})
+    assert idx is not None
+    ws = openpyxl.load_workbook(p2).active
+    written = {c.value for c in ws[idx]}
+    assert "https://withweb.test" in written and "Main St" in written
+
+
 def test_data_and_state_column_split_is_exhaustive():
     from outreach.excel_store import LOGICAL_COLUMNS
     assert set(DATA_COLUMNS) | set(STATE_COLUMNS) == set(LOGICAL_COLUMNS)
