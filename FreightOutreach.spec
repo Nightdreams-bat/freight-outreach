@@ -25,7 +25,13 @@ a = Analysis(
     hiddenimports=hiddenimports,
     hookspath=[],
     runtime_hooks=[],
-    excludes=["tkinter.test", "test", "unittest"],
+    excludes=[
+        # Nothing in this app uses these; they're only in the build machine's global
+        # site-packages and PyInstaller would otherwise vacuum them in (~hundreds of MB).
+        "matplotlib", "numpy", "pandas", "scipy", "PIL", "pygame",
+        "IPython", "jedi", "parso", "notebook", "zmq", "pytest",
+        "tkinter.test", "test", "unittest",
+    ],
     noarchive=False,
 )
 pyz = PYZ(a.pure)

@@ -1,35 +1,69 @@
 """Single entry point for both the source checkout (`python -m outreach`) and the
-frozen build (`FreightOutreach.exe`).
+frozen build.
 
-    (no args)     open the dashboard in the browser  <- what a double-click does
-    --setup       run the first-time setup wizard
-    --cold        send the cold-intro batch now (headless, for a shortcut/task)
-    --reminders   run the reminder scan now (headless, used by the scheduled task)
+What decides the mode:
+  * If the running .exe is named Setup.exe  -> the first-time setup wizard.
+  * Otherwise, no args                      -> open the dashboard in the browser
+                                               (this is what a double-click does).
+  * Explicit flags override both:
+        --setup       first-time setup wizard
+        --cold        send the cold-intro batch now (headless)
+        --reminders   run the reminder scan now (headless; used by the scheduled task)
+        --selfcheck   verify a freshly built .exe has everything it needs
 """
 
 import sys
+from pathlib import Path
+
+FROZEN = getattr(sys, "frozen", False)
+
+
+def _mode_from_exe_name():
+    """Setup.exe -> 'setup'. Any other frozen exe name -> None (fall through to args)."""
+    if not FROZEN:
+        return None
+    if Path(sys.executable).stem.strip().lower() == "setup":
+        return "setup"
+    return None
+
+
+def _pause_if_frozen():
+    """Keep a double-clicked console window open so the user can read the output."""
+    if FROZEN:
+        try:
+            input("\nPress Enter to close this window.")
+        except EOFError:
+            pass
 
 
 def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
 
-    # Downstream mains parse their own args with argparse; hide the dispatch flag from them.
+    # Downstream mains parse their own args with argparse; hide our dispatch flags from them.
     dispatch_flags = {"--setup", "--cold", "--reminders", "--selfcheck"}
     sys.argv = [sys.argv[0]] + [a for a in argv if a not in dispatch_flags]
 
+    mode = _mode_from_exe_name()
     if "--selfcheck" in argv:
         _selfcheck()
         return
-    elif "--setup" in argv:
+    elif "--setup" in argv or mode == "setup":
         from outreach.setup import main as run
+        run()
+        _pause_if_frozen()
+        return
     elif "--cold" in argv:
         from outreach.send_cold import main as run
+        run()
+        _pause_if_frozen()
+        return
     elif "--reminders" in argv:
         from outreach.send_reminders import main as run
+        run()
+        return  # scheduled task: no one is watching, don't pause
     else:
         from outreach.web.app import main as run
-
-    run()
+        run()
 
 
 def _selfcheck():

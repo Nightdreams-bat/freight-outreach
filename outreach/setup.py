@@ -1,3 +1,4 @@
+import sys
 from pathlib import Path
 
 from outreach.config import CONFIG_PATH, save_config
@@ -12,7 +13,11 @@ from outreach.templates import (
 
 def prompt(msg, default=None):
     suffix = f" [{default}]" if default else ""
-    val = input(f"{msg}{suffix}: ").strip()
+    try:
+        val = input(f"{msg}{suffix}: ").strip().lstrip("﻿")
+    except EOFError:
+        print()
+        return default
     return val or default
 
 
@@ -49,7 +54,9 @@ def main():
         "One-line pitch (e.g. 'We specialize in reefer and dry van freight across the Midwest.')"
     )
 
-    excel_path = prompt("Full path to clients.xlsx", str(Path.cwd() / "clients.xlsx"))
+    from outreach.paths import DEFAULT_EXCEL_PATH
+
+    excel_path = prompt("Full path to clients.xlsx", str(DEFAULT_EXCEL_PATH))
     column_aliases = prompt_column_aliases()
 
     interval_hours = prompt_int("How often should the reminder check run, in hours", 2)
@@ -89,10 +96,13 @@ def main():
     }
     save_config(config)
     print(f"\nSaved config to {CONFIG_PATH}")
+
+    frozen = getattr(sys, "frozen", False)
+    open_dashboard = "FreightOutreach.exe" if frozen else "python -m outreach"
     print(
-        "\nOne step left: connect the sending Gmail account. Run the dashboard "
-        "(python -m outreach.dashboard) and click 'Connect Gmail' on the Settings page - "
-        "it opens the real Google sign-in screen, no passwords typed here."
+        f"\nOne step left: connect the sending Gmail account. Open the dashboard "
+        f"({open_dashboard}) and click 'Connect Gmail' on the Settings page - "
+        f"it opens the real Google sign-in screen, no passwords typed here."
     )
 
     register = prompt(

@@ -72,10 +72,14 @@ Two real causes, both addressed:
 ## Standalone executable (done)
 
 The client no longer needs Python. `build.ps1` runs PyInstaller against
-`FreightOutreach.spec` and produces `dist\FreightOutreach\` - a folder to copy to the
-client's PC. Double-clicking `FreightOutreach.exe` opens the dashboard; `--setup`,
-`--cold`, `--reminders`, and `--selfcheck` are also there. See `BUILD.md` for the full
-process and where `config.json` / `client_secret.json` go next to the `.exe`.
+`FreightOutreach.spec`, self-checks the result, and assembles `release\FreightOutreach\` -
+the folder you hand the client. It contains, at the top level: `START HERE.txt`,
+`Setup.exe` (run first), `FreightOutreach.exe` (the app), `client_secret.json`, and two
+subfolders - `_internal\` (frozen runtime) and `Source code\` (a copy of the source).
+
+`Setup.exe` and `FreightOutreach.exe` are the same binary; the app runs the setup wizard
+when it's launched under the name `Setup.exe`. `config.json` and the logs are created
+next to the `.exe` files. See `BUILD.md`.
 
 Path handling was reworked so the same code runs from source and frozen:
 `outreach/paths.py` is the one place that decides where user data lives (project root

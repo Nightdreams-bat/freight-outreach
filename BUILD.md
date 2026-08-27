@@ -1,7 +1,7 @@
-# Building the standalone executable
+# Building the client package
 
-The client doesn't need Python installed. You build a self-contained folder on a
-Windows machine that has Python, then hand them that folder.
+The client doesn't need Python. You build on a Windows machine that has Python,
+then hand them one folder.
 
 ## Build
 
@@ -10,41 +10,51 @@ cd C:\Users\darga\freight-outreach
 .\build.ps1
 ```
 
-That installs the build dependencies, runs PyInstaller against `FreightOutreach.spec`,
-and finishes with a self-check that verifies the Windows credential store, the bundled
-Flask templates, and every Google/Excel import work inside the frozen build.
+`build.ps1` installs the build dependencies, runs PyInstaller against
+`FreightOutreach.spec`, runs a self-check on the result, and assembles the
+client folder at **`release\FreightOutreach\`**.
 
-Output: **`dist\FreightOutreach\`** - a folder containing `FreightOutreach.exe` and an
-`_internal\` folder. Copy the whole folder anywhere; the `.exe` won't run without
-`_internal\` beside it.
+## What the client folder looks like
 
-## What goes next to the .exe on the client's PC
+```
+FreightOutreach\
+  START HERE.txt          plain-English instructions
+  Setup.exe               first-time setup wizard  <- client runs this first
+  FreightOutreach.exe     the app (opens the dashboard)
+  client_secret.json      Google OAuth client (copied in if present in the repo root)
+  _internal\              the frozen Python runtime - shared by both .exe files
+  Source code\            a copy of the source, for anyone who wants to read it
+```
 
-User data lives in the **same folder as `FreightOutreach.exe`**, not inside `_internal\`:
+`config.json`, `clients.xlsx`, and the logs are created next to the two `.exe`
+files as the client uses it.
 
-| File | How it gets there |
+`Setup.exe` and `FreightOutreach.exe` are the **same binary** - the app runs the
+setup wizard when it sees it's being run under the name `Setup.exe`. One build,
+one `_internal\`, no duplication beyond the ~10 MB bootloader stub.
+
+## Running it (what the client does)
+
+1. Double-click `Setup.exe` - answer the questions. Writes `config.json`.
+2. Make sure `client_secret.json` is in the folder.
+3. Double-click `FreightOutreach.exe` - the dashboard opens; connect Gmail in Settings.
+
+After that, `FreightOutreach.exe` is the only thing they touch day to day.
+
+## Developer flags
+
+Run either `.exe` (or `python -m outreach` from source) with:
+
+| Flag | Does |
 |---|---|
-| `config.json` | created by `FreightOutreach.exe --setup` |
-| `client_secret.json` | copy it in by hand - it's the one-time Google Cloud OAuth client (see `README.md`) |
-| `clients.xlsx` | created on first run, or point `config.json` at an existing path |
-| `outreach.log`, `send_log.json`, `send_history.jsonl` | created automatically |
-
-## Running it
-
-| Action | Command |
-|---|---|
-| Open the dashboard | double-click `FreightOutreach.exe` (or run it with no arguments) |
-| First-time setup wizard | `FreightOutreach.exe --setup` |
-| Send the cold batch now, headless | `FreightOutreach.exe --cold` |
-| Run the reminder scan now, headless | `FreightOutreach.exe --reminders` |
-| Verify the build is intact | `FreightOutreach.exe --selfcheck` |
-
-The dashboard uses port 5000 when it's free and falls back to a random open port
-otherwise; it prints the URL and opens the browser for you.
+| `--setup` | setup wizard (same as running `Setup.exe`) |
+| `--cold` | send the cold-intro batch now, headless |
+| `--reminders` | run the reminder scan now, headless (used by the scheduled task) |
+| `--selfcheck` | verify a freshly built `.exe` has everything it needs |
 
 ## Automatic reminders
 
-The "Enable automatic reminders" button in Settings registers a Windows Task Scheduler
-job. In the frozen build it runs `FreightOutreach.exe --reminders`; from source it runs
-`python -m outreach --reminders`. Either way the job's working directory is the folder
-holding `config.json`.
+The "Enable automatic reminders" button in Settings registers a Windows Task
+Scheduler job. In the frozen build it runs `FreightOutreach.exe --reminders`;
+from source it runs `python -m outreach --reminders`. The job's working
+directory is the folder holding `config.json`.

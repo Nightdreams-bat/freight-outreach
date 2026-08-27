@@ -1,0 +1,35 @@
+FREIGHT OUTREACH
+================
+
+FIRST TIME
+----------
+1. Double-click  Setup.exe
+   Answer the questions (your name, company, one-line pitch, path to your
+   leads spreadsheet, sending limits). This creates config.json in this folder.
+
+2. Make sure  client_secret.json  is in this folder.
+   (If you see a file called "PUT client_secret.json HERE.txt", you still need
+    to add it - it's the Google sign-in file.)
+
+3. Double-click  FreightOutreach.exe
+   Your browser opens the dashboard. Go to Settings -> "Connect Gmail" and sign
+   in with the Google account that will send the emails.
+
+EVERY DAY AFTER THAT
+--------------------
+Just double-click  FreightOutreach.exe  - it opens the dashboard where you
+manage leads, review what's queued, and send. Close the small black window to
+stop it.
+
+WHAT THE FILES ARE
+------------------
+  Setup.exe            first-time setup wizard (run once)
+  FreightOutreach.exe  the app - opens the dashboard
+  config.json          your settings (created by Setup.exe; safe to back up)
+  client_secret.json   Google sign-in file (needed for "Connect Gmail")
+  clients.xlsx         your leads (created on first run if it doesn't exist)
+  _internal\           the app's engine - don't touch or delete
+  Source code\         the full source, if you or a developer want to read it
+
+Everything runs on your PC. Nothing is uploaded anywhere except the emails you
+choose to send through your own Gmail.

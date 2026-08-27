@@ -2,6 +2,7 @@ config.json
 client_secret.json
 clients.xlsx
 outreach.log*
+build_out.log
 send_log.json
 send_history.jsonl
 __pycache__/
@@ -10,3 +11,7 @@ __pycache__/
 # PyInstaller build output
 build/
 dist/
+release/
+
+# Added by ggshield
+.cache_ggshield
