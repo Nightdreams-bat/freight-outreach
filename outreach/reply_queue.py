@@ -202,22 +202,28 @@ def approve(qid, *, overrides=None, cfg=None, store=None, mailer=None):
             log.warning("Could not open the sheet to record the outcome: %s", e)
             store = None
 
-    event_id = None
+    # If a prior approve() created the event but then failed before finishing,
+    # the id is on the record - reuse it instead of booking a second slot.
+    event_id = record.get("event_id")
     try:
         if kind == "book":
             start = _parse_dt(action["start"])
             duration = int(cfg_get(cfg, "meeting_duration_minutes"))
-            event_id = calendar_api.create_event(
-                gmail_address,
-                cfg_get(cfg, "calendar_id"),
-                summary=action.get("event_summary") or "Intro call",
-                description=action.get("event_description") or "",
-                start=start,
-                duration_minutes=duration,
-                attendee_email=to_addr,
-                timezone=calendar_api.local_tz_name(),
-                send_updates=True,
-            )
+            if not event_id:
+                event_id = calendar_api.create_event(
+                    gmail_address,
+                    cfg_get(cfg, "calendar_id"),
+                    summary=action.get("event_summary") or "Intro call",
+                    description=action.get("event_description") or "",
+                    start=start,
+                    duration_minutes=duration,
+                    attendee_email=to_addr,
+                    timezone=calendar_api.local_tz_name(),
+                    send_updates=True,
+                )
+                # Persist immediately so a send failure below can't cause a rebook.
+                record["event_id"] = event_id
+                _write_all(records)
             mailer.send(to_addr, action["email_subject"], action["email_body"])
             _record_send(record)
             if store is not None:
