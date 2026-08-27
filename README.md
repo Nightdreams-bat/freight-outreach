@@ -35,16 +35,14 @@ the user's own Gmail account over a real Google sign-in (OAuth), not SMTP or app
 
 <table>
   <tr>
-    <td align="center"><img src="docs/img/dashboard-light.png" alt="Dashboard (light mode)" width="420"><br><sub>Dashboard — stat tiles and the Run now panel</sub></td>
-    <td align="center"><img src="docs/img/dashboard-dark.png" alt="Dashboard (dark mode)" width="420"><br><sub>Dark mode</sub></td>
+    <td align="center"><img src="docs/img/dashboard.png" alt="Dashboard" width="420"><br><sub>Dashboard — stat tiles and the Run now panel</sub></td>
+    <td align="center"><img src="docs/img/leads.png" alt="Leads / CRM" width="420"><br><sub>Leads — every column, priority score, per-lead suppress</sub></td>
   </tr>
   <tr>
     <td align="center"><img src="docs/img/replies.png" alt="Replies page" width="420"><br><sub>Replies — drafted actions awaiting approval</sub></td>
     <td align="center"><img src="docs/img/diagnostics.png" alt="Diagnostics page" width="420"><br><sub>Diagnostics — live connection checks</sub></td>
   </tr>
 </table>
-
-> Screenshot files live in `docs/img/` and may be added after this document.
 
 ---
 
