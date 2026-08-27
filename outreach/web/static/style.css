@@ -194,13 +194,16 @@ code {
   height: 28px;
   display: grid;
   place-items: center;
-  background: var(--accent);
-  color: var(--accent-ink);
+  background:
+    linear-gradient(150deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.03) 55%),
+    #05080a;
+  color: var(--accent);
+  border: 1px solid rgba(61, 220, 132, 0.35);
   border-radius: 8px;
   flex-shrink: 0;
-  box-shadow: var(--glow);
+  box-shadow: 0 0 18px -4px rgba(61, 220, 132, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.12);
 }
-.brand .mark svg { width: 17px; height: 17px; }
+.brand .mark svg { width: 16px; height: 16px; filter: drop-shadow(0 0 5px rgba(61, 220, 132, 0.5)); }
 
 .nav { padding: 12px 12px; display: flex; flex-direction: column; gap: 3px; flex: 1; overflow-x: hidden; overflow-y: auto; }
 .navitem {
