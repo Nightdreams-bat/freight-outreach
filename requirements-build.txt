@@ -2,3 +2,4 @@
 -r requirements.txt
 pyinstaller
 pywin32
+pytest

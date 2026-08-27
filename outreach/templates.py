@@ -5,8 +5,11 @@ import jinja2
 # rather than leaving a dangling blank space.
 #
 # Available variables:
-#   Cold intro:  name, company, phone, sender_name, sender_company, sender_phone, sender_pitch
-#   Reminder:    name, company, phone, sender_name, sender_company, sender_phone, meeting_time
+#   Cold intro:      name, company, phone, sender_name, sender_company, sender_phone, sender_pitch
+#   Reminder:        name, company, phone, sender_name, sender_company, sender_phone, meeting_time
+#   Meeting confirm: name, company, sender_name, sender_company, sender_phone, meeting_time
+#   Propose times:   name, company, sender_name, sender_company, sender_phone, slots (list of strings)
+#   Decline ack:     name, company, sender_name, sender_company
 
 COLD_INTRO_SUBJECT = "{{ company }} freight - quick question"
 
@@ -36,6 +39,50 @@ Best,
 {{ sender_name }}
 {{ sender_company }}
 {% if sender_phone %}{{ sender_phone }}{% endif %}
+"""
+
+
+MEETING_CONFIRM_SUBJECT = "Confirmed - our call {{ meeting_time }}"
+
+MEETING_CONFIRM_BODY = """Hi {{ name }},
+
+Great - I've put us down for {{ meeting_time }} and sent a calendar invite so it's on both our schedules.
+
+Looking forward to talking through {{ company }}'s freight needs then. If anything changes on your end, just let me know.
+
+Best,
+{{ sender_name }}
+{{ sender_company }}
+{% if sender_phone %}{{ sender_phone }}{% endif %}
+"""
+
+PROPOSE_TIMES_SUBJECT = "A few times that work - {{ company }}"
+
+PROPOSE_TIMES_BODY = """Hi {{ name }},
+
+Glad you're open to a call. Here are a few times that work on my end:
+
+{% for slot in slots %}  - {{ slot }}
+{% endfor %}
+Let me know which one suits you and I'll send a calendar invite. If none of these fit, tell me roughly when you're free and I'll work around it.
+
+Best,
+{{ sender_name }}
+{{ sender_company }}
+{% if sender_phone %}{{ sender_phone }}{% endif %}
+"""
+
+DECLINE_ACK_SUBJECT = "Thanks for the reply - {{ company }}"
+
+DECLINE_ACK_BODY = """Hi {{ name }},
+
+Understood, and thanks for letting me know. I won't follow up again.
+
+If {{ company }}'s freight needs change down the line, feel free to reach out any time.
+
+Best,
+{{ sender_name }}
+{{ sender_company }}
 """
 
 

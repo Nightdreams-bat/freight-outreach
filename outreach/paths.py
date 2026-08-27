@@ -38,3 +38,8 @@ LOG_PATH = data_dir() / "outreach.log"
 SEND_LOG_PATH = data_dir() / "send_log.json"
 SEND_HISTORY_PATH = data_dir() / "send_history.jsonl"
 DEFAULT_EXCEL_PATH = data_dir() / "clients.xlsx"
+
+# Reply-handling feature: which inbound messages have already been classified,
+# and the queue of drafted actions awaiting the client's approval.
+PROCESSED_REPLIES_PATH = data_dir() / "processed_replies.json"
+REPLY_QUEUE_PATH = data_dir() / "reply_queue.jsonl"

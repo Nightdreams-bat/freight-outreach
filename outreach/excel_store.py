@@ -19,6 +19,10 @@ LOGICAL_COLUMNS = [
     "ReminderSentAt",
     "Suppressed",
     "Notes",
+    # Reply-handling feature - appended so existing sheets keep their column order.
+    "ReplyStatus",     # "", awaiting, yes, no, maybe, question, scheduling, booked
+    "LastReplyAt",     # YYYY-MM-DD HH:MM:SS of the most recent inbound reply
+    "MeetingEventId",  # Google Calendar event id, set when a booking is approved
 ]
 
 

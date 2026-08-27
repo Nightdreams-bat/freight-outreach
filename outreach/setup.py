@@ -1,11 +1,17 @@
 import sys
 from pathlib import Path
 
-from outreach.config import CONFIG_PATH, save_config
+from outreach.config import CONFIG_PATH, DEFAULTS, save_config
 from outreach.excel_store import LOGICAL_COLUMNS
 from outreach.templates import (
     COLD_INTRO_BODY,
     COLD_INTRO_SUBJECT,
+    DECLINE_ACK_BODY,
+    DECLINE_ACK_SUBJECT,
+    MEETING_CONFIRM_BODY,
+    MEETING_CONFIRM_SUBJECT,
+    PROPOSE_TIMES_BODY,
+    PROPOSE_TIMES_SUBJECT,
     REMINDER_BODY,
     REMINDER_SUBJECT,
 )
@@ -93,6 +99,15 @@ def main():
         "cold_body_template": COLD_INTRO_BODY,
         "reminder_subject_template": REMINDER_SUBJECT,
         "reminder_body_template": REMINDER_BODY,
+        # Reply-handling / auto-scheduling. Off by default; enable it and add an
+        # Anthropic API key on the dashboard's Settings page.
+        "meeting_confirm_subject_template": MEETING_CONFIRM_SUBJECT,
+        "meeting_confirm_body_template": MEETING_CONFIRM_BODY,
+        "propose_times_subject_template": PROPOSE_TIMES_SUBJECT,
+        "propose_times_body_template": PROPOSE_TIMES_BODY,
+        "decline_ack_subject_template": DECLINE_ACK_SUBJECT,
+        "decline_ack_body_template": DECLINE_ACK_BODY,
+        **DEFAULTS,
     }
     save_config(config)
     print(f"\nSaved config to {CONFIG_PATH}")
