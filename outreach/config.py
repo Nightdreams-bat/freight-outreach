@@ -30,6 +30,16 @@ DEFAULTS = {
     # Abort a batch send after this many consecutive failures (revoked token,
     # rate-limit) instead of throwing once per lead through the whole list.
     "send_failure_abort_threshold": 5,
+    # Send pacing. Cold + follow-up sends wait a random gap in this range between
+    # messages (a fixed interval is a blast fingerprint). Reminders are time
+    # sensitive and low volume, so they use a short fixed delay.
+    "send_delay_min_seconds": 45,
+    "send_delay_max_seconds": 150,
+    "reminder_send_delay_seconds": 5,
+    # Route replies to a different address. Empty = omit the Reply-To header
+    # (recommended). Setting this breaks automated reply detection, which only
+    # searches the connected mailbox.
+    "reply_to": "",
     # Language a fresh install's templates are seeded in ("en" or "ro"). An
     # existing config keeps whatever it already has; migration back-fills "en".
     "template_language": "en",
@@ -57,8 +67,8 @@ def default_config(lang=None):
         "gmail_address": "",
         "reminder_interval_hours": 2,
         "reminder_window_hours": 2,
-        "max_reminders_per_run": 25,
-        "daily_send_cap": 150,
+        "max_reminders_per_run": 60,
+        "daily_send_cap": 20,
         "disallowed_domains": [],
         "disallowed_emails": [],
         **templates.defaults(lang),
@@ -87,7 +97,9 @@ def _migrate(cfg):
 
     # Back-fill any keys added since this file was written, without clobbering
     # the user's own edits (templates, business details, limits). Back-fill uses
-    # English template text for the same reason.
+    # English template text for the same reason. Note this only ADDS missing keys
+    # - an existing daily_send_cap (even one above today's lower default) is kept
+    # as the user set it.
     for key, value in default_config("en").items():
         if key not in cfg:
             cfg[key] = value

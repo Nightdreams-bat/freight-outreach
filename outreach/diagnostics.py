@@ -109,12 +109,42 @@ def _check_excel(cfg, _gmail):
         return _fail("Leads spreadsheet", f"Can't open it: {e}")
 
 
+def _stale_token_note(gmail_address):
+    """A warning string if the stored OAuth token looks like it hasn't been
+    refreshed in >5 days (Testing-mode refresh tokens die after 7), or None if
+    that can't be determined from the token JSON."""
+    try:
+        import json
+        from datetime import timezone
+
+        from outreach.credentials import get_oauth_token
+
+        raw = json.loads(get_oauth_token(gmail_address)).get("expiry")
+        if not raw:
+            return None
+        expiry = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+        if expiry.tzinfo is None:
+            expiry = expiry.replace(tzinfo=timezone.utc)
+        age_days = (datetime.now(timezone.utc) - expiry).total_seconds() / 86400
+        if age_days > 5:
+            return (f"token last refreshed ~{int(age_days)}d ago - if sends start failing, "
+                    f"click Connect Gmail again (Testing-mode tokens expire after 7 days)")
+    except Exception:  # noqa: BLE001
+        return None
+    return None
+
+
 def _check_gmail_send(cfg, gmail):
     if not (cfg.get("gmail_address") or "").strip():
         return _fail("Gmail - account & token", "No sending account connected (Settings -> Connect Gmail).")
+    # Read the stored token age before gmail.service() refreshes it.
+    stale = _stale_token_note(cfg["gmail_address"])
     try:
         profile = gmail.service().users().getProfile(userId="me").execute()
-        return _ok("Gmail - account & token", f"Authorised as {profile.get('emailAddress')}")
+        detail = f"Authorised as {profile.get('emailAddress')}"
+        if stale:
+            return _warn("Gmail - account & token", f"{detail} - {stale}")
+        return _ok("Gmail - account & token", detail)
     except Exception as e:  # noqa: BLE001
         return _fail("Gmail - account & token", f"{e}")
 

@@ -1,11 +1,13 @@
 import json
 
+from google.auth.exceptions import RefreshError
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 
-from outreach.credentials import get_oauth_token, set_oauth_token
+from outreach.credentials import delete_oauth_token, get_oauth_token, set_oauth_token
+from outreach.errors import GmailNeedsReconnect
 from outreach.paths import CLIENT_SECRET_PATH
 
 SCOPES = [
@@ -49,7 +51,15 @@ def get_credentials(gmail_address):
     creds = Credentials.from_authorized_user_info(json.loads(token_json), SCOPES)
 
     if creds.expired and creds.refresh_token:
-        creds.refresh(Request())
+        try:
+            creds.refresh(Request())
+        except RefreshError as e:
+            # The refresh token is dead (revoked, or expired after 7 days on a
+            # Testing-mode OAuth app). Drop it so the next Connect Gmail starts clean.
+            delete_oauth_token(gmail_address)
+            raise GmailNeedsReconnect(
+                "Gmail sign-in expired - click Connect Gmail again"
+            ) from e
         set_oauth_token(gmail_address, creds.to_json())
 
     return creds

@@ -31,6 +31,8 @@ STATE_COLUMNS = [
     "MeetingEventId",  # Google Calendar event id, set when a booking is approved
     "FollowupStage",   # int: how many follow-up nudges have been sent (blank/0 = none)
     "FollowupSentAt",  # YYYY-MM-DD HH:MM:SS of the most recent follow-up
+    "ColdMessageId",   # RFC Message-ID of the cold intro, so follow-ups/reminders thread
+    "ColdThreadId",    # Gmail threadId of the cold intro
 ]
 
 LOGICAL_COLUMNS = DATA_COLUMNS + STATE_COLUMNS

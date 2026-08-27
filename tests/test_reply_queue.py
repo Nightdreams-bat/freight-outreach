@@ -19,8 +19,8 @@ class FakeMailer:
     def __init__(self):
         self.sent = []
 
-    def send(self, to_addr, subject, body):
-        self.sent.append((to_addr, subject, body))
+    def send(self, to_addr, subject, body, **kwargs):
+        self.sent.append((to_addr, subject, body, kwargs))
 
 
 class FakeStore:

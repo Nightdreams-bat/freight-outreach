@@ -42,15 +42,19 @@ def main():
         log.info("No reminders due this run.")
         return
 
-    max_per_run = cfg.get("max_reminders_per_run", 25)
+    max_per_run = cfg.get("max_reminders_per_run", 60)
     if len(candidates) > max_per_run:
+        # Don't go silent on a busy day - send the soonest N and let the next run
+        # pick up the rest, but log loudly in case it's a data problem.
+        candidates.sort(key=lambda c: c[2])  # soonest meeting first
+        overflow = len(candidates) - max_per_run
+        candidates = candidates[:max_per_run]
         log.critical(
-            f"{len(candidates)} reminders matched this run, which exceeds the safety cap of "
-            f"{max_per_run}. Sending NONE - check clients.xlsx for a data problem "
-            f"(e.g. many rows with the same MeetingDateTime), then run send_reminders.py "
-            f"manually once you've confirmed it's correct."
+            f"{max_per_run + overflow} reminders matched this run, over the per-run cap of "
+            f"{max_per_run}. Sending the {max_per_run} with the soonest meetings; the other "
+            f"{overflow} will go out on the next run. If this is unexpected, check clients.xlsx "
+            f"for a data problem (e.g. many rows with the same MeetingDateTime)."
         )
-        return
 
     if not args.dry_run:
         daily_cap = cfg.get("daily_send_cap", 150)

@@ -27,6 +27,15 @@ def get_oauth_token(gmail_address):
     return token_json
 
 
+def delete_oauth_token(gmail_address):
+    """Remove the stored Gmail OAuth token, if any. Best-effort - a missing token
+    or a keyring that doesn't support delete is not an error."""
+    try:
+        _keyring().delete_password(SERVICE_NAME, gmail_address)
+    except Exception:  # noqa: BLE001
+        pass
+
+
 def set_anthropic_key(api_key):
     """Store the Anthropic API key in the OS credential store."""
     _keyring().set_password(ANTHROPIC_SERVICE, "api_key", api_key)

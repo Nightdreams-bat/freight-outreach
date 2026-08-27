@@ -44,9 +44,16 @@ Google needs to know about the app. This is a free, one-time setup.
    - User type: **External**.
    - Fill in the app name, your support email, developer email. Nothing else is
      required.
-   - **Publishing status: leave it in "Testing".** Testing mode skips Google's
-     multi-week verification (which a single-client internal tool does not need),
-     but it *only lets whitelisted accounts sign in*.
+   - **Publishing status: set it to "In production" / Published.** You do *not*
+     need to complete Google's verification for your own account's use — the
+     "unverified app" warning screen stays (just click through it, see step 7
+     below), but **refresh tokens stop expiring**. In "Testing" mode, refresh
+     tokens die after 7 days, so the sending account silently stops working every
+     week and every scheduled run fails until someone clicks "Connect Gmail"
+     again. Publishing removes that. (If you keep it in "Testing", add **every**
+     Gmail address that will ever click "Connect Gmail" as a Test user, or
+     sign-in fails with *"Access blocked: … has not completed the Google
+     verification process"*.)
    - **Test users:** add **every Gmail address that will ever click "Connect
      Gmail"** — the sending account, and yours if different. Without this, sign-in
      fails with *"Access blocked: … has not completed the Google verification
