@@ -12,19 +12,28 @@ def _python_for_task():
     return str(pythonw) if pythonw.exists() else str(exe)
 
 
-def register_task(interval_hours):
-    project_root = Path(__file__).resolve().parent.parent
-    script = project_root / "outreach" / "send_reminders.py"
-    python_exe = _python_for_task()
+def _reminder_command():
+    """The command the scheduled task should run to do a headless reminder scan.
 
+    Frozen build: the .exe itself with --reminders. Source checkout: pythonw -m outreach.
+    """
+    if getattr(sys, "frozen", False):
+        return f'"{Path(sys.executable).resolve()}" --reminders'
+    return f'"{_python_for_task()}" -m outreach --reminders'
+
+
+def register_task(interval_hours):
+    from outreach.paths import data_dir
+
+    working_dir = data_dir()
     cmd = [
         "schtasks", "/Create", "/F",
         "/SC", "HOURLY",
         "/MO", str(interval_hours),
         "/TN", TASK_NAME,
-        "/TR", f'"{python_exe}" "{script}"',
+        "/TR", _reminder_command(),
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True, cwd=str(project_root))
+    result = subprocess.run(cmd, capture_output=True, text=True, cwd=str(working_dir))
     ok = result.returncode == 0
     if ok:
         print(f"Scheduled task '{TASK_NAME}' created: runs every {interval_hours}h.")

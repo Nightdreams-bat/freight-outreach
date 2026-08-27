@@ -1,5 +1,4 @@
 import json
-from pathlib import Path
 
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
@@ -7,13 +6,13 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 
 from outreach.credentials import get_oauth_token, set_oauth_token
+from outreach.paths import CLIENT_SECRET_PATH
 
 SCOPES = [
     "https://www.googleapis.com/auth/gmail.send",
     "https://www.googleapis.com/auth/userinfo.email",
     "openid",
 ]
-CLIENT_SECRET_PATH = Path(__file__).resolve().parent.parent / "client_secret.json"
 
 
 def run_oauth_flow():

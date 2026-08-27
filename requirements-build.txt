@@ -1,0 +1,4 @@
+# Only needed to build the standalone .exe (see BUILD.md). Not needed to run from source.
+-r requirements.txt
+pyinstaller
+pywin32

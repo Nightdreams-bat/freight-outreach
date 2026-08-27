@@ -1,13 +1,13 @@
 import json
-from pathlib import Path
 
-CONFIG_PATH = Path(__file__).resolve().parent.parent / "config.json"
+from outreach.paths import CONFIG_PATH
 
 
 def load_config():
     if not CONFIG_PATH.exists():
         raise FileNotFoundError(
-            f"No config.json found at {CONFIG_PATH}. Run `python -m outreach.setup` first."
+            f"No config.json found at {CONFIG_PATH}. Run the setup wizard first "
+            f"(FreightOutreach.exe --setup, or `python -m outreach.setup`)."
         )
     return json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
 

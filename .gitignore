@@ -6,3 +6,7 @@ send_log.json
 send_history.jsonl
 __pycache__/
 *.pyc
+
+# PyInstaller build output
+build/
+dist/

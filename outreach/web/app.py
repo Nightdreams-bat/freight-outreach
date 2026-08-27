@@ -1,8 +1,10 @@
+import socket
 import webbrowser
 
 from flask import Flask, flash, redirect, render_template, request, url_for
 
 from outreach.config import load_config, save_config
+from outreach.paths import resource_path
 from outreach.core import (
     apply_daily_cap,
     build_mailer,
@@ -20,7 +22,11 @@ SUPPRESSED_TRUE_VALUES = ("1", "true", "yes", "y")
 
 
 def create_app():
-    app = Flask(__name__)
+    app = Flask(
+        __name__,
+        template_folder=str(resource_path("outreach/web/templates")),
+        static_folder=str(resource_path("outreach/web/static")),
+    )
     # Local single-user tool: the key only needs to survive this process's lifetime,
     # it's not protecting anything beyond flash-message cookies.
     app.secret_key = "freight-outreach-local-dashboard"
@@ -291,12 +297,25 @@ def create_app():
     return app
 
 
+def _pick_port(preferred=5000):
+    """Use 5000 if free, otherwise let the OS hand us any open port."""
+    for port in (preferred, 0):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            try:
+                s.bind(("127.0.0.1", port))
+                return s.getsockname()[1]
+            except OSError:
+                continue
+    return preferred
+
+
 def main():
     app = create_app()
-    url = "http://127.0.0.1:5000"
-    print(f"Freight Outreach dashboard running at {url}  (Ctrl+C to stop)")
+    port = _pick_port()
+    url = f"http://127.0.0.1:{port}"
+    print(f"Freight Outreach dashboard running at {url}  (close this window to stop)")
     webbrowser.open(url)
-    app.run(host="127.0.0.1", port=5000, debug=False)
+    app.run(host="127.0.0.1", port=port, debug=False)
 
 
 if __name__ == "__main__":

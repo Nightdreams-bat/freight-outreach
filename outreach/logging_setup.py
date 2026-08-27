@@ -1,8 +1,7 @@
 import logging
 from logging.handlers import RotatingFileHandler
-from pathlib import Path
 
-LOG_PATH = Path(__file__).resolve().parent.parent / "outreach.log"
+from outreach.paths import LOG_PATH
 
 
 def get_logger(name):

@@ -1,9 +1,9 @@
 import json
 from datetime import date, datetime
-from pathlib import Path
 
-TRACKER_PATH = Path(__file__).resolve().parent.parent / "send_log.json"
-HISTORY_PATH = Path(__file__).resolve().parent.parent / "send_history.jsonl"
+from outreach.paths import SEND_HISTORY_PATH as HISTORY_PATH
+from outreach.paths import SEND_LOG_PATH as TRACKER_PATH
+
 HISTORY_MAX_ENTRIES = 500
 
 

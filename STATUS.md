@@ -32,6 +32,8 @@ Leads, Send, History, Blocklist are all there. The CLI (`send_cold.py`, `send_re
 | `schedule_task.py` | Creates/removes/queries the Windows Task Scheduler job that runs the reminder scan automatically. |
 | `setup.py` | First-time CLI wizard - business details, Excel path, limits. Gmail is connected separately via the dashboard. |
 | `web/` | The Flask dashboard - `app.py` (routes) + `templates/` (pages) + `static/style.css`. |
+| `paths.py` | The one place that resolves file locations, so the same code works run from source or as the frozen `.exe`. |
+| `__main__.py` | Single entry point (`python -m outreach` / `FreightOutreach.exe`): no args -> dashboard, `--setup` / `--cold` / `--reminders` / `--selfcheck`. |
 
 ## The two sending modes
 
@@ -67,11 +69,24 @@ Two real causes, both addressed:
 - Manually send/reply to a handful of test emails first, mark anything that lands in spam as "Not Spam" - the single strongest reputation signal.
 - If this becomes an ongoing real campaign, a Google Workspace domain will build reputation faster and look more legitimate than a personal Gmail address.
 
+## Standalone executable (done)
+
+The client no longer needs Python. `build.ps1` runs PyInstaller against
+`FreightOutreach.spec` and produces `dist\FreightOutreach\` - a folder to copy to the
+client's PC. Double-clicking `FreightOutreach.exe` opens the dashboard; `--setup`,
+`--cold`, `--reminders`, and `--selfcheck` are also there. See `BUILD.md` for the full
+process and where `config.json` / `client_secret.json` go next to the `.exe`.
+
+Path handling was reworked so the same code runs from source and frozen:
+`outreach/paths.py` is the one place that decides where user data lives (project root
+when run from source, the `.exe`'s own folder when frozen) and where bundled resources
+are (project tree vs. PyInstaller's temp dir). `outreach/__main__.py` is the single
+entry point both modes share.
+
 ## Still placeholder / not started
 
 - **Business details in Settings are still demo data** (`Alex Carter` / `Carter Freight Solutions` / a placeholder pitch) - replace with the real client's info before sending anything real.
 - **`clients.xlsx` currently has one test row** (`Jamie Lin`, actually the client's own test address, meeting set for 2026-08-28 00:17) - the automatic reminder scan will email that address a reminder tomorrow since automation is enabled; that's expected/harmless (it's your own test data), just don't be surprised by it. Replace with real leads before relying on this.
-- **Standalone `.exe` packaging** (so the client can double-click instead of running Python from a terminal) - discussed, not started. Currently requires Python + `pip install -r requirements.txt` to run.
 - **No open/click tracking** - would need a hosted server for a tracking pixel, out of scope for this local-only tool.
 
 ## Picking this back up
