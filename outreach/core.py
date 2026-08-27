@@ -5,6 +5,7 @@ import jinja2
 
 from outreach.excel_store import ExcelFileLocked
 from outreach.lead_fields import lead_company, lead_name, valid_email
+from outreach.locking import data_lock
 from outreach.logging_setup import get_logger
 from outreach.mailer import Mailer
 from outreach.send_tracker import record_send_history, record_sent, remaining_today
@@ -150,6 +151,9 @@ def _check_template(subject_tmpl, body_tmpl):
         return None
     except jinja2.TemplateError as e:
         return f"Template error: {e}"
+    except Exception as e:  # noqa: BLE001 - a bad template (e.g. {{1/0}}, sandbox
+        # violation) must be caught pre-flight, not abort the batch mid-run.
+        return f"Template error: {e}"
 
 
 def _tmpl_defaults(cfg):
@@ -163,133 +167,135 @@ def _abort_note(n):
 
 def send_cold_batch(cfg, store, mailer, candidates, dry_run=False):
     """Sends the cold-intro email to each candidate row. Returns a summary dict."""
-    result = {"sent": 0, "skipped": [], "errors": [], "preview": []}
+    with data_lock(timeout=3600):
+        result = {"sent": 0, "skipped": [], "errors": [], "preview": []}
 
-    tmpl = _tmpl_defaults(cfg)
-    subject_tmpl = cfg.get("cold_subject_template") or tmpl["cold_subject_template"]
-    body_tmpl = cfg.get("cold_body_template") or tmpl["cold_body_template"]
+        tmpl = _tmpl_defaults(cfg)
+        subject_tmpl = cfg.get("cold_subject_template") or tmpl["cold_subject_template"]
+        body_tmpl = cfg.get("cold_body_template") or tmpl["cold_body_template"]
 
-    abort_threshold = cfg_get(cfg, "send_failure_abort_threshold")
-    consecutive_failures = 0
+        abort_threshold = cfg_get(cfg, "send_failure_abort_threshold")
+        consecutive_failures = 0
 
-    template_error = _check_template(subject_tmpl, body_tmpl)
-    if template_error:
-        log.critical(f"Cold intro template is broken, sent nothing: {template_error}")
-        result["errors"].append(template_error)
+        template_error = _check_template(subject_tmpl, body_tmpl)
+        if template_error:
+            log.critical(f"Cold intro template is broken, sent nothing: {template_error}")
+            result["errors"].append(template_error)
+            return result
+
+        for row_idx, row in candidates:
+            email = str(row["Email"]).strip()
+            if not valid_email(email):
+                log.warning(f"Skipping row {row_idx}: '{email}' doesn't look like a valid email address")
+                result["skipped"].append(email)
+                continue
+
+            context = {
+                "name": lead_name(row),
+                "company": lead_company(row),
+                "phone": row.get("Phone") or "",
+                "sender_name": cfg["sender_name"],
+                "sender_company": cfg["sender_company"],
+                "sender_phone": cfg.get("sender_phone") or "",
+                "sender_pitch": cfg.get("sender_pitch") or "",
+            }
+            subject = render(subject_tmpl, **context)
+            body = render(body_tmpl, **context)
+
+            if dry_run:
+                result["preview"].append({"email": email, "subject": subject, "body": body})
+                continue
+
+            try:
+                mailer.send(email, subject, body)
+                store.mark_sent(row_idx, "ColdEmailSentAt")
+                record_sent(1)
+                record_send_history("cold", email, row.get("Name"), row.get("Company"), subject)
+                log.info(f"Sent cold intro to {email} (row {row_idx})")
+                result["sent"] += 1
+                consecutive_failures = 0
+                time.sleep(SEND_DELAY_SECONDS)
+            except ExcelFileLocked as e:
+                # The mail already went out - this is not a send failure.
+                log.critical(f"Email to {email} was sent but could not be marked as sent: {e}")
+                result["errors"].append(str(e))
+            except Exception as e:
+                log.error(f"Failed to send to {email} (row {row_idx}): {e}")
+                result["errors"].append(str(e))
+                consecutive_failures += 1
+                if consecutive_failures >= abort_threshold:
+                    log.critical(f"Aborting cold batch after {consecutive_failures} consecutive "
+                                 f"send failures; last error: {e}")
+                    result["errors"].append(_abort_note(consecutive_failures))
+                    break
+
         return result
-
-    for row_idx, row in candidates:
-        email = str(row["Email"]).strip()
-        if not valid_email(email):
-            log.warning(f"Skipping row {row_idx}: '{email}' doesn't look like a valid email address")
-            result["skipped"].append(email)
-            continue
-
-        context = {
-            "name": lead_name(row),
-            "company": lead_company(row),
-            "phone": row.get("Phone") or "",
-            "sender_name": cfg["sender_name"],
-            "sender_company": cfg["sender_company"],
-            "sender_phone": cfg.get("sender_phone") or "",
-            "sender_pitch": cfg.get("sender_pitch") or "",
-        }
-        subject = render(subject_tmpl, **context)
-        body = render(body_tmpl, **context)
-
-        if dry_run:
-            result["preview"].append({"email": email, "subject": subject, "body": body})
-            continue
-
-        try:
-            mailer.send(email, subject, body)
-            store.mark_sent(row_idx, "ColdEmailSentAt")
-            record_sent(1)
-            record_send_history("cold", email, row.get("Name"), row.get("Company"), subject)
-            log.info(f"Sent cold intro to {email} (row {row_idx})")
-            result["sent"] += 1
-            consecutive_failures = 0
-            time.sleep(SEND_DELAY_SECONDS)
-        except ExcelFileLocked as e:
-            # The mail already went out - this is not a send failure.
-            log.critical(f"Email to {email} was sent but could not be marked as sent: {e}")
-            result["errors"].append(str(e))
-        except Exception as e:
-            log.error(f"Failed to send to {email} (row {row_idx}): {e}")
-            result["errors"].append(str(e))
-            consecutive_failures += 1
-            if consecutive_failures >= abort_threshold:
-                log.critical(f"Aborting cold batch after {consecutive_failures} consecutive "
-                             f"send failures; last error: {e}")
-                result["errors"].append(_abort_note(consecutive_failures))
-                break
-
-    return result
 
 
 def send_reminder_batch(cfg, store, mailer, candidates, dry_run=False):
     """Sends the reminder email to each (row_idx, row, meeting_time) candidate. Returns a summary dict."""
-    result = {"sent": 0, "skipped": [], "errors": [], "preview": []}
+    with data_lock(timeout=3600):
+        result = {"sent": 0, "skipped": [], "errors": [], "preview": []}
 
-    tmpl = _tmpl_defaults(cfg)
-    subject_tmpl = cfg.get("reminder_subject_template") or tmpl["reminder_subject_template"]
-    body_tmpl = cfg.get("reminder_body_template") or tmpl["reminder_body_template"]
+        tmpl = _tmpl_defaults(cfg)
+        subject_tmpl = cfg.get("reminder_subject_template") or tmpl["reminder_subject_template"]
+        body_tmpl = cfg.get("reminder_body_template") or tmpl["reminder_body_template"]
 
-    abort_threshold = cfg_get(cfg, "send_failure_abort_threshold")
-    consecutive_failures = 0
+        abort_threshold = cfg_get(cfg, "send_failure_abort_threshold")
+        consecutive_failures = 0
 
-    template_error = _check_template(subject_tmpl, body_tmpl)
-    if template_error:
-        log.critical(f"Reminder template is broken, sent nothing: {template_error}")
-        result["errors"].append(template_error)
+        template_error = _check_template(subject_tmpl, body_tmpl)
+        if template_error:
+            log.critical(f"Reminder template is broken, sent nothing: {template_error}")
+            result["errors"].append(template_error)
+            return result
+
+        for row_idx, row, meeting_time in candidates:
+            email = str(row["Email"]).strip()
+            if not valid_email(email):
+                log.warning(f"Skipping row {row_idx}: '{email}' doesn't look like a valid email address")
+                result["skipped"].append(email)
+                continue
+
+            context = {
+                "name": lead_name(row),
+                "company": lead_company(row),
+                "phone": row.get("Phone") or "",
+                "meeting_time": meeting_time.strftime("%A, %b %d at %I:%M %p"),
+                "sender_name": cfg["sender_name"],
+                "sender_company": cfg["sender_company"],
+                "sender_phone": cfg.get("sender_phone") or "",
+            }
+            subject = render(subject_tmpl, **context)
+            body = render(body_tmpl, **context)
+
+            if dry_run:
+                result["preview"].append({"email": email, "subject": subject, "body": body})
+                continue
+
+            try:
+                mailer.send(email, subject, body)
+                store.mark_sent(row_idx, "ReminderSentAt")
+                record_sent(1)
+                record_send_history("reminder", email, row.get("Name"), row.get("Company"), subject)
+                log.info(f"Sent reminder to {email} (row {row_idx})")
+                result["sent"] += 1
+                consecutive_failures = 0
+                time.sleep(SEND_DELAY_SECONDS)
+            except ExcelFileLocked as e:
+                log.critical(f"Reminder to {email} was sent but could not be marked as sent: {e}")
+                result["errors"].append(str(e))
+            except Exception as e:
+                log.error(f"Failed to send reminder to {email} (row {row_idx}): {e}")
+                result["errors"].append(str(e))
+                consecutive_failures += 1
+                if consecutive_failures >= abort_threshold:
+                    log.critical(f"Aborting reminder batch after {consecutive_failures} consecutive "
+                                 f"send failures; last error: {e}")
+                    result["errors"].append(_abort_note(consecutive_failures))
+                    break
+
         return result
-
-    for row_idx, row, meeting_time in candidates:
-        email = str(row["Email"]).strip()
-        if not valid_email(email):
-            log.warning(f"Skipping row {row_idx}: '{email}' doesn't look like a valid email address")
-            result["skipped"].append(email)
-            continue
-
-        context = {
-            "name": lead_name(row),
-            "company": lead_company(row),
-            "phone": row.get("Phone") or "",
-            "meeting_time": meeting_time.strftime("%A, %b %d at %I:%M %p"),
-            "sender_name": cfg["sender_name"],
-            "sender_company": cfg["sender_company"],
-            "sender_phone": cfg.get("sender_phone") or "",
-        }
-        subject = render(subject_tmpl, **context)
-        body = render(body_tmpl, **context)
-
-        if dry_run:
-            result["preview"].append({"email": email, "subject": subject, "body": body})
-            continue
-
-        try:
-            mailer.send(email, subject, body)
-            store.mark_sent(row_idx, "ReminderSentAt")
-            record_sent(1)
-            record_send_history("reminder", email, row.get("Name"), row.get("Company"), subject)
-            log.info(f"Sent reminder to {email} (row {row_idx})")
-            result["sent"] += 1
-            consecutive_failures = 0
-            time.sleep(SEND_DELAY_SECONDS)
-        except ExcelFileLocked as e:
-            log.critical(f"Reminder to {email} was sent but could not be marked as sent: {e}")
-            result["errors"].append(str(e))
-        except Exception as e:
-            log.error(f"Failed to send reminder to {email} (row {row_idx}): {e}")
-            result["errors"].append(str(e))
-            consecutive_failures += 1
-            if consecutive_failures >= abort_threshold:
-                log.critical(f"Aborting reminder batch after {consecutive_failures} consecutive "
-                             f"send failures; last error: {e}")
-                result["errors"].append(_abort_note(consecutive_failures))
-                break
-
-    return result
 
 
 def send_followup_batch(cfg, store, mailer, candidates, dry_run=False):
@@ -298,76 +304,77 @@ def send_followup_batch(cfg, store, mailer, candidates, dry_run=False):
     Bumps FollowupStage and stamps FollowupSentAt on success. The final touch
     (stage == len(offsets) - 1) uses the breakup body. Returns a summary dict.
     """
-    result = {"sent": 0, "skipped": [], "errors": [], "preview": []}
+    with data_lock(timeout=3600):
+        result = {"sent": 0, "skipped": [], "errors": [], "preview": []}
 
-    offsets = list(cfg_get(cfg, "followup_offsets_days") or [])
-    last_stage = len(offsets) - 1
+        offsets = list(cfg_get(cfg, "followup_offsets_days") or [])
+        last_stage = len(offsets) - 1
 
-    tmpl = _tmpl_defaults(cfg)
-    subject_tmpl = cfg.get("followup_subject_template") or tmpl["followup_subject_template"]
-    body_tmpl = cfg.get("followup_body_template") or tmpl["followup_body_template"]
-    breakup_tmpl = cfg.get("followup_breakup_body_template") or tmpl["followup_breakup_body_template"]
+        tmpl = _tmpl_defaults(cfg)
+        subject_tmpl = cfg.get("followup_subject_template") or tmpl["followup_subject_template"]
+        body_tmpl = cfg.get("followup_body_template") or tmpl["followup_body_template"]
+        breakup_tmpl = cfg.get("followup_breakup_body_template") or tmpl["followup_breakup_body_template"]
 
-    abort_threshold = cfg_get(cfg, "send_failure_abort_threshold")
-    consecutive_failures = 0
+        abort_threshold = cfg_get(cfg, "send_failure_abort_threshold")
+        consecutive_failures = 0
 
-    for tmpl in (body_tmpl, breakup_tmpl):
-        template_error = _check_template(subject_tmpl, tmpl)
-        if template_error:
-            log.critical(f"Follow-up template is broken, sent nothing: {template_error}")
-            result["errors"].append(template_error)
-            return result
+        for tmpl in (body_tmpl, breakup_tmpl):
+            template_error = _check_template(subject_tmpl, tmpl)
+            if template_error:
+                log.critical(f"Follow-up template is broken, sent nothing: {template_error}")
+                result["errors"].append(template_error)
+                return result
 
-    for row_idx, row, stage in candidates:
-        email = str(row["Email"]).strip()
-        if not valid_email(email):
-            log.warning(f"Skipping row {row_idx}: '{email}' doesn't look like a valid email address")
-            result["skipped"].append(email)
-            continue
+        for row_idx, row, stage in candidates:
+            email = str(row["Email"]).strip()
+            if not valid_email(email):
+                log.warning(f"Skipping row {row_idx}: '{email}' doesn't look like a valid email address")
+                result["skipped"].append(email)
+                continue
 
-        is_last = stage >= last_stage
-        context = {
-            "name": lead_name(row),
-            "company": lead_company(row),
-            "phone": row.get("Phone") or "",
-            "sender_name": cfg["sender_name"],
-            "sender_company": cfg["sender_company"],
-            "sender_phone": cfg.get("sender_phone") or "",
-            "sender_pitch": cfg.get("sender_pitch") or "",
-            "stage": stage + 1,
-            "is_last": is_last,
-        }
-        subject = render(subject_tmpl, **context)
-        body = render(breakup_tmpl if is_last else body_tmpl, **context)
+            is_last = stage >= last_stage
+            context = {
+                "name": lead_name(row),
+                "company": lead_company(row),
+                "phone": row.get("Phone") or "",
+                "sender_name": cfg["sender_name"],
+                "sender_company": cfg["sender_company"],
+                "sender_phone": cfg.get("sender_phone") or "",
+                "sender_pitch": cfg.get("sender_pitch") or "",
+                "stage": stage + 1,
+                "is_last": is_last,
+            }
+            subject = render(subject_tmpl, **context)
+            body = render(breakup_tmpl if is_last else body_tmpl, **context)
 
-        if dry_run:
-            result["preview"].append({"email": email, "subject": subject, "body": body})
-            continue
+            if dry_run:
+                result["preview"].append({"email": email, "subject": subject, "body": body})
+                continue
 
-        try:
-            mailer.send(email, subject, body)
-            # Stamp the timestamp first: if the sheet is locked between these two
-            # saves, next run re-sends this same nudge (one duplicate, caught by
-            # the 1-day floor in followup_candidates) rather than skipping ahead.
-            store.mark_sent(row_idx, "FollowupSentAt")
-            store.set_value(row_idx, "FollowupStage", stage + 1)
-            record_sent(1)
-            record_send_history("followup", email, row.get("Name"), row.get("Company"), subject)
-            log.info(f"Sent follow-up #{stage + 1} to {email} (row {row_idx})")
-            result["sent"] += 1
-            consecutive_failures = 0
-            time.sleep(SEND_DELAY_SECONDS)
-        except ExcelFileLocked as e:
-            log.critical(f"Follow-up to {email} was sent but could not be marked: {e}")
-            result["errors"].append(str(e))
-        except Exception as e:
-            log.error(f"Failed to send follow-up to {email} (row {row_idx}): {e}")
-            result["errors"].append(str(e))
-            consecutive_failures += 1
-            if consecutive_failures >= abort_threshold:
-                log.critical(f"Aborting follow-up batch after {consecutive_failures} consecutive "
-                             f"send failures; last error: {e}")
-                result["errors"].append(_abort_note(consecutive_failures))
-                break
+            try:
+                mailer.send(email, subject, body)
+                # Stamp the timestamp first: if the sheet is locked between these two
+                # saves, next run re-sends this same nudge (one duplicate, caught by
+                # the 1-day floor in followup_candidates) rather than skipping ahead.
+                store.mark_sent(row_idx, "FollowupSentAt")
+                store.set_value(row_idx, "FollowupStage", stage + 1)
+                record_sent(1)
+                record_send_history("followup", email, row.get("Name"), row.get("Company"), subject)
+                log.info(f"Sent follow-up #{stage + 1} to {email} (row {row_idx})")
+                result["sent"] += 1
+                consecutive_failures = 0
+                time.sleep(SEND_DELAY_SECONDS)
+            except ExcelFileLocked as e:
+                log.critical(f"Follow-up to {email} was sent but could not be marked: {e}")
+                result["errors"].append(str(e))
+            except Exception as e:
+                log.error(f"Failed to send follow-up to {email} (row {row_idx}): {e}")
+                result["errors"].append(str(e))
+                consecutive_failures += 1
+                if consecutive_failures >= abort_threshold:
+                    log.critical(f"Aborting follow-up batch after {consecutive_failures} consecutive "
+                                 f"send failures; last error: {e}")
+                    result["errors"].append(_abort_note(consecutive_failures))
+                    break
 
-    return result
+        return result

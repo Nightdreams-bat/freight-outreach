@@ -5,6 +5,7 @@ outreach.log*
 build_out.log
 send_log.json
 send_history.jsonl
+.lock
 __pycache__/
 *.pyc
 

@@ -1,6 +1,7 @@
 import json
 from datetime import date, datetime
 
+from outreach.locking import data_lock
 from outreach.paths import SEND_HISTORY_PATH as HISTORY_PATH
 from outreach.paths import SEND_LOG_PATH as TRACKER_PATH
 
@@ -26,13 +27,14 @@ def remaining_today(daily_cap):
 
 
 def record_sent(count=1):
-    data = _load()
-    today = str(date.today())
-    data[today] = data.get(today, 0) + count
-    if len(data) > 14:  # keep the file small, we only ever need "today"
-        for old_day in sorted(data)[:-14]:
-            del data[old_day]
-    _save(data)
+    with data_lock():
+        data = _load()
+        today = str(date.today())
+        data[today] = data.get(today, 0) + count
+        if len(data) > 14:  # keep the file small, we only ever need "today"
+            for old_day in sorted(data)[:-14]:
+                del data[old_day]
+        _save(data)
 
 
 def record_send_history(kind, email, name, company, subject):
@@ -44,12 +46,13 @@ def record_send_history(kind, email, name, company, subject):
         "company": company,
         "subject": subject,
     }
-    lines = []
-    if HISTORY_PATH.exists():
-        lines = HISTORY_PATH.read_text(encoding="utf-8").splitlines()
-    lines.append(json.dumps(entry))
-    lines = lines[-HISTORY_MAX_ENTRIES:]
-    HISTORY_PATH.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    with data_lock():
+        lines = []
+        if HISTORY_PATH.exists():
+            lines = HISTORY_PATH.read_text(encoding="utf-8").splitlines()
+        lines.append(json.dumps(entry))
+        lines = lines[-HISTORY_MAX_ENTRIES:]
+        HISTORY_PATH.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def recent_history(limit=100):

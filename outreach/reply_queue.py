@@ -24,6 +24,7 @@ from outreach.config import load_config
 from outreach.core import build_mailer
 from outreach.excel_store import ExcelStore
 from outreach.logging_setup import get_logger
+from outreach.locking import data_lock
 from outreach.paths import REPLY_QUEUE_PATH
 from outreach.send_tracker import record_send_history, record_sent, remaining_today
 
@@ -51,8 +52,9 @@ def _read_all():
 
 
 def _write_all(records):
-    body = "\n".join(json.dumps(r) for r in records)
-    REPLY_QUEUE_PATH.write_text(body + ("\n" if body else ""), encoding="utf-8")
+    with data_lock():
+        body = "\n".join(json.dumps(r) for r in records)
+        REPLY_QUEUE_PATH.write_text(body + ("\n" if body else ""), encoding="utf-8")
 
 
 def _jsonable_action(action):
@@ -101,9 +103,10 @@ def enqueue(action, *, lead_row_idx=None, lead_email="", lead_name="",
         "reply_summary": reply_summary,
         "action": _jsonable_action(action),
     }
-    records = _read_all()
-    records.append(record)
-    _write_all(records)
+    with data_lock():
+        records = _read_all()
+        records.append(record)
+        _write_all(records)
     return qid
 
 
@@ -124,15 +127,16 @@ def get(qid):
 
 
 def reject(qid):
-    records = _read_all()
-    hit = False
-    for record in records:
-        if record.get("id") == qid and record.get("status") == "pending":
-            record["status"] = "rejected"
-            record["resolved_at"] = datetime.now().strftime(_TS)
-            hit = True
-    if hit:
-        _write_all(records)
+    with data_lock():
+        records = _read_all()
+        hit = False
+        for record in records:
+            if record.get("id") == qid and record.get("status") == "pending":
+                record["status"] = "rejected"
+                record["resolved_at"] = datetime.now().strftime(_TS)
+                hit = True
+        if hit:
+            _write_all(records)
     return hit
 
 
@@ -157,102 +161,103 @@ def approve(qid, *, overrides=None, cfg=None, store=None, mailer=None):
 
     `cfg` / `store` / `mailer` are injectable for tests; production builds them.
     """
-    records = _read_all()
-    record = next((r for r in records if r.get("id") == qid), None)
-    if record is None:
-        return {"status": "error", "message": f"Queue item {qid} not found."}
-    if record.get("status") != "pending":
-        return {"status": "error", "message": f"Item is already {record['status']}."}
+    with data_lock():
+        records = _read_all()
+        record = next((r for r in records if r.get("id") == qid), None)
+        if record is None:
+            return {"status": "error", "message": f"Queue item {qid} not found."}
+        if record.get("status") != "pending":
+            return {"status": "error", "message": f"Item is already {record['status']}."}
 
-    action = dict(record.get("action", {}))
-    if overrides:
-        action.update(overrides)
-    kind = action.get("kind")
+        action = dict(record.get("action", {}))
+        if overrides:
+            action.update(overrides)
+        kind = action.get("kind")
 
-    if kind == "manual":
-        return {
-            "status": "error",
-            "message": "This one needs manual scheduling - reply in Gmail, then reject it here.",
-        }
-    if kind not in ("book", "propose", "decline_ack"):
-        return {"status": "error", "message": f"Unknown action kind '{kind}'."}
+        if kind == "manual":
+            return {
+                "status": "error",
+                "message": "This one needs manual scheduling - reply in Gmail, then reject it here.",
+            }
+        if kind not in ("book", "propose", "decline_ack"):
+            return {"status": "error", "message": f"Unknown action kind '{kind}'."}
 
-    cfg = cfg or load_config()
-    daily_cap = cfg.get("daily_send_cap", 150)
-    if remaining_today(daily_cap) <= 0:
-        return {
-            "status": "deferred",
-            "message": f"Daily send cap ({daily_cap}) reached - approve this again tomorrow.",
-        }
+        cfg = cfg or load_config()
+        daily_cap = cfg.get("daily_send_cap", 150)
+        if remaining_today(daily_cap) <= 0:
+            return {
+                "status": "deferred",
+                "message": f"Daily send cap ({daily_cap}) reached - approve this again tomorrow.",
+            }
 
-    to_addr = record.get("lead_email")
-    row_idx = record.get("lead_row_idx")
-    gmail_address = cfg.get("gmail_address")
-    mailer = mailer or build_mailer(cfg)
+        to_addr = record.get("lead_email")
+        row_idx = record.get("lead_row_idx")
+        gmail_address = cfg.get("gmail_address")
+        mailer = mailer or build_mailer(cfg)
 
-    if store is None and row_idx is not None:
-        try:
-            store = ExcelStore(
-                cfg["excel_path"],
-                column_aliases=cfg.get("column_aliases"),
-                disallowed_emails=cfg.get("disallowed_emails"),
-                disallowed_domains=cfg.get("disallowed_domains"),
-            )
-        except Exception as e:  # noqa: BLE001 - a locked sheet shouldn't block the send
-            log.warning("Could not open the sheet to record the outcome: %s", e)
-            store = None
-
-    # If a prior approve() created the event but then failed before finishing,
-    # the id is on the record - reuse it instead of booking a second slot.
-    event_id = record.get("event_id")
-    try:
-        if kind == "book":
-            start = _parse_dt(action["start"])
-            duration = int(cfg_get(cfg, "meeting_duration_minutes"))
-            if not event_id:
-                event_id = calendar_api.create_event(
-                    gmail_address,
-                    cfg_get(cfg, "calendar_id"),
-                    summary=action.get("event_summary") or "Intro call",
-                    description=action.get("event_description") or "",
-                    start=start,
-                    duration_minutes=duration,
-                    attendee_email=to_addr,
-                    timezone=calendar_api.local_tz_name(),
-                    send_updates=True,
+        if store is None and row_idx is not None:
+            try:
+                store = ExcelStore(
+                    cfg["excel_path"],
+                    column_map=cfg.get("column_map"),
+                    disallowed_emails=cfg.get("disallowed_emails"),
+                    disallowed_domains=cfg.get("disallowed_domains"),
                 )
-                # Persist immediately so a send failure below can't cause a rebook.
-                record["event_id"] = event_id
-                _write_all(records)
-            mailer.send(to_addr, action["email_subject"], action["email_body"])
-            _record_send(record)
-            if store is not None:
-                store.set_value(row_idx, "MeetingDateTime", start.strftime(_TS))
-                store.set_value(row_idx, "MeetingEventId", event_id)
-                store.set_value(row_idx, "ReplyStatus", "booked")
-            message = f"Booked {start.strftime('%b %d, %H:%M')} and emailed {to_addr}."
+            except Exception as e:  # noqa: BLE001 - a locked sheet shouldn't block the send
+                log.warning("Could not open the sheet to record the outcome: %s", e)
+                store = None
 
-        elif kind == "propose":
-            mailer.send(to_addr, action["email_subject"], action["email_body"])
-            _record_send(record)
-            if store is not None:
-                store.set_value(row_idx, "ReplyStatus", "scheduling")
-            message = f"Sent proposed times to {to_addr}."
+        # If a prior approve() created the event but then failed before finishing,
+        # the id is on the record - reuse it instead of booking a second slot.
+        event_id = record.get("event_id")
+        try:
+            if kind == "book":
+                start = _parse_dt(action["start"])
+                duration = int(cfg_get(cfg, "meeting_duration_minutes"))
+                if not event_id:
+                    event_id = calendar_api.create_event(
+                        gmail_address,
+                        cfg_get(cfg, "calendar_id"),
+                        summary=action.get("event_summary") or "Intro call",
+                        description=action.get("event_description") or "",
+                        start=start,
+                        duration_minutes=duration,
+                        attendee_email=to_addr,
+                        timezone=calendar_api.local_tz_name(),
+                        send_updates=True,
+                    )
+                    # Persist immediately so a send failure below can't cause a rebook.
+                    record["event_id"] = event_id
+                    _write_all(records)
+                mailer.send(to_addr, action["email_subject"], action["email_body"])
+                _record_send(record)
+                if store is not None:
+                    store.set_value(row_idx, "MeetingDateTime", start.strftime(_TS))
+                    store.set_value(row_idx, "MeetingEventId", event_id)
+                    store.set_value(row_idx, "ReplyStatus", "booked")
+                message = f"Booked {start.strftime('%b %d, %H:%M')} and emailed {to_addr}."
 
-        else:  # decline_ack
-            mailer.send(to_addr, action["email_subject"], action["email_body"])
-            _record_send(record)
-            if store is not None:
-                store.set_value(row_idx, "ReplyStatus", "no")
-            message = f"Sent an acknowledgement to {to_addr}."
+            elif kind == "propose":
+                mailer.send(to_addr, action["email_subject"], action["email_body"])
+                _record_send(record)
+                if store is not None:
+                    store.set_value(row_idx, "ReplyStatus", "scheduling")
+                message = f"Sent proposed times to {to_addr}."
 
-    except Exception as e:  # noqa: BLE001 - report the failure, leave the item pending
-        log.error("approve(%s) failed: %s", qid, e)
-        return {"status": "error", "message": f"Failed: {e}"}
+            else:  # decline_ack
+                mailer.send(to_addr, action["email_subject"], action["email_body"])
+                _record_send(record)
+                if store is not None:
+                    store.set_value(row_idx, "ReplyStatus", "no")
+                message = f"Sent an acknowledgement to {to_addr}."
 
-    record["status"] = "done"
-    record["resolved_at"] = datetime.now().strftime(_TS)
-    if event_id:
-        record["event_id"] = event_id
-    _write_all(records)
-    return {"status": "done", "message": message, "event_id": event_id}
+        except Exception as e:  # noqa: BLE001 - report the failure, leave the item pending
+            log.error("approve(%s) failed: %s", qid, e)
+            return {"status": "error", "message": f"Failed: {e}"}
+
+        record["status"] = "done"
+        record["resolved_at"] = datetime.now().strftime(_TS)
+        if event_id:
+            record["event_id"] = event_id
+        _write_all(records)
+        return {"status": "done", "message": message, "event_id": event_id}

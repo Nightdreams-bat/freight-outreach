@@ -1,9 +1,10 @@
+import secrets
 import socket
 import threading
 import webbrowser
 from datetime import datetime
 
-from flask import Flask, flash, jsonify, redirect, render_template, request, url_for
+from flask import Flask, abort, flash, jsonify, redirect, render_template, request, url_for
 
 from outreach import lead_sourcing, reply_queue, templates
 from outreach.config import get as cfg_get
@@ -36,6 +37,31 @@ from outreach.scoring import score_lead
 from outreach.send_tracker import recent_history, remaining_today, sent_today
 
 SUPPRESSED_TRUE_VALUES = ("1", "true", "yes", "y")
+
+# Hostnames the dashboard is ever legitimately reached on. The port varies
+# (_pick_port), so only the host part is checked.
+_ALLOWED_HOSTS = ("127.0.0.1", "localhost")
+_SAFE_METHODS = ("GET", "HEAD", "OPTIONS")
+
+
+def _host_only(value):
+    """'127.0.0.1:5000' -> '127.0.0.1'; strips an optional :port."""
+    return (value or "").rsplit(":", 1)[0].strip("[]").lower()
+
+
+def _same_origin_ok():
+    """True if this request is safe to treat as coming from our own dashboard:
+    a loopback Host, and an Origin/Referer that is absent or same-origin."""
+    if _host_only(request.host) not in _ALLOWED_HOSTS:
+        return False
+    expected = f"{request.scheme}://{request.host}"
+    origin = request.headers.get("Origin")
+    if origin:
+        return origin == expected
+    referer = request.headers.get("Referer")
+    if referer:
+        return _host_only(referer.split("://", 1)[-1].split("/", 1)[0]) in _ALLOWED_HOSTS
+    return True
 
 # ---- manual "Run now" jobs (Dashboard) ------------------------------------
 # One background job at a time, in-process (no subprocess - avoids a PyInstaller
@@ -166,8 +192,19 @@ def create_app():
         static_folder=str(resource_path("outreach/web/static")),
     )
     # Local single-user tool: the key only needs to survive this process's lifetime,
-    # it's not protecting anything beyond flash-message cookies.
-    app.secret_key = "freight-outreach-local-dashboard"
+    # it's not protecting anything beyond flash-message cookies. Fresh per process.
+    app.secret_key = secrets.token_hex(32)
+
+    @app.before_request
+    def _block_cross_origin():
+        """CSRF / DNS-rebind guard: any state-changing request must come from our
+        own loopback dashboard. A cross-site page can issue the request but cannot
+        set a matching Origin or forge the loopback Host, so it gets a 403."""
+        if request.method in _SAFE_METHODS:
+            return None
+        if not _same_origin_ok():
+            abort(403)
+        return None
 
     @app.context_processor
     def inject_active():
@@ -448,6 +485,12 @@ def create_app():
 
     @app.route("/diagnostics/run")
     def diagnostics_run():
+        # Billable (Anthropic) + Google round-trips. Harmless to leave as GET for
+        # the dashboard's own fetch, but reject an obvious cross-site <img>/fetch
+        # that carries a foreign Referer.
+        referer = request.headers.get("Referer")
+        if referer and _host_only(referer.split("://", 1)[-1].split("/", 1)[0]) not in _ALLOWED_HOSTS:
+            abort(403)
         return jsonify(run_checks(load_config()))
 
     @app.route("/blocklist")
@@ -774,7 +817,7 @@ def main():
     url = f"http://127.0.0.1:{port}"
     print(f"Freight Outreach dashboard running at {url}  (close this window to stop)")
     webbrowser.open(url)
-    app.run(host="127.0.0.1", port=port, debug=False)
+    app.run(host="127.0.0.1", port=port, debug=False, threaded=True)
 
 
 if __name__ == "__main__":

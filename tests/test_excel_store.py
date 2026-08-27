@@ -37,6 +37,25 @@ def test_combined_first_last_name(tmp_path):
     assert v["Name"] == "Jane Roe"
 
 
+def test_save_is_atomic_and_keeps_a_backup(tmp_path):
+    p = _make(tmp_path / "leads.xlsx",
+              ["Name", "Email"], ["Jane", "jane@acme.test"])
+    original = p.read_bytes()
+
+    store = ExcelStore(p)
+    # .bak is written once on construction, before any change.
+    bak = p.with_suffix(".xlsx.bak")
+    assert bak.exists()
+    assert bak.read_bytes() == original
+
+    row_idx = list(store.rows())[0][0]
+    store.set_value(row_idx, "Notes", "touched")
+    # No stray temp file left behind, and the sheet is still readable.
+    assert not (tmp_path / "leads.xlsx.tmp").exists()
+    reloaded = ExcelStore(p)
+    assert reloaded.get_row(row_idx)["Notes"] == "touched"
+
+
 def test_explicit_map_overrides_detection(tmp_path):
     p = _make(tmp_path / "leads.xlsx",
               ["Contact", "Alt Contact", "Email"],

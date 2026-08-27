@@ -158,6 +158,40 @@ def test_find_leads_search_then_import(client):
     assert "Added 1" in imp.get_data(as_text=True)
 
 
+def test_cross_origin_post_is_rejected(client):
+    r = client.post("/blocklist/domain", data={"domain": "x.com"},
+                    headers={"Origin": "http://evil.example"})
+    assert r.status_code == 403
+
+
+def test_cross_origin_referer_post_is_rejected(client):
+    r = client.post("/blocklist/domain", data={"domain": "x.com"},
+                    headers={"Referer": "http://evil.example/page"})
+    assert r.status_code == 403
+
+
+def test_foreign_host_post_is_rejected(client):
+    r = client.post("/blocklist/domain", data={"domain": "x.com"},
+                    base_url="http://attacker.test")
+    assert r.status_code == 403
+
+
+def test_same_origin_post_is_allowed(client):
+    r = client.post("/blocklist/domain", data={"domain": "x.com"},
+                    headers={"Origin": "http://localhost"}, follow_redirects=True)
+    assert r.status_code < 400
+
+
+def test_no_origin_post_is_allowed(client):
+    # The desktop WebView / test client sends no Origin - must still work.
+    r = client.post("/blocklist/domain", data={"domain": "x.com"}, follow_redirects=True)
+    assert r.status_code < 400
+
+
+def test_get_routes_never_blocked_by_guard(client):
+    assert client.get("/leads", headers={"Origin": "http://evil.example"}).status_code < 400
+
+
 def test_run_job_followups_noop_when_drip_disabled(monkeypatch):
     cfg = dict(BASE_CFG)
     cfg["followup_enabled"] = False

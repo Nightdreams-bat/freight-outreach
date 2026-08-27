@@ -45,7 +45,7 @@
       </select>
       <div class="help">
         {% if cv.effective is string %}Using <code>{{ cv.effective }}</code>.
-        {% elif cv.effective %}Joining <code>{{ cv.effective|join('</code> + <code>')|safe }}</code>.
+        {% elif cv.effective %}Joining {% for part in cv.effective %}<code>{{ part }}</code>{% if not loop.last %} + {% endif %}{% endfor %}.
         {% else %}<em>Not mapped.</em>{% if cv.logical in ('Name', 'Company') %} Filled from the email address.{% endif %}
         {% endif %}
       </div>

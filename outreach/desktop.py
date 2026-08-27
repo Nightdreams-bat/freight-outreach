@@ -40,7 +40,7 @@ def _start_server():
     url = f"http://127.0.0.1:{port}"
 
     def _serve():
-        app.run(host="127.0.0.1", port=port, debug=False, use_reloader=False)
+        app.run(host="127.0.0.1", port=port, debug=False, use_reloader=False, threaded=True)
 
     thread = threading.Thread(target=_serve, daemon=True, name="flask")
     thread.start()

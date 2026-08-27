@@ -1,4 +1,5 @@
 import jinja2
+import jinja2.sandbox
 
 # Templates are Jinja2 text - {{ var }} to insert a value, {% if var %}...{% endif %} to
 # skip a whole line/sentence cleanly when a field is empty (e.g. no Phone on that lead),
@@ -243,7 +244,10 @@ def defaults(lang="en"):
     return {key: pair[idx] for key, pair in _TEMPLATE_KEYS.items()}
 
 
-_JINJA_ENV = jinja2.Environment(trim_blocks=True, lstrip_blocks=True)
+# Sandboxed: template text is user-authored (Settings page) and rendered on every
+# send, so a payload like {{ cycler.__init__.__globals__ }} must not reach real
+# attributes.
+_JINJA_ENV = jinja2.sandbox.SandboxedEnvironment(trim_blocks=True, lstrip_blocks=True)
 
 
 def render(template_text, **kwargs):

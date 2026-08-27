@@ -1,3 +1,5 @@
+import os
+import shutil
 from datetime import datetime
 from pathlib import Path
 
@@ -65,6 +67,13 @@ class ExcelStore:
         self.email_column_missing = False
         if not self.path.exists():
             self._create_blank_workbook()
+        else:
+            # Best-effort snapshot: one copy per store construction, so a crash or
+            # corruption mid-save leaves the client a recoverable .bak.
+            try:
+                shutil.copy2(self.path, self.path.with_suffix(self.path.suffix + ".bak"))
+            except OSError:
+                pass
         self.wb = openpyxl.load_workbook(self.path)
         self.ws = self.wb.active
         self.headers = [c.value for c in self.ws[1] if c.value is not None and str(c.value).strip()]
@@ -76,7 +85,9 @@ class ExcelStore:
 
     def _save(self):
         try:
-            self.wb.save(self.path)
+            tmp = self.path.with_name(self.path.name + ".tmp")
+            self.wb.save(tmp)
+            os.replace(tmp, self.path)
         except PermissionError as e:
             raise ExcelFileLocked(
                 f"Could not save {self.path} - is it open in Excel? Close it and try again."
