@@ -5,3 +5,4 @@ google-auth
 google-auth-oauthlib
 google-api-python-client
 anthropic==1.0.0
+pywebview            ; sys_platform == "win32"   # native desktop window (uses Windows' built-in WebView2)

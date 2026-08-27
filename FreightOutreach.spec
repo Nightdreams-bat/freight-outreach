@@ -20,9 +20,14 @@ datas += collect_data_files("googleapiclient")
 # anthropic (reply classification) and its stack. anthropic 1.x pulls httpx2 +
 # jiter (compiled) + pydantic; none are covered by PyInstaller's built-in hooks
 # the way plain httpx is, so collect each one wholesale.
+#
+# pywebview + pythonnet power the native desktop window (WebView2). PyInstaller
+# ships hooks for webview/clr/clr_loader, but pythonnet's Python.Runtime.dll and
+# the WebView2 loader assemblies still need collecting.
 binaries = []
 for _pkg in ("anthropic", "httpx2", "jiter", "anyio", "sniffio", "distro",
-             "pydantic", "pydantic_core", "docstring_parser"):
+             "pydantic", "pydantic_core", "docstring_parser",
+             "webview", "pythonnet", "clr_loader"):
     try:
         _d, _b, _h = collect_all(_pkg)
         datas += _d
@@ -30,6 +35,8 @@ for _pkg in ("anthropic", "httpx2", "jiter", "anyio", "sniffio", "distro",
         hiddenimports += _h
     except Exception:
         pass
+
+hiddenimports += ["webview.platforms.edgechromium", "clr_loader", "clr_loader.netfx"]
 
 a = Analysis(
     ["outreach/__main__.py"],
@@ -56,9 +63,10 @@ exe = EXE(
     [],
     exclude_binaries=True,
     name="FreightOutreach",
-    console=True,  # keep a console: the dashboard prints its URL, and errors stay visible
+    console=True,  # keep a console for CLI flags (--cold, --selfcheck, scheduled tasks);
+                   # GUI mode hides the console window at runtime (outreach/desktop.py)
     disable_windowed_traceback=False,
-    icon=None,
+    icon="assets/freight.ico",
 )
 coll = COLLECT(
     exe,

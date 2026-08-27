@@ -1,9 +1,10 @@
 """Single entry point for both the source checkout (`python -m outreach`) and the
 frozen build.
 
-  * No args (a double-click) -> open the dashboard in the browser. Everything is
-    configured on the dashboard's Settings page; there is no setup wizard.
+  * No args (a double-click) -> open the dashboard in a native app window.
+    Everything is configured on the dashboard's Settings page; there is no wizard.
   * Explicit flags:
+        --web         open the dashboard in the default browser instead of a window
         --cold        send the cold-intro batch now (headless)
         --followup    send due follow-up nudges now (headless; opt-in via config)
         --reminders   run the reminder + follow-up scan now (headless; scheduled task)
@@ -29,11 +30,15 @@ def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
 
     # Downstream mains parse their own args with argparse; hide our dispatch flags from them.
-    dispatch_flags = {"--cold", "--followup", "--reminders", "--replies", "--selfcheck"}
+    dispatch_flags = {"--web", "--cold", "--followup", "--reminders", "--replies", "--selfcheck"}
     sys.argv = [sys.argv[0]] + [a for a in argv if a not in dispatch_flags]
 
     if "--selfcheck" in argv:
         _selfcheck()
+        return
+    elif "--web" in argv:
+        from outreach.web.app import main as run
+        run()
         return
     elif "--cold" in argv:
         from outreach.send_cold import main as run
@@ -58,8 +63,8 @@ def main(argv=None):
         run()
         return  # scheduled task: no one is watching, don't pause
     else:
-        from outreach.web.app import main as run
-        run()
+        from outreach.desktop import run_desktop
+        run_desktop()
 
 
 def _selfcheck():
@@ -94,6 +99,14 @@ def _selfcheck():
         print("import anthropic: OK")
     except Exception as e:
         print(f"import anthropic: MISSING (reply classification disabled) - {e}")
+
+    # The native window is optional too - a missing/broken pywebview falls back
+    # to a chromeless browser window, so it's info, not a failure.
+    try:
+        __import__("webview")
+        print("import webview (native window): OK")
+    except Exception as e:
+        print(f"import webview: MISSING (will use a browser window instead) - {e}")
 
     try:
         from outreach.config import get as cfg_get
