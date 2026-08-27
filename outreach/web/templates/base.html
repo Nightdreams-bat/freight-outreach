@@ -24,6 +24,10 @@
       <a class="nav-link {{ 'active' if active == 'send' }}" href="{{ url_for('send_page') }}">
         <i class="bi bi-send-fill"></i> Send
       </a>
+      <a class="nav-link {{ 'active' if active == 'replies' }}" href="{{ url_for('replies_page') }}">
+        <i class="bi bi-chat-left-dots-fill"></i> Replies
+        {% if pending_replies %}<span class="badge rounded-pill text-bg-danger ms-1">{{ pending_replies }}</span>{% endif %}
+      </a>
       <a class="nav-link {{ 'active' if active == 'history' }}" href="{{ url_for('history') }}">
         <i class="bi bi-clock-history"></i> History
       </a>

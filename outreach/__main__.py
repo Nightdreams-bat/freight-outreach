@@ -9,6 +9,7 @@ What decides the mode:
         --setup       first-time setup wizard
         --cold        send the cold-intro batch now (headless)
         --reminders   run the reminder scan now (headless; used by the scheduled task)
+        --replies     scan for lead replies and draft actions (headless; scheduled task)
         --selfcheck   verify a freshly built .exe has everything it needs
 """
 
@@ -40,7 +41,7 @@ def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
 
     # Downstream mains parse their own args with argparse; hide our dispatch flags from them.
-    dispatch_flags = {"--setup", "--cold", "--reminders", "--selfcheck"}
+    dispatch_flags = {"--setup", "--cold", "--reminders", "--replies", "--selfcheck"}
     sys.argv = [sys.argv[0]] + [a for a in argv if a not in dispatch_flags]
 
     mode = _mode_from_exe_name()
@@ -59,6 +60,10 @@ def main(argv=None):
         return
     elif "--reminders" in argv:
         from outreach.send_reminders import main as run
+        run()
+        return  # scheduled task: no one is watching, don't pause
+    elif "--replies" in argv:
+        from outreach.process_replies import main as run
         run()
         return  # scheduled task: no one is watching, don't pause
     else:
@@ -91,11 +96,43 @@ def _selfcheck():
             ok = False
             print(f"import {mod}: FAILED - {e}")
 
+    # Reply-handling is optional - a missing anthropic package or unset key is a
+    # warning, not a self-check failure.
+    try:
+        __import__("anthropic")
+        print("import anthropic: OK")
+    except Exception as e:
+        print(f"import anthropic: MISSING (reply classification disabled) - {e}")
+
+    try:
+        from outreach.credentials import get_anthropic_key
+        from outreach.config import load_config, get as cfg_get
+        print(f"  Anthropic API key: {'set' if get_anthropic_key() else 'not set'}")
+        try:
+            cfg = load_config()
+            print(f"  reply_scan_enabled: {cfg_get(cfg, 'reply_scan_enabled')}")
+        except FileNotFoundError:
+            print("  reply_scan_enabled: (no config yet)")
+    except Exception as e:
+        print(f"  reply-handling config check skipped - {e}")
+
     from outreach.paths import resource_path
     for res in ("outreach/web/templates/base.html", "outreach/web/static/style.css"):
         exists = resource_path(res).exists()
         ok = ok and exists
         print(f"resource {res}: {'OK' if exists else 'MISSING'}")
+
+    try:
+        from outreach import templates as _t
+        from outreach.templates import render as _render
+        _dummy = dict(name="A", company="B", sender_name="C", sender_company="D",
+                      sender_phone="", meeting_time="Mon", slots=["Mon 9am", "Tue 2pm"])
+        for tname in ("MEETING_CONFIRM_BODY", "PROPOSE_TIMES_BODY", "DECLINE_ACK_BODY"):
+            _render(getattr(_t, tname), **_dummy)
+        print("scheduling templates render: OK")
+    except Exception as e:
+        ok = False
+        print(f"scheduling templates render: FAILED - {e}")
 
     print("\nSELF-CHECK", "PASSED" if ok else "FAILED")
     raise SystemExit(0 if ok else 1)

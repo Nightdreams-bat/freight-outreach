@@ -73,7 +73,51 @@
   </div>
 </div>
 
-<form method="post">
+<div class="content-card" style="max-width:960px" id="reply-handling">
+  <h5 class="mb-3">Reply handling &amp; auto-scheduling</h5>
+
+  <div class="row align-items-start mb-3">
+    <div class="col-md-6">
+      <p class="mb-1">
+        Anthropic API key:
+        <strong>{{ "configured" if anthropic_key_set else "not set" }}</strong>
+      </p>
+      <input class="form-control form-control-sm" type="password" name="anthropic_api_key"
+             placeholder="sk-ant-..." autocomplete="off" form="settings-form">
+      <div class="form-text">Paste a key and click <em>Save Settings</em> below. Stored in Windows Credential Manager, never shown again.</div>
+    </div>
+    <div class="col-md-6 text-muted small">
+      Reading replies uses Claude to tell a "yes" from a "no" and pull out any time the lead suggests.
+      Without a key, reply checking stays off.
+    </div>
+  </div>
+
+  <div class="row align-items-start">
+    <div class="col-md-6">
+      {% if reply_task and reply_task.registered %}
+        <p><span class="badge text-bg-success badge-status mb-2">Enabled</span></p>
+        <p class="text-muted small">Status: {{ reply_task.status }} &middot; Next run: {{ reply_task.next_run }}</p>
+        <form method="post" action="{{ url_for('replies_disable') }}">
+          <button type="submit" class="btn btn-outline-danger btn-sm">Disable</button>
+        </form>
+      {% else %}
+        <p><span class="badge text-bg-secondary badge-status mb-2">Not enabled</span></p>
+        <form method="post" action="{{ url_for('replies_enable') }}">
+          <button type="submit" class="btn btn-outline-success btn-sm"
+                  {{ "disabled" if not anthropic_key_set }}>Enable automatic reply checking</button>
+        </form>
+      {% endif %}
+    </div>
+    <div class="col-md-6 text-muted small">
+      When <strong>enabled</strong>, a scheduled task checks the inbox every {{ cfg.reminder_interval_hours }} hour(s),
+      classifies each new reply, checks your Google Calendar for conflicts, and drafts a calendar invite or a
+      "here are some times" email. Everything lands on the <strong>Replies</strong> page for you to approve -
+      nothing is sent or booked automatically.
+    </div>
+  </div>
+</div>
+
+<form method="post" id="settings-form">
 <div class="content-card" style="max-width:960px">
   <h5 class="mb-3">Business details</h5>
 
@@ -158,6 +202,51 @@
     </div>
     <div class="col-md-6 text-muted small pt-2">The full reminder message - sent automatically by the automation above, or on demand from the Send page.</div>
   </div>
+
+  <h6 class="mt-4">Scheduling replies</h6>
+  <p class="text-muted small">
+    Used only when reply handling is on. Extra variables: <code>{{ '{{ meeting_time }}' }}</code> (confirm),
+    <code>{{ '{{ slots }}' }}</code> (a list, in "Propose times").
+  </p>
+
+  <div class="row mb-2">
+    <div class="col-md-6">
+      <input class="form-control" name="meeting_confirm_subject_template" placeholder="Subject" value="{{ cfg.meeting_confirm_subject_template or '' }}">
+    </div>
+    <div class="col-md-6 text-muted small pt-2">Subject of the confirmation sent when you approve a booking.</div>
+  </div>
+  <div class="row mb-3">
+    <div class="col-md-6">
+      <textarea class="form-control" name="meeting_confirm_body_template" rows="8" style="font-family:monospace">{{ cfg.meeting_confirm_body_template or '' }}</textarea>
+    </div>
+    <div class="col-md-6 text-muted small pt-2">Goes out alongside the calendar invite.</div>
+  </div>
+
+  <div class="row mb-2">
+    <div class="col-md-6">
+      <input class="form-control" name="propose_times_subject_template" placeholder="Subject" value="{{ cfg.propose_times_subject_template or '' }}">
+    </div>
+    <div class="col-md-6 text-muted small pt-2">Subject when offering the lead a few open slots.</div>
+  </div>
+  <div class="row mb-3">
+    <div class="col-md-6">
+      <textarea class="form-control" name="propose_times_body_template" rows="8" style="font-family:monospace">{{ cfg.propose_times_body_template or '' }}</textarea>
+    </div>
+    <div class="col-md-6 text-muted small pt-2">Sent when the lead said yes but gave no time, or their time was taken.</div>
+  </div>
+
+  <div class="row mb-2">
+    <div class="col-md-6">
+      <input class="form-control" name="decline_ack_subject_template" placeholder="Subject" value="{{ cfg.decline_ack_subject_template or '' }}">
+    </div>
+    <div class="col-md-6 text-muted small pt-2">Subject of the short acknowledgement when a lead says no.</div>
+  </div>
+  <div class="row mb-3">
+    <div class="col-md-6">
+      <textarea class="form-control" name="decline_ack_body_template" rows="6" style="font-family:monospace">{{ cfg.decline_ack_body_template or '' }}</textarea>
+    </div>
+    <div class="col-md-6 text-muted small pt-2">Only sent if you approve it on the Replies page.</div>
+  </div>
 </div>
 
 <div class="content-card" style="max-width:960px">
@@ -196,6 +285,33 @@
     </div>
     <div class="col-md-6 text-muted small pt-2">
       <strong>Daily send cap</strong> - total cold + reminder emails allowed per day, combined. Keeps the account well under Gmail's own daily limit so it doesn't get flagged as spam.
+    </div>
+  </div>
+
+  <div class="row mb-3">
+    <div class="col-md-6">
+      <input class="form-control" type="number" min="5" name="meeting_duration_minutes" placeholder="Meeting length (minutes)" value="{{ cfg.meeting_duration_minutes or 30 }}">
+    </div>
+    <div class="col-md-6 text-muted small pt-2">
+      <strong>Meeting length</strong> - how long a booked call is, and the size of the slots offered when proposing times.
+    </div>
+  </div>
+
+  <div class="row mb-3">
+    <div class="col-md-6">
+      <input class="form-control" type="number" min="1" name="min_notice_hours" placeholder="Minimum notice (hours)" value="{{ cfg.min_notice_hours or 24 }}">
+    </div>
+    <div class="col-md-6 text-muted small pt-2">
+      <strong>Minimum notice</strong> - never propose or accept a slot sooner than this many hours from now.
+    </div>
+  </div>
+
+  <div class="row mb-3">
+    <div class="col-md-6">
+      <input class="form-control" type="number" min="1" name="scheduling_window_days" placeholder="Scheduling window (days)" value="{{ cfg.scheduling_window_days or 10 }}">
+    </div>
+    <div class="col-md-6 text-muted small pt-2">
+      <strong>Scheduling window</strong> - how far ahead to look for open slots when proposing times.
     </div>
   </div>
 

@@ -10,6 +10,9 @@ from outreach.paths import CLIENT_SECRET_PATH
 
 SCOPES = [
     "https://www.googleapis.com/auth/gmail.send",
+    "https://www.googleapis.com/auth/gmail.readonly",       # read lead replies
+    "https://www.googleapis.com/auth/calendar.events",      # create meeting invites
+    "https://www.googleapis.com/auth/calendar.freebusy",    # check the client's calendar for conflicts
     "https://www.googleapis.com/auth/userinfo.email",
     "openid",
 ]

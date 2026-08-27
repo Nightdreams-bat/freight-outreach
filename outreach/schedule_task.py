@@ -2,7 +2,12 @@ import subprocess
 import sys
 from pathlib import Path
 
-TASK_NAME = "FreightOutreach_ReminderCheck"
+# The two headless scans that can run on a Windows Task Scheduler timer.
+REMINDER_TASK_NAME = "FreightOutreach_ReminderCheck"
+REPLY_TASK_NAME = "FreightOutreach_ReplyCheck"
+
+# Back-compat alias - older code / docs referred to the reminder task as TASK_NAME.
+TASK_NAME = REMINDER_TASK_NAME
 
 
 def _python_for_task():
@@ -12,17 +17,22 @@ def _python_for_task():
     return str(pythonw) if pythonw.exists() else str(exe)
 
 
-def _reminder_command():
-    """The command the scheduled task should run to do a headless reminder scan.
+def _task_command(cli_flag):
+    """The command a scheduled task should run to do a headless scan.
 
-    Frozen build: the .exe itself with --reminders. Source checkout: pythonw -m outreach.
+    Frozen build: the .exe itself with the flag. Source checkout: pythonw -m outreach.
     """
     if getattr(sys, "frozen", False):
-        return f'"{Path(sys.executable).resolve()}" --reminders'
-    return f'"{_python_for_task()}" -m outreach --reminders'
+        return f'"{Path(sys.executable).resolve()}" {cli_flag}'
+    return f'"{_python_for_task()}" -m outreach {cli_flag}'
 
 
-def register_task(interval_hours):
+def register_task(interval_hours, name=REMINDER_TASK_NAME, cli_flag="--reminders"):
+    """Create/replace a Windows scheduled task that runs every `interval_hours`.
+
+    Defaults target the reminder scan so existing callers keep working; pass
+    `name`/`cli_flag` for the reply scan (REPLY_TASK_NAME / "--replies").
+    """
     from outreach.paths import data_dir
 
     working_dir = data_dir()
@@ -30,22 +40,22 @@ def register_task(interval_hours):
         "schtasks", "/Create", "/F",
         "/SC", "HOURLY",
         "/MO", str(interval_hours),
-        "/TN", TASK_NAME,
-        "/TR", _reminder_command(),
+        "/TN", name,
+        "/TR", _task_command(cli_flag),
     ]
     result = subprocess.run(cmd, capture_output=True, text=True, cwd=str(working_dir))
     ok = result.returncode == 0
     if ok:
-        print(f"Scheduled task '{TASK_NAME}' created: runs every {interval_hours}h.")
+        print(f"Scheduled task '{name}' created: runs every {interval_hours}h.")
     else:
-        print("Failed to create scheduled task:")
+        print(f"Failed to create scheduled task '{name}':")
         print(result.stdout, result.stderr)
     return ok, (result.stdout or result.stderr).strip()
 
 
-def unregister_task():
+def unregister_task(name=REMINDER_TASK_NAME):
     result = subprocess.run(
-        ["schtasks", "/Delete", "/TN", TASK_NAME, "/F"],
+        ["schtasks", "/Delete", "/TN", name, "/F"],
         capture_output=True, text=True,
     )
     ok = result.returncode == 0
@@ -53,10 +63,10 @@ def unregister_task():
     return ok, (result.stdout or result.stderr).strip()
 
 
-def task_status():
+def task_status(name=REMINDER_TASK_NAME):
     """Returns a dict with registered/next_run/status, or None if the task doesn't exist."""
     result = subprocess.run(
-        ["schtasks", "/Query", "/TN", TASK_NAME, "/FO", "LIST", "/V"],
+        ["schtasks", "/Query", "/TN", name, "/FO", "LIST", "/V"],
         capture_output=True, text=True,
     )
     if result.returncode != 0:

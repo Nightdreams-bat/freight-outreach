@@ -3,7 +3,10 @@ import webbrowser
 
 from flask import Flask, flash, redirect, render_template, request, url_for
 
+from outreach import reply_queue
+from outreach.config import get as cfg_get
 from outreach.config import load_config, save_config
+from outreach.credentials import get_anthropic_key, set_anthropic_key
 from outreach.paths import resource_path
 from outreach.core import (
     apply_daily_cap,
@@ -15,7 +18,12 @@ from outreach.core import (
 )
 from outreach.excel_store import ExcelFileLocked, ExcelStore
 from outreach.gmail_oauth import run_oauth_flow
-from outreach.schedule_task import register_task, task_status, unregister_task
+from outreach.schedule_task import (
+    REPLY_TASK_NAME,
+    register_task,
+    task_status,
+    unregister_task,
+)
 from outreach.send_tracker import recent_history, remaining_today, sent_today
 
 SUPPRESSED_TRUE_VALUES = ("1", "true", "yes", "y")
@@ -37,11 +45,18 @@ def create_app():
             "dashboard": "dashboard",
             "leads": "leads",
             "send_page": "send",
+            "replies_page": "replies",
             "history": "history",
             "blocklist_page": "blocklist",
             "settings": "settings",
         }
-        return {"active": endpoint_to_active.get(request.endpoint)}
+        active = endpoint_to_active.get(request.endpoint)
+        # The nav badge needs the count on every page, cheap to read.
+        try:
+            pending_replies = len(reply_queue.pending())
+        except Exception:
+            pending_replies = 0
+        return {"active": active, "pending_replies": pending_replies}
 
     def get_config_and_store():
         cfg = load_config()
@@ -75,6 +90,7 @@ def create_app():
             "cold_pending": len(cold_candidates(store)),
             "reminders_due": len(reminder_candidates(store, cfg.get("reminder_window_hours", 2))),
             "blocklist_count": len(cfg.get("disallowed_domains", [])) + len(cfg.get("disallowed_emails", [])),
+            "pending_replies": len(reply_queue.pending()),
         }
         return render_template("dashboard.html", stats=stats, cfg=cfg)
 
@@ -155,6 +171,31 @@ def create_app():
         flash(msg, "warning" if (result["errors"] or deferred) else "success")
         return redirect(url_for("send_page"))
 
+    @app.route("/replies")
+    def replies_page():
+        return render_template("replies.html", items=reply_queue.pending())
+
+    @app.route("/replies/<qid>/approve", methods=["POST"])
+    def reply_approve(qid):
+        item = reply_queue.get(qid)
+        if not item or item.get("status") != "pending":
+            flash("That reply action is no longer pending.", "warning")
+            return redirect(url_for("replies_page"))
+        try:
+            result = reply_queue.approve(qid)
+        except Exception as e:
+            flash(f"Couldn't complete that action: {e}", "danger")
+            return redirect(url_for("replies_page"))
+        category = {"done": "success", "deferred": "warning"}.get(result.get("status"), "danger")
+        flash(result.get("message", "Done."), category)
+        return redirect(url_for("replies_page"))
+
+    @app.route("/replies/<qid>/reject", methods=["POST"])
+    def reply_reject(qid):
+        reply_queue.reject(qid)
+        flash("Reply action discarded.", "success")
+        return redirect(url_for("replies_page"))
+
     @app.route("/history")
     def history():
         return render_template("history.html", entries=recent_history(200))
@@ -218,13 +259,20 @@ def create_app():
                 "sender_name", "sender_company", "sender_phone", "sender_pitch",
                 "cold_subject_template", "cold_body_template",
                 "reminder_subject_template", "reminder_body_template",
+                "meeting_confirm_subject_template", "meeting_confirm_body_template",
+                "propose_times_subject_template", "propose_times_body_template",
+                "decline_ack_subject_template", "decline_ack_body_template",
             ):
-                cfg[field] = request.form.get(field, cfg.get(field))
+                if field in request.form:
+                    cfg[field] = request.form.get(field, cfg.get(field))
             for key in (
                 "reminder_interval_hours",
                 "reminder_window_hours",
                 "max_reminders_per_run",
                 "daily_send_cap",
+                "meeting_duration_minutes",
+                "scheduling_window_days",
+                "min_notice_hours",
             ):
                 raw = request.form.get(key)
                 if raw:
@@ -232,10 +280,21 @@ def create_app():
                         cfg[key] = int(raw)
                     except ValueError:
                         flash(f"Ignored invalid value for {key}.", "warning")
+            new_key = (request.form.get("anthropic_api_key") or "").strip()
+            if new_key:
+                set_anthropic_key(new_key)
+                flash("Anthropic API key saved.", "success")
             save_config(cfg)
             flash("Settings saved.", "success")
             return redirect(url_for("settings"))
-        return render_template("settings.html", cfg=cfg, task=task_status())
+        return render_template(
+            "settings.html",
+            cfg=cfg,
+            task=task_status(),
+            reply_task=task_status(REPLY_TASK_NAME),
+            anthropic_key_set=bool(get_anthropic_key()),
+            reply_scan_enabled=cfg_get(cfg, "reply_scan_enabled"),
+        )
 
     @app.route("/settings/browse-excel", methods=["POST"])
     def browse_excel():
@@ -292,6 +351,35 @@ def create_app():
     def automation_disable():
         ok, message = unregister_task()
         flash(message if message else ("Automatic reminders disabled." if ok else "Failed to disable."), "success" if ok else "danger")
+        return redirect(url_for("settings"))
+
+    @app.route("/settings/replies/enable", methods=["POST"])
+    def replies_enable():
+        cfg = load_config()
+        if not get_anthropic_key():
+            flash("Add an Anthropic API key first - reply reading needs it.", "warning")
+            return redirect(url_for("settings"))
+        interval = cfg.get("reminder_interval_hours", 2)
+        ok, message = register_task(interval, REPLY_TASK_NAME, "--replies")
+        if ok:
+            cfg["reply_scan_enabled"] = True
+            save_config(cfg)
+        flash(
+            message or ("Automatic reply checking enabled." if ok else "Failed to enable."),
+            "success" if ok else "danger",
+        )
+        return redirect(url_for("settings"))
+
+    @app.route("/settings/replies/disable", methods=["POST"])
+    def replies_disable():
+        cfg = load_config()
+        ok, message = unregister_task(REPLY_TASK_NAME)
+        cfg["reply_scan_enabled"] = False
+        save_config(cfg)
+        flash(
+            message or ("Automatic reply checking disabled." if ok else "Failed to disable."),
+            "success" if ok else "danger",
+        )
         return redirect(url_for("settings"))
 
     return app
