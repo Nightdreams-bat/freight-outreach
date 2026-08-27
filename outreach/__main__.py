@@ -128,7 +128,8 @@ def _selfcheck():
         from outreach import templates as _t
         from outreach.templates import render as _render
         _dummy = dict(name="A", company="B", sender_name="C", sender_company="D",
-                      sender_phone="", meeting_time="Mon", slots=["Mon 9am", "Tue 2pm"],
+                      sender_phone="", sender_address="", unsubscribe_line="Reply STOP.",
+                      meeting_time="Mon", slots=["Mon 9am", "Tue 2pm"],
                       stage=1, is_last=False, phone="", sender_pitch="")
         for tname in ("MEETING_CONFIRM_BODY", "PROPOSE_TIMES_BODY", "DECLINE_ACK_BODY",
                       "FOLLOWUP_BODY", "FOLLOWUP_BREAKUP_BODY"):

@@ -84,6 +84,15 @@ as a Claude.ai subscription — it is billed separately, pay-as-you-go.
 The key is entered by the client on the Settings page (Part B); it is stored in
 the Windows Credential Manager, never in a file, and never displayed again.
 
+**Data processing note.** When reply handling is on, the **full text of every
+inbound reply** — names, phone numbers, quoted rates, signatures — is sent to
+Anthropic to be classified. Anthropic acts as a data processor. Review and sign
+[Anthropic's DPA](https://www.anthropic.com/legal/commercial-terms) and look at
+their [zero-retention](https://privacy.anthropic.com/) options before enabling
+this. **The operator must disclose this processing in their own privacy notice.**
+The always-on keyword opt-out scan (below) does not use any LLM and sends nothing
+to Anthropic.
+
 ---
 
 ## Part B — client setup (Settings page)
@@ -124,7 +133,10 @@ Go to **Settings** and do these, top to bottom:
    settings**. The label changes to "configured". Then click **Enable automatic
    reply checking**.
 
-6. **Business details** — your name, company, phone, one-line pitch. The
+6. **Business details** — your name, company, phone, one-line pitch, and
+   **postal address**. The address is **required by anti-spam law on every
+   commercial email** (street, city, country is enough); it is added to the
+   signature footer of every message and Diagnostics warns until it is set. The
    From-line preview updates live.
 
 7. **Email templates** — the actual emails, written by you. Every "Send now" uses
@@ -142,6 +154,37 @@ every connection and shows OK / WARN / FAIL per check. **WARN** = optional and
 not configured (e.g. no Anthropic key, automation off). **FAIL** = something that
 will stop a real send or booking — fix those before going live. Re-run it after
 any change.
+
+---
+
+## Compliance & deliverability
+
+Cold email is regulated — CAN-SPAM (US), GDPR / PECR (EU). **The operator is
+responsible for compliance, not this tool.**
+
+What the tool now does for you:
+
+- Every email carries a **postal address** and a **one-line opt-out** ("Reply
+  STOP …") in the footer, plus `List-Unsubscribe` headers. Set the address in
+  **Settings → Business details**.
+- On every reminder run, an **always-on keyword scan** (no Anthropic key needed,
+  works with reply handling off) reads inbound replies and **permanently
+  blocklists** any lead who writes "stop / unsubscribe / remove me / opt out" in
+  English or Romanian. That address is added to the disallowed list and never
+  contacted again by any batch (cold, follow-up or reminder).
+
+What you must still do yourself:
+
+- **Do not send cold outreach from a consumer `@gmail.com` account.** It breaks
+  Google's bulk-sender and consumer-Gmail policies and can get the account
+  suspended without warning. Use **Google Workspace on a domain you own**.
+- Configure **SPF, DKIM and DMARC** for that domain (your DNS provider + the
+  Workspace admin console).
+- **Keep the daily send cap low and warm the mailbox up:** ~20/day for the first
+  week on a new account, then raise it gradually over 2–3 weeks while watching
+  bounce and spam-complaint rates. Pause on any spike.
+- Make sure you have a lawful basis to contact each lead, and honour opt-outs
+  across every future spreadsheet import.
 
 ---
 

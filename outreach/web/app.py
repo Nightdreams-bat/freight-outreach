@@ -549,7 +549,7 @@ def create_app():
         cfg = load_config()
         if request.method == "POST":
             for field in (
-                "sender_name", "sender_company", "sender_phone", "sender_pitch",
+                "sender_name", "sender_company", "sender_phone", "sender_address", "sender_pitch",
                 "cold_subject_template", "cold_body_template",
                 "followup_subject_template", "followup_body_template",
                 "followup_breakup_body_template",

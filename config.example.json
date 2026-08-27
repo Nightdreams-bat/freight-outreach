@@ -2,6 +2,7 @@
   "sender_name": "Your Name",
   "sender_company": "Your Company",
   "sender_phone": "",
+  "sender_address": "Street, City, Country (required on commercial email by anti-spam law)",
   "sender_pitch": "One or two sentences describing what you offer.",
   "excel_path": "C:/path/to/clients.xlsx",
   "column_map": {},

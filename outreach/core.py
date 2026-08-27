@@ -24,6 +24,8 @@ _DUMMY_CONTEXT = {
     "name": "Sample Lead", "company": "Sample Co", "phone": "555-0100",
     "sender_name": "Sample Sender", "sender_company": "Sample Company",
     "sender_phone": "555-0100", "sender_pitch": "Sample pitch.",
+    "sender_address": "1 Sample St, Sample City, Country",
+    "unsubscribe_line": "Reply STOP to this email and I won't contact you again.",
     "meeting_time": "Monday, Jan 1 at 10:00 AM",
     "stage": 1, "is_last": False,
     "slots": ["Mon 10:00 AM", "Tue 2:00 PM"],
@@ -196,6 +198,8 @@ def send_cold_batch(cfg, store, mailer, candidates, dry_run=False):
                 "phone": row.get("Phone") or "",
                 "sender_name": cfg["sender_name"],
                 "sender_company": cfg["sender_company"],
+                "sender_address": cfg.get("sender_address") or "",
+                "unsubscribe_line": templates.unsubscribe_line(cfg_get(cfg, "template_language")),
                 "sender_phone": cfg.get("sender_phone") or "",
                 "sender_pitch": cfg.get("sender_pitch") or "",
             }
@@ -264,6 +268,8 @@ def send_reminder_batch(cfg, store, mailer, candidates, dry_run=False):
                 "meeting_time": meeting_time.strftime("%A, %b %d at %I:%M %p"),
                 "sender_name": cfg["sender_name"],
                 "sender_company": cfg["sender_company"],
+                "sender_address": cfg.get("sender_address") or "",
+                "unsubscribe_line": templates.unsubscribe_line(cfg_get(cfg, "template_language")),
                 "sender_phone": cfg.get("sender_phone") or "",
             }
             subject = render(subject_tmpl, **context)
@@ -339,6 +345,8 @@ def send_followup_batch(cfg, store, mailer, candidates, dry_run=False):
                 "phone": row.get("Phone") or "",
                 "sender_name": cfg["sender_name"],
                 "sender_company": cfg["sender_company"],
+                "sender_address": cfg.get("sender_address") or "",
+                "unsubscribe_line": templates.unsubscribe_line(cfg_get(cfg, "template_language")),
                 "sender_phone": cfg.get("sender_phone") or "",
                 "sender_pitch": cfg.get("sender_pitch") or "",
                 "stage": stage + 1,

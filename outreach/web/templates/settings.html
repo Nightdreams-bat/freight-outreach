@@ -184,6 +184,11 @@
     <div class="help">Leave blank and it's skipped cleanly everywhere — no empty line in the signature.</div>
   </div>
   <div class="setrow">
+    <div><label class="lab">Postal address</label>
+      <textarea class="field" name="sender_address" rows="2">{{ cfg.sender_address or '' }}</textarea></div>
+    <div class="help">Required by anti-spam law (CAN-SPAM / GDPR) on every commercial email — e.g. street, city, country. Appears in the signature footer of every message; leave blank and it's skipped, but Diagnostics will warn.</div>
+  </div>
+  <div class="setrow">
     <div><label class="lab">One-line pitch</label>
       <textarea class="field" name="sender_pitch" rows="2">{{ cfg.sender_pitch or '' }}</textarea></div>
     <div class="help">A short description of what you do — available as a template variable.</div>
@@ -213,8 +218,10 @@
   <p class="help" style="margin:0 0 6px">
     Written by you, in full. Variables: <code>{{ '{{ name }}' }}</code>, <code>{{ '{{ company }}' }}</code>,
     <code>{{ '{{ phone }}' }}</code>, <code>{{ '{{ sender_name }}' }}</code>, <code>{{ '{{ sender_company }}' }}</code>,
-    <code>{{ '{{ sender_phone }}' }}</code>, <code>{{ '{{ sender_pitch }}' }}</code>
+    <code>{{ '{{ sender_phone }}' }}</code>, <code>{{ '{{ sender_pitch }}' }}</code>,
+    <code>{{ '{{ sender_address }}' }}</code>, <code>{{ '{{ unsubscribe_line }}' }}</code>
     (reminders also get <code>{{ '{{ meeting_time }}' }}</code>; follow-ups also get <code>{{ '{{ stage }}' }}</code>).
+    Every template's footer already carries <code>{{ '{{ sender_address }}' }}</code> and <code>{{ '{{ unsubscribe_line }}' }}</code> — keep them if you edit the templates.
     Wrap a line in <code>{% raw %}{% if phone %}…{% endif %}{% endraw %}</code> to skip it when a field is empty.
   </p>
 

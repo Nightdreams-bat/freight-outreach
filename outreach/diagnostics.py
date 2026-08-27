@@ -19,6 +19,7 @@ log = get_logger("diagnostics")
 # the placeholder rows it renders first.
 CHECK_NAMES = [
     "Business details",
+    "Postal address",
     "Leads spreadsheet",
     "Gmail - account & token",
     "Gmail - read replies",
@@ -79,6 +80,15 @@ def _check_config(cfg, _gmail):
     if missing:
         return _warn("Business details", f"Not set: {', '.join(missing)} (Settings -> Business details)")
     return _ok("Business details", f"{cfg.get('sender_name')} - {cfg.get('sender_company')}")
+
+
+def _check_postal_address(cfg, _gmail):
+    if not (cfg.get("sender_address") or "").strip():
+        return _warn(
+            "Postal address",
+            "No postal address set - required by anti-spam law. Settings -> Business details.",
+        )
+    return _ok("Postal address", "included in every email footer")
 
 
 def _check_excel(cfg, _gmail):
@@ -177,6 +187,7 @@ def _check_tasks(cfg, _gmail):
 
 _CHECKS = [
     _check_config,
+    _check_postal_address,
     _check_excel,
     _check_gmail_send,
     _check_gmail_read,

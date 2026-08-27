@@ -31,6 +31,26 @@ def test_phone_guard_present_in_romanian():
     assert "555" in with_phone and "555" not in no_phone
 
 
+@pytest.mark.parametrize("lang", ["en", "ro"])
+def test_footer_carries_address_and_optout(lang):
+    ctx = {**_DUMMY_CONTEXT,
+           "sender_address": "12 Dock Rd, Chisinau, MD",
+           "unsubscribe_line": templates.unsubscribe_line(lang)}
+    for key, text in templates.defaults(lang).items():
+        if not key.endswith("body_template"):
+            continue
+        out = templates.render(text, **ctx)
+        assert "12 Dock Rd, Chisinau, MD" in out
+        assert templates.unsubscribe_line(lang) in out
+
+
+def test_footer_fields_skip_cleanly_when_blank():
+    ctx = {**_DUMMY_CONTEXT, "sender_address": "", "unsubscribe_line": ""}
+    out = templates.render(templates.defaults("ro")["cold_body_template"], **ctx)
+    assert "STOP" not in out
+    assert out.rstrip().endswith(_DUMMY_CONTEXT["sender_company"]) or "555-0100" in out
+
+
 def test_sandbox_blocks_ssti_payload():
     from outreach import templates as t
     payload = "{{ cycler.__init__.__globals__ }}"

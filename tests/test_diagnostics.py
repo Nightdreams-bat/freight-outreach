@@ -28,6 +28,14 @@ def test_business_details_ok_when_set():
     assert diagnostics._check_config({"sender_name": "Al", "sender_company": "FreightCo"}, _G)["status"] == "ok"
 
 
+def test_postal_address_warns_when_blank():
+    assert diagnostics._check_postal_address({"sender_address": ""}, _G)["status"] == "warn"
+
+
+def test_postal_address_ok_when_set():
+    assert diagnostics._check_postal_address({"sender_address": "1 St, City, MD"}, _G)["status"] == "ok"
+
+
 def test_gmail_check_fails_without_account():
     assert diagnostics._check_gmail_send({"gmail_address": ""}, _G)["status"] == "fail"
 

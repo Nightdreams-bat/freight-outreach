@@ -30,6 +30,7 @@ from outreach.templates import (
     PROPOSE_TIMES_BODY,
     PROPOSE_TIMES_SUBJECT,
     render,
+    unsubscribe_line,
 )
 
 log = get_logger("scheduling")
@@ -68,6 +69,8 @@ def _base_ctx(lead, cfg):
         "sender_name": cfg.get("sender_name") or "",
         "sender_company": cfg.get("sender_company") or "",
         "sender_phone": cfg.get("sender_phone") or "",
+        "sender_address": cfg.get("sender_address") or "",
+        "unsubscribe_line": unsubscribe_line(cfg_get(cfg, "template_language")),
     }
 
 

@@ -48,6 +48,7 @@ def default_config(lang=None):
         "sender_name": "",
         "sender_company": "",
         "sender_phone": "",
+        "sender_address": "",
         "sender_pitch": "",
         "excel_path": str(DEFAULT_EXCEL_PATH),
         # {logical: header} or {logical: [first_header, last_header]}. Empty means

@@ -4,6 +4,7 @@ from outreach.config import load_config
 from outreach.core import apply_daily_cap, build_mailer, reminder_candidates, send_reminder_batch
 from outreach.excel_store import ExcelFileLocked, ExcelStore
 from outreach.logging_setup import get_logger
+from outreach.optout_scan import scan_optouts
 
 log = get_logger("send_reminders")
 
@@ -24,6 +25,15 @@ def main():
     except ExcelFileLocked as e:
         log.error(str(e))
         return
+
+    # Always-on suppression: honour "stop / unsubscribe" replies even with the
+    # LLM reply scan switched off. A Gmail error here must not block reminders.
+    try:
+        opted_out = scan_optouts(cfg, store)
+        if opted_out:
+            log.info(f"Opt-out scan: suppressed {len(opted_out)} address(es): {', '.join(opted_out)}")
+    except Exception as e:  # noqa: BLE001
+        log.warning(f"Opt-out scan failed (continuing with reminders): {e}")
 
     window_hours = cfg.get("reminder_window_hours", 2)
     candidates = reminder_candidates(store, window_hours)

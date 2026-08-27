@@ -5,13 +5,18 @@ import jinja2.sandbox
 # skip a whole line/sentence cleanly when a field is empty (e.g. no Phone on that lead),
 # rather than leaving a dangling blank space.
 #
+# Every body also gets `sender_address` (the operator's postal address, required
+# on commercial email by anti-spam law) and `unsubscribe_line` (a rendered
+# one-line opt-out instruction) - both appended to the signature footer and both
+# skipped cleanly when empty.
+#
 # Available variables:
-#   Cold intro:      name, company, phone, sender_name, sender_company, sender_phone, sender_pitch
-#   Follow-up:       name, company, phone, sender_name, sender_company, sender_phone, sender_pitch, stage, is_last
-#   Reminder:        name, company, phone, sender_name, sender_company, sender_phone, meeting_time
-#   Meeting confirm: name, company, sender_name, sender_company, sender_phone, meeting_time
-#   Propose times:   name, company, sender_name, sender_company, sender_phone, slots (list of strings)
-#   Decline ack:     name, company, sender_name, sender_company
+#   Cold intro:      name, company, phone, sender_name, sender_company, sender_phone, sender_pitch, sender_address, unsubscribe_line
+#   Follow-up:       name, company, phone, sender_name, sender_company, sender_phone, sender_pitch, sender_address, unsubscribe_line, stage, is_last
+#   Reminder:        name, company, phone, sender_name, sender_company, sender_phone, sender_address, unsubscribe_line, meeting_time
+#   Meeting confirm: name, company, sender_name, sender_company, sender_phone, sender_address, unsubscribe_line, meeting_time
+#   Propose times:   name, company, sender_name, sender_company, sender_phone, sender_address, unsubscribe_line, slots (list of strings)
+#   Decline ack:     name, company, sender_name, sender_company, sender_address, unsubscribe_line
 
 COLD_INTRO_SUBJECT = "{{ company }} freight - quick question"
 
@@ -26,8 +31,10 @@ If this isn't useful to you right now, no worries at all, just let me know and I
 Best,
 {{ sender_name }}
 {{ sender_company }}
-{% if sender_phone %}{{ sender_phone }}{% endif %}
-"""
+{% if sender_phone %}{{ sender_phone }}
+{% endif %}{% if sender_address %}{{ sender_address }}
+{% endif %}{% if unsubscribe_line %}{{ unsubscribe_line }}
+{% endif %}"""
 
 FOLLOWUP_SUBJECT = "Following up - {{ company }} freight"
 
@@ -40,8 +47,10 @@ If a short call would be useful, I'm happy to work around your schedule. And if 
 Best,
 {{ sender_name }}
 {{ sender_company }}
-{% if sender_phone %}{{ sender_phone }}{% endif %}
-"""
+{% if sender_phone %}{{ sender_phone }}
+{% endif %}{% if sender_address %}{{ sender_address }}
+{% endif %}{% if unsubscribe_line %}{{ unsubscribe_line }}
+{% endif %}"""
 
 FOLLOWUP_BREAKUP_BODY = """Hi {{ name }},
 
@@ -52,8 +61,10 @@ If things change down the line, you're always welcome to reach out - I'd be glad
 Best,
 {{ sender_name }}
 {{ sender_company }}
-{% if sender_phone %}{{ sender_phone }}{% endif %}
-"""
+{% if sender_phone %}{{ sender_phone }}
+{% endif %}{% if sender_address %}{{ sender_address }}
+{% endif %}{% if unsubscribe_line %}{{ unsubscribe_line }}
+{% endif %}"""
 
 
 REMINDER_SUBJECT = "Our call {{ meeting_time }}"
@@ -67,8 +78,10 @@ Let me know if anything's changed on your end.
 Best,
 {{ sender_name }}
 {{ sender_company }}
-{% if sender_phone %}{{ sender_phone }}{% endif %}
-"""
+{% if sender_phone %}{{ sender_phone }}
+{% endif %}{% if sender_address %}{{ sender_address }}
+{% endif %}{% if unsubscribe_line %}{{ unsubscribe_line }}
+{% endif %}"""
 
 
 MEETING_CONFIRM_SUBJECT = "Confirmed - our call {{ meeting_time }}"
@@ -82,8 +95,10 @@ Looking forward to talking through {{ company }}'s freight needs then. If anythi
 Best,
 {{ sender_name }}
 {{ sender_company }}
-{% if sender_phone %}{{ sender_phone }}{% endif %}
-"""
+{% if sender_phone %}{{ sender_phone }}
+{% endif %}{% if sender_address %}{{ sender_address }}
+{% endif %}{% if unsubscribe_line %}{{ unsubscribe_line }}
+{% endif %}"""
 
 PROPOSE_TIMES_SUBJECT = "A few times that work - {{ company }}"
 
@@ -98,8 +113,10 @@ Let me know which one suits you and I'll send a calendar invite. If none of thes
 Best,
 {{ sender_name }}
 {{ sender_company }}
-{% if sender_phone %}{{ sender_phone }}{% endif %}
-"""
+{% if sender_phone %}{{ sender_phone }}
+{% endif %}{% if sender_address %}{{ sender_address }}
+{% endif %}{% if unsubscribe_line %}{{ unsubscribe_line }}
+{% endif %}"""
 
 DECLINE_ACK_SUBJECT = "Thanks for the reply - {{ company }}"
 
@@ -112,7 +129,9 @@ If {{ company }}'s freight needs change down the line, feel free to reach out an
 Best,
 {{ sender_name }}
 {{ sender_company }}
-"""
+{% if sender_address %}{{ sender_address }}
+{% endif %}{% if unsubscribe_line %}{{ unsubscribe_line }}
+{% endif %}"""
 
 
 # --- Romanian template set ------------------------------------------------
@@ -132,8 +151,10 @@ Dacă acest lucru nu vă este util acum, nicio problemă, spuneți-mi și nu voi
 Cu stimă,
 {{ sender_name }}
 {{ sender_company }}
-{% if sender_phone %}{{ sender_phone }}{% endif %}
-"""
+{% if sender_phone %}{{ sender_phone }}
+{% endif %}{% if sender_address %}{{ sender_address }}
+{% endif %}{% if unsubscribe_line %}{{ unsubscribe_line }}
+{% endif %}"""
 
 FOLLOWUP_SUBJECT_RO = "Revin - transport {{ company }}"
 
@@ -146,8 +167,10 @@ Dacă un apel scurt v-ar fi util, mă adaptez programului dumneavoastră. Iar da
 Cu stimă,
 {{ sender_name }}
 {{ sender_company }}
-{% if sender_phone %}{{ sender_phone }}{% endif %}
-"""
+{% if sender_phone %}{{ sender_phone }}
+{% endif %}{% if sender_address %}{{ sender_address }}
+{% endif %}{% if unsubscribe_line %}{{ unsubscribe_line }}
+{% endif %}"""
 
 FOLLOWUP_BREAKUP_BODY_RO = """Bună ziua {{ name }},
 
@@ -158,8 +181,10 @@ Dacă situația se schimbă pe viitor, îmi puteți scrie oricând - v-aș ajuta
 Cu stimă,
 {{ sender_name }}
 {{ sender_company }}
-{% if sender_phone %}{{ sender_phone }}{% endif %}
-"""
+{% if sender_phone %}{{ sender_phone }}
+{% endif %}{% if sender_address %}{{ sender_address }}
+{% endif %}{% if unsubscribe_line %}{{ unsubscribe_line }}
+{% endif %}"""
 
 REMINDER_SUBJECT_RO = "Apelul nostru {{ meeting_time }}"
 
@@ -172,8 +197,10 @@ Spuneți-mi dacă s-a schimbat ceva între timp.
 Cu stimă,
 {{ sender_name }}
 {{ sender_company }}
-{% if sender_phone %}{{ sender_phone }}{% endif %}
-"""
+{% if sender_phone %}{{ sender_phone }}
+{% endif %}{% if sender_address %}{{ sender_address }}
+{% endif %}{% if unsubscribe_line %}{{ unsubscribe_line }}
+{% endif %}"""
 
 MEETING_CONFIRM_SUBJECT_RO = "Confirmat - apelul nostru {{ meeting_time }}"
 
@@ -186,8 +213,10 @@ Aștept cu interes să discutăm despre nevoile de transport ale {{ company }}. 
 Cu stimă,
 {{ sender_name }}
 {{ sender_company }}
-{% if sender_phone %}{{ sender_phone }}{% endif %}
-"""
+{% if sender_phone %}{{ sender_phone }}
+{% endif %}{% if sender_address %}{{ sender_address }}
+{% endif %}{% if unsubscribe_line %}{{ unsubscribe_line }}
+{% endif %}"""
 
 PROPOSE_TIMES_SUBJECT_RO = "Câteva intervale disponibile - {{ company }}"
 
@@ -202,8 +231,10 @@ Spuneți-mi care vă convine și trimit o invitație în calendar. Dacă niciunu
 Cu stimă,
 {{ sender_name }}
 {{ sender_company }}
-{% if sender_phone %}{{ sender_phone }}{% endif %}
-"""
+{% if sender_phone %}{{ sender_phone }}
+{% endif %}{% if sender_address %}{{ sender_address }}
+{% endif %}{% if unsubscribe_line %}{{ unsubscribe_line }}
+{% endif %}"""
 
 DECLINE_ACK_SUBJECT_RO = "Mulțumesc pentru răspuns - {{ company }}"
 
@@ -216,7 +247,9 @@ Dacă nevoile de transport ale {{ company }} se schimbă pe viitor, îmi puteți
 Cu stimă,
 {{ sender_name }}
 {{ sender_company }}
-"""
+{% if sender_address %}{{ sender_address }}
+{% endif %}{% if unsubscribe_line %}{{ unsubscribe_line }}
+{% endif %}"""
 
 
 # config key -> (English, Romanian). One source of truth for config.py seeding,
@@ -236,6 +269,19 @@ _TEMPLATE_KEYS = {
     "decline_ack_subject_template": (DECLINE_ACK_SUBJECT, DECLINE_ACK_SUBJECT_RO),
     "decline_ack_body_template": (DECLINE_ACK_BODY, DECLINE_ACK_BODY_RO),
 }
+
+
+# One-line opt-out instruction rendered into every body's footer (as the
+# `unsubscribe_line` context value). Kept short and plain so it reads as a
+# sentence, not boilerplate.
+_UNSUBSCRIBE_LINE = {
+    "en": "Reply STOP to this email and I won't contact you again.",
+    "ro": "Răspundeți cu STOP la acest e-mail și nu vă voi mai contacta.",
+}
+
+
+def unsubscribe_line(lang="en"):
+    return _UNSUBSCRIBE_LINE["ro" if lang == "ro" else "en"]
 
 
 def defaults(lang="en"):

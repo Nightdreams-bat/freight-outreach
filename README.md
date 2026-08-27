@@ -170,10 +170,45 @@ Credentials (`client_secret.json`, the OAuth token, the Anthropic key) and user 
 
 ---
 
+## Compliance & deliverability
+
+Cold email is regulated (CAN-SPAM in the US, GDPR/PECR in the EU). **The operator, not
+this tool, is responsible for compliance.** What the tool does for you:
+
+- Every outgoing email now carries a **postal address** and a **one-line opt-out**
+  ("Reply STOP …") in the footer, plus `List-Unsubscribe` / `List-Unsubscribe-Post`
+  headers. Fill in the address at **Settings → Business details** — Diagnostics warns
+  until you do.
+- An always-on keyword scan (no API key needed) reads replies on every reminder run and
+  permanently blocklists any lead who says "stop / unsubscribe / remove me" (English or
+  Romanian). This works even with reply handling switched off.
+
+What you still have to do:
+
+- **Do not use a consumer `@gmail.com` account for cold outreach** — it violates Google's
+  bulk-sender and consumer-Gmail policies and risks suspension. Use **Google Workspace on
+  a domain you control**, with **SPF, DKIM and DMARC** configured for that domain.
+- Keep the **daily send cap low** (start ~20/day on a new mailbox) and **warm up**
+  gradually over 2–3 weeks, watching bounce and complaint rates.
+- Have a lawful basis for contacting each lead and honour opt-outs across every future
+  import.
+
+## Data processing
+
+If reply handling is enabled, the **full text of each inbound reply** (names, phone
+numbers, rates, signatures) is sent to **Anthropic** for a yes/no/maybe classification.
+Anthropic is a data processor here; review and sign
+[Anthropic's DPA](https://www.anthropic.com/legal/commercial-terms) and consider their
+[zero-retention](https://privacy.anthropic.com/) options. **The operator must disclose
+this processing in their own privacy notice.** The keyword opt-out scan does **not** call
+any LLM.
+
+---
+
 ## Development
 
 ```bash
-python -m pytest tests/          # 188 tests, fully network-free (Gmail / Calendar / Anthropic are faked)
+python -m pytest tests/          # 260 tests, fully network-free (Gmail / Calendar / Anthropic are faked)
 ```
 
 ### Project layout — `outreach/` package
@@ -201,6 +236,7 @@ python -m pytest tests/          # 188 tests, fully network-free (Gmail / Calend
 | `process_replies.py` | The headless reply scan (`--replies`). |
 | `send_cold.py`, `send_reminders.py`, `send_followups.py` | The headless send entry points. |
 | `blocklist.py`, `manage_blocklist.py` | Permanent block-by-domain-or-address. |
+| `optout_scan.py` | Always-on keyword opt-out scan (no LLM); runs on every reminder pass and blocklists "stop / unsubscribe" replies. |
 | `send_tracker.py` | Daily send counter and the History log. |
 | `schedule_task.py` | Create / remove / query the Windows Task Scheduler jobs. |
 | `diagnostics.py` | The active connection checks behind the Diagnostics page and `--selfcheck`. |
