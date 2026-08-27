@@ -18,7 +18,7 @@ if (-not $py) { throw "python.exe not found on PATH. Install Python 3.10+ and re
 Write-Host "Using Python: $py"
 
 # Any running copy of the app locks the folders we're about to delete.
-Get-Process FreightOutreach, Setup -ErrorAction SilentlyContinue | Stop-Process -Force
+Get-Process FreightOutreach -ErrorAction SilentlyContinue | Stop-Process -Force
 Start-Sleep -Milliseconds 500
 foreach ($d in "build", "dist", "release") {
     $p = Join-Path $root $d
@@ -42,9 +42,6 @@ New-Item -ItemType Directory -Force -Path $release | Out-Null
 
 Copy-Item (Join-Path $built "FreightOutreach.exe") $release
 Copy-Item (Join-Path $built "_internal") $release -Recurse
-# Setup.exe is the SAME binary under a different name - the app runs the setup
-# wizard when it sees it's being run as "Setup.exe". No second build, shares _internal.
-Copy-Item (Join-Path $built "FreightOutreach.exe") (Join-Path $release "Setup.exe")
 
 $secret = Join-Path $root "client_secret.json"
 if (Test-Path $secret) {

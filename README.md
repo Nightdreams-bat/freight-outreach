@@ -17,12 +17,15 @@ It can also **read the replies**: Claude classifies each response (yes / no / ma
    - Create an **OAuth Client ID** of type "Desktop app", download the JSON, and save it as `client_secret.json` in this project folder.
 
    > If you already set this up with only `gmail.send`: add the Calendar API + the new scopes above, then have each connected account click **Connect Gmail** again to re-consent. The old token doesn't carry the new permissions.
-3. Run the setup wizard:
+3. Start the dashboard:
    ```
-   python -m outreach.setup
+   python -m outreach
    ```
-   Asks for the client's business details, the path to `clients.xlsx`, how your sheet's columns are named, the reminder check interval, a safety cap on reminders-per-run, and a daily send cap. Saves settings to `config.json` and offers to register a Windows scheduled task for you.
-4. Start the dashboard (`python -m outreach.dashboard`) and click **Connect Gmail** in Settings - this is the client's *entire* part of the setup: a normal Google sign-in page opens, they log in, click Allow, done. No passwords typed anywhere, no Google Cloud Console. The token is stored in the Windows Credential Manager via `keyring` and auto-refreshes, so this is a true one-time login.
+   There is no setup wizard. `config.json` is created with defaults on first run;
+   everything - business details, the path to `clients.xlsx`, column mapping,
+   sending limits, the scheduled task - is configured on the **Settings** page.
+   The dashboard shows a short checklist until the essentials are filled in.
+4. In Settings, click **Connect Gmail** - this is the client's *entire* part of the setup: a normal Google sign-in page opens, they log in, click Allow, done. No passwords typed anywhere, no Google Cloud Console. The token is stored in the Windows Credential Manager via `keyring` and auto-refreshes, so this is a true one-time login.
 
 ## Excel file (`clients.xlsx`)
 
@@ -35,17 +38,19 @@ Default columns (created automatically if missing; the reply-handling columns ar
 - `ColdEmailSentAt` / `ReminderSentAt` fill in automatically - leave blank for leads not yet contacted.
 - `ReplyStatus` (`awaiting` / `yes` / `no` / `maybe` / `question` / `scheduling` / `booked`), `LastReplyAt`, and `MeetingEventId` are maintained by the reply scan and the Replies page - leave them blank.
 - `Suppressed`: set to `yes`/`1`/`true` to permanently exclude a lead from both flows (e.g. after a STOP reply). Checked automatically before every send.
-- If your real sheet uses different column headers, the setup wizard asks for them and stores the mapping in `config.json` - no code editing needed.
+- **Your sheet can use its own headers.** The app matches them automatically - `Surname`, `Organisation`, `E-mail Address`, a split first-name / last-name pair, etc. Settings → *Lead spreadsheet columns* shows what it detected and lets you correct any guess. The mapping is stored in `config.json` as `column_map`.
+- **A row with only an email still works.** The greeting name is derived from the address (`j.doe@acme-freight.com` → "Doe"), and the company from the domain (→ "Acme Freight"). Real values in the sheet always take precedence.
 
 ## Dashboard
 
 A local web UI, styled after a classic admin dashboard (dark sidebar, stat cards, data tables):
 ```
-python -m outreach.dashboard
+python -m outreach
 ```
-Opens your browser to `http://127.0.0.1:5000` (bound to localhost only, no network exposure). Everything is driven from **Settings**, no terminal required after the very first `python -m outreach.setup`:
+Opens your browser to `http://127.0.0.1:5000` (bound to localhost only, no network exposure). Everything is driven from **Settings**, no terminal required:
 
 - **Excel file** - a "Browse..." button opens a real Windows file picker (via `tkinter`) to point the tool at your `clients.xlsx` anywhere on disk.
+- **Lead spreadsheet columns** - the auto-detected Name/Company/Email/Phone mapping, with a dropdown per field to override a wrong guess.
 - **Gmail account** - a "Connect Gmail" button opens the real Google sign-in screen (OAuth) - see [One-time setup](#one-time-setup). Shows the connected address once done, with a "Reconnect" option.
 - **Automation** - shows whether the 24h-before-meeting reminder scan is currently running in the background (Windows Task Scheduler) with an Enable/Disable button, plus a plain-language explanation of what it actually does.
 - **Business details & email templates** - every field has its explanation right next to it (what it affects, what happens if left blank), plus a live From-line preview so the effect of the name/company fields is visible immediately.

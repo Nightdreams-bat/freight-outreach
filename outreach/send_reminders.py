@@ -17,7 +17,7 @@ def main():
     try:
         store = ExcelStore(
             cfg["excel_path"],
-            column_aliases=cfg.get("column_aliases"),
+            column_map=cfg.get("column_map"),
             disallowed_emails=cfg.get("disallowed_emails"),
             disallowed_domains=cfg.get("disallowed_domains"),
         )

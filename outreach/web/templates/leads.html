@@ -33,8 +33,14 @@
       <tbody>
         {% for r in rows %}
         <tr>
-          <td>{{ r.v.Name or "-" }}</td>
-          <td>{{ r.v.Company or "-" }}</td>
+          <td>
+            {{ r.display_name if r.display_name != "there" else "-" }}
+            {% if r.name_derived %}<span class="badge text-bg-light border text-muted" title="Filled in from the email address">from email</span>{% endif %}
+          </td>
+          <td>
+            {{ r.display_company if r.display_company != "your company" else "-" }}
+            {% if r.company_derived %}<span class="badge text-bg-light border text-muted" title="Filled in from the email domain">from email</span>{% endif %}
+          </td>
           <td>{{ r.v.Email }}</td>
           <td>{{ r.v.Phone or "-" }}</td>
           <td>{{ r.v.MeetingDateTime or "-" }}</td>

@@ -20,6 +20,7 @@ from datetime import datetime
 
 from outreach import calendar_api
 from outreach.config import get as cfg_get
+from outreach.lead_fields import lead_company, lead_name
 from outreach.logging_setup import get_logger
 from outreach.templates import (
     DECLINE_ACK_BODY,
@@ -62,8 +63,8 @@ def _tmpl(cfg, key, fallback):
 
 def _base_ctx(lead, cfg):
     return {
-        "name": lead.get("Name") or "there",
-        "company": lead.get("Company") or "your company",
+        "name": lead_name(lead),
+        "company": lead_company(lead),
         "sender_name": cfg.get("sender_name") or "",
         "sender_company": cfg.get("sender_company") or "",
         "sender_phone": cfg.get("sender_phone") or "",
@@ -93,8 +94,8 @@ def _propose(lead, cfg, slots):
 def _book(lead, cfg, start):
     ctx = _base_ctx(lead, cfg)
     ctx["meeting_time"] = _fmt(start)
-    company = lead.get("Company") or lead.get("Name") or "lead"
-    who = lead.get("Name") or lead.get("Email") or "the lead"
+    company = lead_company(lead)
+    who = lead_name(lead) if lead_name(lead) != "there" else (lead.get("Email") or "the lead")
     return {
         "kind": "book",
         "start": start,

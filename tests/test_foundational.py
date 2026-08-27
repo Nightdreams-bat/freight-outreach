@@ -34,6 +34,45 @@ def test_get_unknown_key_raises():
         config.get({}, "no_such_key")
 
 
+# --- config auto-creation / migration ---------------------------------
+
+@pytest.fixture
+def tmp_config(tmp_path, monkeypatch):
+    path = tmp_path / "config.json"
+    monkeypatch.setattr(config, "CONFIG_PATH", path)
+    return path
+
+
+def test_load_config_creates_file_when_missing(tmp_config):
+    assert not tmp_config.exists()
+    cfg = config.load_config()
+    assert tmp_config.exists()
+    assert cfg["column_map"] == {}
+    assert cfg["sender_name"] == ""
+    assert cfg["reply_scan_enabled"] is False
+    assert "cold_body_template" in cfg
+
+
+def test_load_config_migrates_column_aliases(tmp_config):
+    tmp_config.write_text(
+        '{"sender_name": "Al", "column_aliases": {"Name": "Contact"}}', encoding="utf-8"
+    )
+    cfg = config.load_config()
+    assert cfg["column_map"] == {"Name": "Contact"}
+    assert "column_aliases" not in cfg
+    assert cfg["sender_name"] == "Al"  # untouched
+    assert "daily_send_cap" in cfg  # back-filled
+
+
+def test_load_config_backfills_missing_keys_without_clobber(tmp_config):
+    tmp_config.write_text(
+        '{"cold_body_template": "MY CUSTOM BODY", "column_map": {}}', encoding="utf-8"
+    )
+    cfg = config.load_config()
+    assert cfg["cold_body_template"] == "MY CUSTOM BODY"
+    assert "reminder_body_template" in cfg
+
+
 # --- Anthropic key storage ----------------------------------------------
 
 class _FakeKeyring:

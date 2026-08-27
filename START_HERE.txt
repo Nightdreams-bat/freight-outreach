@@ -1,49 +1,55 @@
 FREIGHT OUTREACH
 ================
 
-FIRST TIME
+START HERE
 ----------
-1. Double-click  Setup.exe
-   Answer the questions (your name, company, one-line pitch, path to your
-   leads spreadsheet, sending limits). This creates config.json in this folder.
+1. Double-click  FreightOutreach.exe
+   Your browser opens the dashboard. A small black window stays open in the
+   background - closing it stops the app.
 
-2. Make sure  client_secret.json  is in this folder.
-   (If you see a file called "PUT client_secret.json HERE.txt", you still need
-    to add it - it's the Google sign-in file.)
+2. Go to the Settings page (left menu) and fill in:
+   - Business details: your name, company, phone, one-line pitch.
+   - Excel file: click Browse and point it at your leads spreadsheet.
+     (If you don't have one yet, leave it - a blank clients.xlsx is created
+      next to FreightOutreach.exe on first use.)
+   - Lead spreadsheet columns: the app guesses which column is the name,
+     company, email and phone. Check the guesses; fix any it got wrong.
+   - Gmail account: click "Connect Gmail" and sign in with the Google account
+     that will send the emails. Nothing is typed here - it's the real Google
+     screen. You need  client_secret.json  in this folder for this to work
+     (if you see "PUT client_secret.json HERE.txt", you still need to add it -
+      ask whoever set this up).
 
-3. Double-click  FreightOutreach.exe
-   Your browser opens the dashboard. Go to Settings -> "Connect Gmail" and sign
-   in with the Google account that will send the emails.
+That's it. There is no separate setup program - everything is on Settings and
+can be changed any time.
 
 EVERY DAY AFTER THAT
 --------------------
-Just double-click  FreightOutreach.exe  - it opens the dashboard where you
-manage leads, review what's queued, and send. Close the small black window to
-stop it.
+Double-click  FreightOutreach.exe  - it opens the dashboard where you manage
+leads, review what's queued, and send.
 
-The "Replies" page is where drafted follow-ups wait for you: when a lead
-replies, the app reads it and prepares a calendar invite + email (or a "here
-are some times that work" email). Nothing is sent or booked until you click
-Approve there.
+THE REPLIES PAGE
+----------------
+When a lead replies, the app reads it and prepares a calendar invite + email
+(or a "here are some times that work" email). Nothing is sent or booked until
+you click Approve on the Replies page.
 
-OPTIONAL: REPLY HANDLING
-------------------------
-To have the app read replies and draft meetings, do these once in Settings:
-  - Click "Connect Gmail" again (it needs new permissions for reading mail and
+To turn this on, in Settings:
+  - Click "Connect Gmail" again (it needs extra permissions to read mail and
     your calendar).
-  - Paste an Anthropic API key in the "Reply handling" section, then click
-    Enable. Ask whoever set this up for the key.
+  - Paste an Anthropic API key in the "Reply handling" section, then Enable.
+    Ask whoever set this up for the key.
 
 WHAT THE FILES ARE
 ------------------
-  Setup.exe            first-time setup wizard (run once)
   FreightOutreach.exe  the app - opens the dashboard
-  config.json          your settings (created by Setup.exe; safe to back up)
   client_secret.json   Google sign-in file (needed for "Connect Gmail")
-  clients.xlsx         your leads (created on first run if it doesn't exist)
+  config.json          your settings (created automatically; safe to back up)
+  clients.xlsx         your leads (created on first use if you don't pick one)
   reply_queue.jsonl    drafted follow-ups waiting for your approval (auto-managed)
   _internal\           the app's engine - don't touch or delete
   Source code\         the full source, if you or a developer want to read it
 
 Everything runs on your PC. Nothing is uploaded anywhere except the emails you
-choose to send through your own Gmail.
+choose to send through your own Gmail, and (if you turn on reply handling) the
+text of a reply sent to Anthropic for a yes/no reading.

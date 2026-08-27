@@ -7,6 +7,17 @@
   <div class="text-muted">{{ cfg.sender_company }}</div>
 </div>
 
+{% if setup_todo %}
+<div class="content-card border-start border-4 border-warning">
+  <h5 class="mb-2"><i class="bi bi-stars text-warning"></i> Finish setting up</h5>
+  <p class="text-muted small mb-2">A few things to do before you can send. All of it lives on the Settings page.</p>
+  <ul class="mb-3">
+    {% for item in setup_todo %}<li>{{ item }}</li>{% endfor %}
+  </ul>
+  <a href="{{ url_for('settings') }}" class="btn btn-warning btn-sm"><i class="bi bi-gear"></i> Open Settings</a>
+</div>
+{% endif %}
+
 <div class="row g-3 mb-2">
   <div class="col-6 col-xl-3">
     <div class="stat-card bg-grad-purple">

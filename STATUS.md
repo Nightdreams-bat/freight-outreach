@@ -14,11 +14,13 @@ dashboard, and Gmail + Google Calendar (via real Google sign-in).
 Run it with:
 ```
 cd C:\Users\darga\freight-outreach
-python -m outreach.dashboard
+python -m outreach
 ```
 Opens the dashboard at **http://127.0.0.1:5000**. That's the main way to use this - Settings,
-Leads, Send, History, Blocklist are all there. The CLI (`send_cold.py`, `send_reminders.py`,
-`setup.py`) still works too; the dashboard is a UI on top of the same underlying logic.
+Leads, Send, History, Blocklist are all there. The CLI (`send_cold.py`, `send_reminders.py`)
+still works too; the dashboard is a UI on top of the same underlying logic. There is no
+setup wizard - `config.json` is written with defaults on first run and everything is
+configured on the Settings page.
 
 ## How it's built (`outreach/` package)
 
@@ -39,10 +41,12 @@ Leads, Send, History, Blocklist are all there. The CLI (`send_cold.py`, `send_re
 | `scheduling.py` | `plan_action()` - turns a classification into a drafted action: `book` / `propose` / `decline_ack` / `manual`. Renders the emails from templates; degrades to `manual` on any Calendar error. |
 | `reply_queue.py` | The approval queue (`reply_queue.jsonl`). `approve()` is the only code here that sends/books - creates the event, sends the email, writes `MeetingDateTime`/`MeetingEventId`/`ReplyStatus`, respects the daily cap, and is idempotent on the calendar event if a retry happens. |
 | `process_replies.py` | The headless reply scan (`--replies`): gated on `reply_scan_enabled`, scans -> classifies -> plans -> enqueues. Never sends or books. |
-| `setup.py` | First-time CLI wizard - business details, Excel path, limits. Gmail is connected separately via the dashboard. |
+| `config.py` | Loads/saves `config.json`; `default_config()` writes a full file on first run and migrates older configs (incl. `column_aliases` -> `column_map`). No wizard - Settings edits everything. |
+| `column_map.py` | `detect()` - matches a sheet's own headers (`Surname`, `Organisation`, `E-mail Address`, split first/last name, ...) to the logical Name/Company/Email/Phone fields. |
+| `lead_fields.py` | `lead_name()` / `lead_company()` - fall back to a name derived from the email local part and a company from the domain when the row only has an address. |
 | `web/` | The Flask dashboard - `app.py` (routes) + `templates/` (pages) + `static/style.css`. |
 | `paths.py` | The one place that resolves file locations, so the same code works run from source or as the frozen `.exe`. |
-| `__main__.py` | Single entry point (`python -m outreach` / `FreightOutreach.exe`): no args -> dashboard, `--setup` / `--cold` / `--reminders` / `--replies` / `--selfcheck`. |
+| `__main__.py` | Single entry point (`python -m outreach` / `FreightOutreach.exe`): no args -> dashboard, `--cold` / `--reminders` / `--replies` / `--selfcheck`. |
 
 ## The two sending modes
 
@@ -83,12 +87,13 @@ Two real causes, both addressed:
 The client no longer needs Python. `build.ps1` runs PyInstaller against
 `FreightOutreach.spec`, self-checks the result, and assembles `release\FreightOutreach\` -
 the folder you hand the client. It contains, at the top level: `START HERE.txt`,
-`Setup.exe` (run first), `FreightOutreach.exe` (the app), `client_secret.json`, and two
-subfolders - `_internal\` (frozen runtime) and `Source code\` (a copy of the source).
+`FreightOutreach.exe` (the app), `client_secret.json`, and two subfolders -
+`_internal\` (frozen runtime) and `Source code\` (a copy of the source).
 
-`Setup.exe` and `FreightOutreach.exe` are the same binary; the app runs the setup wizard
-when it's launched under the name `Setup.exe`. `config.json` and the logs are created
-next to the `.exe` files. See `BUILD.md`.
+Double-clicking `FreightOutreach.exe` opens the dashboard; `config.json`, `clients.xlsx`
+and the logs are created next to it. Everything is configured on the Settings page -
+the dashboard shows a "finish setting up" checklist until business details, the Gmail
+connection and an email column are all in place. See `BUILD.md`.
 
 Path handling was reworked so the same code runs from source and frozen:
 `outreach/paths.py` is the one place that decides where user data lives (project root
@@ -124,14 +129,14 @@ New Excel columns (auto-added): `ReplyStatus`, `LastReplyAt`, `MeetingEventId`.
 
 ## Still placeholder / not started
 
-- **Business details in Settings are still demo data** (`Alex Carter` / `Carter Freight Solutions` / a placeholder pitch) - replace with the real client's info before sending anything real.
+- **Business details** start blank on a fresh install - the client fills them in on the Settings page (the dashboard nags until they do). An existing `config.json` from before this change keeps whatever was in it.
 - **`clients.xlsx` currently has one test row** (`Jamie Lin`, actually the client's own test address, meeting set for 2026-08-28 00:17) - the automatic reminder scan will email that address a reminder tomorrow since automation is enabled; that's expected/harmless (it's your own test data), just don't be surprised by it. Replace with real leads before relying on this.
 - **No open/click tracking** - would need a hosted server for a tracking pixel, out of scope for this local-only tool.
 
 ## Picking this back up
 
-1. `cd C:\Users\darga\freight-outreach && python -m outreach.dashboard`
-2. Settings -> fill in the real business details, lower the daily send cap.
+1. `cd C:\Users\darga\freight-outreach && python -m outreach`
+2. Settings -> fill in the real business details, lower the daily send cap, check the detected column mapping.
 3. Leads -> replace the test row with real lead data (or Settings > Browse to point at a different `.xlsx`).
 4. Send -> review what's queued before clicking Send Now on anything real.
 5. See `README.md` in this folder for full usage details on every feature; this file is just the "what happened and where things stand" snapshot.

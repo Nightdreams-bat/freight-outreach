@@ -23,6 +23,48 @@
   </div>
 </div>
 
+<div class="content-card" style="max-width:960px" id="lead-columns">
+  <h5 class="mb-2">Lead spreadsheet columns</h5>
+  <p class="text-muted small">
+    The app reads your file's headers and works out which column is the name, company, email and phone -
+    it handles things like <em>Surname</em>, <em>Organisation</em>, <em>E-mail Address</em>, or a split
+    first/last name. Only change these if it guessed wrong. A row with just an email still works: the
+    name and company are filled in from the address.
+  </p>
+
+  {% if not sheet_headers %}
+    <p class="text-warning small"><i class="bi bi-exclamation-triangle"></i>
+      Couldn't read any headers from that file yet. Point the Excel file above at your leads sheet, or
+      it'll be created with the standard columns on first send.</p>
+  {% endif %}
+
+  <form method="post">
+    {% for cv in column_view %}
+    <div class="row align-items-center mb-2">
+      <div class="col-md-3"><label class="form-label mb-0">{{ cv.logical }}</label></div>
+      <div class="col-md-4">
+        <select class="form-select form-select-sm" name="col_{{ cv.logical }}">
+          <option value="">
+            Auto{% if cv.auto is string %} (found "{{ cv.auto }}"){% elif cv.auto %} ({{ cv.auto|join(' + ') }}){% else %} (nothing found){% endif %}
+          </option>
+          {% for h in sheet_headers %}
+            <option value="{{ h }}" {{ "selected" if cv.configured == h }}>{{ h }}</option>
+          {% endfor %}
+          <option value="__none__" {{ "selected" if cv.configured == '__none__' }}>Not in my sheet</option>
+        </select>
+      </div>
+      <div class="col-md-5 text-muted small">
+        {% if cv.effective is string %}Using column <code>{{ cv.effective }}</code>.
+        {% elif cv.effective %}Joining <code>{{ cv.effective|join('</code> + <code>')|safe }}</code>.
+        {% else %}<em>Not mapped.</em>{% if cv.logical in ('Name', 'Company') %} Filled from the email address where possible.{% endif %}
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+    <button type="submit" class="btn btn-outline-dark btn-sm mt-2">Save column mapping</button>
+  </form>
+</div>
+
 <div class="content-card" style="max-width:960px">
   <h5 class="mb-3">Gmail account</h5>
   <div class="row align-items-center mb-1">

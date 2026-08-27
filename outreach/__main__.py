@@ -1,12 +1,9 @@
 """Single entry point for both the source checkout (`python -m outreach`) and the
 frozen build.
 
-What decides the mode:
-  * If the running .exe is named Setup.exe  -> the first-time setup wizard.
-  * Otherwise, no args                      -> open the dashboard in the browser
-                                               (this is what a double-click does).
-  * Explicit flags override both:
-        --setup       first-time setup wizard
+  * No args (a double-click) -> open the dashboard in the browser. Everything is
+    configured on the dashboard's Settings page; there is no setup wizard.
+  * Explicit flags:
         --cold        send the cold-intro batch now (headless)
         --reminders   run the reminder scan now (headless; used by the scheduled task)
         --replies     scan for lead replies and draft actions (headless; scheduled task)
@@ -14,18 +11,8 @@ What decides the mode:
 """
 
 import sys
-from pathlib import Path
 
 FROZEN = getattr(sys, "frozen", False)
-
-
-def _mode_from_exe_name():
-    """Setup.exe -> 'setup'. Any other frozen exe name -> None (fall through to args)."""
-    if not FROZEN:
-        return None
-    if Path(sys.executable).stem.strip().lower() == "setup":
-        return "setup"
-    return None
 
 
 def _pause_if_frozen():
@@ -41,17 +28,11 @@ def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
 
     # Downstream mains parse their own args with argparse; hide our dispatch flags from them.
-    dispatch_flags = {"--setup", "--cold", "--reminders", "--replies", "--selfcheck"}
+    dispatch_flags = {"--cold", "--reminders", "--replies", "--selfcheck"}
     sys.argv = [sys.argv[0]] + [a for a in argv if a not in dispatch_flags]
 
-    mode = _mode_from_exe_name()
     if "--selfcheck" in argv:
         _selfcheck()
-        return
-    elif "--setup" in argv or mode == "setup":
-        from outreach.setup import main as run
-        run()
-        _pause_if_frozen()
         return
     elif "--cold" in argv:
         from outreach.send_cold import main as run
@@ -105,14 +86,12 @@ def _selfcheck():
         print(f"import anthropic: MISSING (reply classification disabled) - {e}")
 
     try:
+        from outreach.config import get as cfg_get
+        from outreach.config import load_config
         from outreach.credentials import get_anthropic_key
-        from outreach.config import load_config, get as cfg_get
         print(f"  Anthropic API key: {'set' if get_anthropic_key() else 'not set'}")
-        try:
-            cfg = load_config()
-            print(f"  reply_scan_enabled: {cfg_get(cfg, 'reply_scan_enabled')}")
-        except FileNotFoundError:
-            print("  reply_scan_enabled: (no config yet)")
+        cfg = load_config()  # creates config.json on a fresh install
+        print(f"  reply_scan_enabled: {cfg_get(cfg, 'reply_scan_enabled')}")
     except Exception as e:
         print(f"  reply-handling config check skipped - {e}")
 

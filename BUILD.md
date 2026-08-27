@@ -19,27 +19,25 @@ client folder at **`release\FreightOutreach\`**.
 ```
 FreightOutreach\
   START HERE.txt          plain-English instructions
-  Setup.exe               first-time setup wizard  <- client runs this first
   FreightOutreach.exe     the app (opens the dashboard)
   client_secret.json      Google OAuth client (copied in if present in the repo root)
-  _internal\              the frozen Python runtime - shared by both .exe files
+  _internal\              the frozen Python runtime
   Source code\            a copy of the source, for anyone who wants to read it
 ```
 
-`config.json`, `clients.xlsx`, and the logs are created next to the two `.exe`
-files as the client uses it.
-
-`Setup.exe` and `FreightOutreach.exe` are the **same binary** - the app runs the
-setup wizard when it sees it's being run under the name `Setup.exe`. One build,
-one `_internal\`, no duplication beyond the ~10 MB bootloader stub.
+`config.json`, `clients.xlsx`, and the logs are created next to
+`FreightOutreach.exe` as the client uses it. There is no setup wizard -
+`config.json` is written with defaults on first run and everything is edited on
+the dashboard's **Settings** page.
 
 ## Running it (what the client does)
 
-1. Double-click `Setup.exe` - answer the questions. Writes `config.json`.
-2. Make sure `client_secret.json` is in the folder.
-3. Double-click `FreightOutreach.exe` - the dashboard opens; connect Gmail in Settings.
+1. Double-click `FreightOutreach.exe` - the dashboard opens.
+2. On the Settings page: fill in business details, point "Excel file" at their
+   leads sheet, check the auto-detected column mapping, click "Connect Gmail".
+   (`client_secret.json` must be in the folder for the Gmail step.)
 
-After that, `FreightOutreach.exe` is the only thing they touch day to day.
+The dashboard flags anything still missing until it's done.
 
 ## Developer flags
 
@@ -47,7 +45,6 @@ Run either `.exe` (or `python -m outreach` from source) with:
 
 | Flag | Does |
 |---|---|
-| `--setup` | setup wizard (same as running `Setup.exe`) |
 | `--cold` | send the cold-intro batch now, headless |
 | `--reminders` | run the reminder scan now, headless (used by the `FreightOutreach_ReminderCheck` task) |
 | `--replies` | run the reply scan now, headless (used by the `FreightOutreach_ReplyCheck` task) — reads replies, drafts actions, never sends/books |

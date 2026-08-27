@@ -16,7 +16,8 @@ from outreach.core import (
     send_cold_batch,
     send_reminder_batch,
 )
-from outreach.excel_store import ExcelFileLocked, ExcelStore
+from outreach.excel_store import ExcelFileLocked, ExcelStore, sheet_headers
+from outreach.column_map import detect as detect_columns
 from outreach.gmail_oauth import run_oauth_flow
 from outreach.schedule_task import (
     REPLY_TASK_NAME,
@@ -62,26 +63,31 @@ def create_app():
         cfg = load_config()
         store = ExcelStore(
             cfg["excel_path"],
-            column_aliases=cfg.get("column_aliases"),
+            column_map=cfg.get("column_map"),
             disallowed_emails=cfg.get("disallowed_emails"),
             disallowed_domains=cfg.get("disallowed_domains"),
         )
         return cfg, store
 
-    @app.errorhandler(FileNotFoundError)
-    def handle_no_config(e):
-        flash(f"Setup hasn't been run yet: {e}", "danger")
-        return render_template("setup_needed.html"), 200
-
     @app.errorhandler(ExcelFileLocked)
     def handle_locked(e):
         flash(str(e), "danger")
-        return render_template("setup_needed.html", locked=True), 200
+        return render_template("excel_locked.html"), 200
 
     @app.route("/")
     def dashboard():
         cfg, store = get_config_and_store()
         daily_cap = cfg.get("daily_send_cap", 150)
+        setup_todo = []
+        if not (cfg.get("sender_name") or "").strip() or not (cfg.get("sender_company") or "").strip():
+            setup_todo.append("Add your name and company under Settings → Business details.")
+        if not (cfg.get("gmail_address") or "").strip():
+            setup_todo.append("Connect the sending Gmail account under Settings → Gmail account.")
+        if store.email_column_missing:
+            setup_todo.append(
+                "Your leads file has no email column - pick one under Settings → Lead spreadsheet columns."
+            )
+
         stats = {
             "total_leads": sum(1 for _ in store.all_rows()),
             "sent_today": sent_today(),
@@ -92,15 +98,25 @@ def create_app():
             "blocklist_count": len(cfg.get("disallowed_domains", [])) + len(cfg.get("disallowed_emails", [])),
             "pending_replies": len(reply_queue.pending()),
         }
-        return render_template("dashboard.html", stats=stats, cfg=cfg)
+        return render_template("dashboard.html", stats=stats, cfg=cfg, setup_todo=setup_todo)
 
     @app.route("/leads")
     def leads():
         cfg, store = get_config_and_store()
-        rows = [
-            {"row_idx": row_idx, "v": values, "reason": reason}
-            for row_idx, values, reason in store.all_rows()
-        ]
+        from outreach.lead_fields import lead_company, lead_name
+
+        rows = []
+        for row_idx, values, reason in store.all_rows():
+            name, company = lead_name(values), lead_company(values)
+            rows.append({
+                "row_idx": row_idx,
+                "v": values,
+                "reason": reason,
+                "display_name": name,
+                "display_company": company,
+                "name_derived": not str(values.get("Name") or "").strip() and name != "there",
+                "company_derived": not str(values.get("Company") or "").strip() and company != "your company",
+            })
         return render_template("leads.html", rows=rows, excel_path=cfg["excel_path"])
 
     @app.route("/leads/<int:row_idx>/suppress", methods=["POST"])
@@ -280,6 +296,15 @@ def create_app():
                         cfg[key] = int(raw)
                     except ValueError:
                         flash(f"Ignored invalid value for {key}.", "warning")
+            if any(f"col_{f}" in request.form for f in ("Name", "Company", "Email", "Phone")):
+                column_map = {}
+                for logical in ("Name", "Company", "Email", "Phone"):
+                    choice = (request.form.get(f"col_{logical}") or "").strip()
+                    # "" = auto-detect, "__none__" = the sheet doesn't have this field
+                    if choice and choice != "__none__":
+                        column_map[logical] = choice
+                cfg["column_map"] = column_map
+
             new_key = (request.form.get("anthropic_api_key") or "").strip()
             if new_key:
                 set_anthropic_key(new_key)
@@ -287,6 +312,20 @@ def create_app():
             save_config(cfg)
             flash("Settings saved.", "success")
             return redirect(url_for("settings"))
+
+        headers = sheet_headers(cfg["excel_path"])
+        detected = detect_columns(headers)
+        column_view = []
+        for logical in ("Name", "Company", "Email", "Phone"):
+            configured = cfg.get("column_map", {}).get(logical)
+            auto = detected.get(logical)
+            column_view.append({
+                "logical": logical,
+                "configured": configured,
+                "auto": auto,
+                # what's actually in force right now
+                "effective": configured if configured is not None else auto,
+            })
         return render_template(
             "settings.html",
             cfg=cfg,
@@ -294,6 +333,8 @@ def create_app():
             reply_task=task_status(REPLY_TASK_NAME),
             anthropic_key_set=bool(get_anthropic_key()),
             reply_scan_enabled=cfg_get(cfg, "reply_scan_enabled"),
+            sheet_headers=headers,
+            column_view=column_view,
         )
 
     @app.route("/settings/browse-excel", methods=["POST"])

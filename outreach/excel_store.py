@@ -3,48 +3,72 @@ from pathlib import Path
 
 import openpyxl
 
+from outreach import column_map
 from outreach.blocklist import is_blocked
 from outreach.logging_setup import get_logger
 
 log = get_logger("excel_store")
 
-LOGICAL_COLUMNS = [
-    "Name",
-    "Company",
-    "Email",
-    "Phone",
+# The lead's own data - supplied by the client, in whatever shape their file has.
+# We never add or rename these; column_map.detect() finds them by header text.
+DATA_COLUMNS = ["Name", "Company", "Email", "Phone"]
+
+# Columns this app owns to track outreach state. These are appended to the
+# client's file if missing, and are the only columns we ever write to.
+STATE_COLUMNS = [
     "MeetingDateTime",
     "Status",
     "ColdEmailSentAt",
     "ReminderSentAt",
     "Suppressed",
     "Notes",
-    # Reply-handling feature - appended so existing sheets keep their column order.
     "ReplyStatus",     # "", awaiting, yes, no, maybe, question, scheduling, booked
     "LastReplyAt",     # YYYY-MM-DD HH:MM:SS of the most recent inbound reply
     "MeetingEventId",  # Google Calendar event id, set when a booking is approved
 ]
+
+LOGICAL_COLUMNS = DATA_COLUMNS + STATE_COLUMNS
 
 
 class ExcelFileLocked(RuntimeError):
     """Raised when clients.xlsx can't be saved, typically because it's open in Excel."""
 
 
+def sheet_headers(path):
+    """The first-row header text of a workbook, for the Settings mapping UI.
+    Returns [] if the file doesn't exist or can't be read."""
+    p = Path(path)
+    if not p.exists():
+        return []
+    try:
+        wb = openpyxl.load_workbook(p, read_only=True)
+        headers = [c.value for c in wb.active[1] if c.value is not None and str(c.value).strip()]
+        wb.close()
+        return headers
+    except Exception as e:  # noqa: BLE001
+        log.warning(f"Couldn't read headers from {p}: {e}")
+        return []
+
+
 class ExcelStore:
-    def __init__(self, path, column_aliases=None, disallowed_emails=None, disallowed_domains=None):
+    def __init__(self, path, column_map=None, disallowed_emails=None,
+                 disallowed_domains=None, column_aliases=None):
         self.path = Path(path)
-        self.column_aliases = column_aliases or {}
+        # column_aliases is the old (wizard-era) name for the same thing.
+        self.explicit_map = dict(column_map or column_aliases or {})
         self.disallowed_emails = disallowed_emails or []
         self.disallowed_domains = disallowed_domains or []
+        self.email_column_missing = False
         if not self.path.exists():
             self._create_blank_workbook()
         self.wb = openpyxl.load_workbook(self.path)
         self.ws = self.wb.active
+        self.headers = [c.value for c in self.ws[1] if c.value is not None and str(c.value).strip()]
         self._ensure_headers()
+        self._resolve_map()
         self._index_columns()
 
-    def _header_name(self, logical):
-        return self.column_aliases.get(logical, logical)
+    # --- setup -----------------------------------------------------------
 
     def _save(self):
         try:
@@ -58,7 +82,7 @@ class ExcelStore:
         wb = openpyxl.Workbook()
         ws = wb.active
         for col, logical in enumerate(LOGICAL_COLUMNS, start=1):
-            ws.cell(row=1, column=col, value=self._header_name(logical))
+            ws.cell(row=1, column=col, value=logical)
         try:
             wb.save(self.path)
         except PermissionError as e:
@@ -67,29 +91,69 @@ class ExcelStore:
             ) from e
 
     def _ensure_headers(self):
-        existing = [c.value for c in self.ws[1]]
+        """Append any missing STATE columns. Never touches the client's data columns."""
         changed = False
-        for logical in LOGICAL_COLUMNS:
-            header = self._header_name(logical)
-            if header not in existing:
-                self.ws.cell(row=1, column=self.ws.max_column + 1, value=header)
-                existing.append(header)
+        for logical in STATE_COLUMNS:
+            if logical not in self.headers:
+                self.ws.cell(row=1, column=self.ws.max_column + 1, value=logical)
+                self.headers.append(logical)
                 changed = True
         if changed:
             self._save()
 
+    def _resolve_map(self):
+        """Merge auto-detection with the explicit config map (config wins).
+
+        Detection runs only over the client's own headers - the STATE columns we
+        appended must not be candidates (e.g. 'ColdEmailSentAt' contains 'email')."""
+        data_headers = [h for h in self.headers if h not in STATE_COLUMNS]
+        detected = column_map.detect(data_headers)
+        self.effective_map = {**detected, **self.explicit_map}
+
+    # --- column indexing -----------------------------------------------
+
+    def _col_for_header(self, header):
+        try:
+            return self.headers.index(header) + 1  # openpyxl is 1-based
+        except ValueError:
+            return None
+
     def _index_columns(self):
-        headers = [c.value for c in self.ws[1]]
         self.col_index = {}
-        for logical in LOGICAL_COLUMNS:
-            header = self._header_name(logical)
-            self.col_index[logical] = headers.index(header) + 1  # openpyxl is 1-based
+
+        for logical in DATA_COLUMNS:
+            target = self.effective_map.get(logical)
+            if target is None:
+                continue
+            if isinstance(target, (list, tuple)):
+                cols = [c for c in (self._col_for_header(h) for h in target) if c]
+                if len(cols) == 1:
+                    self.col_index[logical] = cols[0]
+                elif cols:
+                    self.col_index[logical] = cols
+            else:
+                col = self._col_for_header(target)
+                if col:
+                    self.col_index[logical] = col
+
+        for logical in STATE_COLUMNS:
+            col = self._col_for_header(logical)
+            if col:
+                self.col_index[logical] = col
+
+        self.email_column_missing = "Email" not in self.col_index
+
+    # --- reading ------------------------------------------------------
+
+    def _cell(self, row_idx, col):
+        if isinstance(col, list):
+            parts = [self.ws.cell(row=row_idx, column=c).value for c in col]
+            parts = [str(p).strip() for p in parts if p is not None and str(p).strip()]
+            return " ".join(parts) or None
+        return self.ws.cell(row=row_idx, column=col).value
 
     def _read_row(self, row_idx):
-        return {
-            logical: self.ws.cell(row=row_idx, column=col).value
-            for logical, col in self.col_index.items()
-        }
+        return {logical: self._cell(row_idx, col) for logical, col in self.col_index.items()}
 
     def get_row(self, row_idx):
         return self._read_row(row_idx)
@@ -105,6 +169,8 @@ class ExcelStore:
 
     def rows(self):
         """Yields (row_idx, values) for every row with an email address that isn't suppressed/blocked."""
+        if self.email_column_missing:
+            return
         for row_idx in range(2, self.ws.max_row + 1):
             values = self._read_row(row_idx)
             if not values.get("Email"):
@@ -122,14 +188,22 @@ class ExcelStore:
         exclusion_reason is None, "suppressed", or "blocked" - for display purposes
         (e.g. the dashboard's CRM table), unlike rows() which only yields active candidates.
         """
+        if self.email_column_missing:
+            return
         for row_idx in range(2, self.ws.max_row + 1):
             values = self._read_row(row_idx)
             if not values.get("Email"):
                 continue
             yield row_idx, values, self._exclusion_reason(values)
 
+    # --- writing (STATE columns only) --------------------------------
+
     def set_value(self, row_idx, logical, value):
-        col = self.col_index[logical]
+        if logical not in STATE_COLUMNS:
+            raise ValueError(f"Refusing to write to non-state column {logical!r}")
+        col = self.col_index.get(logical)
+        if not isinstance(col, int):
+            raise ValueError(f"State column {logical!r} is not present in the sheet")
         self.ws.cell(row=row_idx, column=col, value=value)
         self._save()  # save immediately so a crash mid-batch never loses state
 

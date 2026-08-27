@@ -17,6 +17,7 @@ from outreach import gmail_read, llm, reply_queue, scheduling
 from outreach.config import get as cfg_get
 from outreach.config import load_config
 from outreach.excel_store import ExcelFileLocked, ExcelStore
+from outreach.lead_fields import lead_company, lead_name
 from outreach.llm import LLMNotConfigured
 from outreach.logging_setup import get_logger
 
@@ -68,7 +69,7 @@ def main(argv=None):
     try:
         store = ExcelStore(
             cfg["excel_path"],
-            column_aliases=cfg.get("column_aliases"),
+            column_map=cfg.get("column_map"),
             disallowed_emails=cfg.get("disallowed_emails"),
             disallowed_domains=cfg.get("disallowed_domains"),
         )
@@ -143,8 +144,8 @@ def main(argv=None):
                 action,
                 lead_row_idx=row_idx,
                 lead_email=reply["email"],
-                lead_name=values.get("Name") or "",
-                lead_company=values.get("Company") or "",
+                lead_name=lead_name(values),
+                lead_company=lead_company(values),
                 thread_id=reply.get("thread_id") or "",
                 reply_summary=summary,
             )

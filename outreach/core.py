@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 import jinja2
 
 from outreach.excel_store import ExcelFileLocked
+from outreach.lead_fields import lead_company, lead_name
 from outreach.logging_setup import get_logger
 from outreach.mailer import Mailer
 from outreach.send_tracker import record_send_history, record_sent, remaining_today
@@ -117,8 +118,8 @@ def send_cold_batch(cfg, store, mailer, candidates, dry_run=False):
             continue
 
         context = {
-            "name": row.get("Name") or "there",
-            "company": row.get("Company") or "your company",
+            "name": lead_name(row),
+            "company": lead_company(row),
             "phone": row.get("Phone") or "",
             "sender_name": cfg["sender_name"],
             "sender_company": cfg["sender_company"],
@@ -171,8 +172,8 @@ def send_reminder_batch(cfg, store, mailer, candidates, dry_run=False):
             continue
 
         context = {
-            "name": row.get("Name") or "there",
-            "company": row.get("Company") or "your company",
+            "name": lead_name(row),
+            "company": lead_company(row),
             "phone": row.get("Phone") or "",
             "meeting_time": meeting_time.strftime("%A, %b %d at %I:%M %p"),
             "sender_name": cfg["sender_name"],

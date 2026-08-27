@@ -4,7 +4,7 @@
   "sender_phone": "",
   "sender_pitch": "One or two sentences describing what you offer.",
   "excel_path": "C:/path/to/clients.xlsx",
-  "column_aliases": {},
+  "column_map": {},
   "gmail_address": "you@gmail.com",
   "reminder_interval_hours": 2,
   "reminder_window_hours": 2,
