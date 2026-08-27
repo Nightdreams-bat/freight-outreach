@@ -1,157 +1,229 @@
-# Freight Outreach Agent
+<div align="center">
 
-Sends personalized cold-intro emails to leads and automatic reminders ~24h before a scheduled call, reading from a local Excel file (`clients.xlsx`).
+# Freight Outreach
 
-It can also **read the replies**: Claude classifies each response (yes / no / maybe / question), and for a "yes" it drafts a Google Calendar invite plus a confirmation email — or, if the lead's time is taken, an email proposing open slots from the client's calendar. Nothing is sent or booked until the client approves it on the **Replies** page. See [Reply handling & auto-scheduling](#reply-handling--auto-scheduling).
+**A local, single-client cold-email and follow-up tool for a freight brokerage — leads live in one Excel file, nothing is hosted, nothing sends or books without your approval.**
 
-## One-time setup
+![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=for-the-badge&logo=python&logoColor=white)
+![Windows](https://img.shields.io/badge/Windows-10%2F11-0078D6?style=for-the-badge&logo=windows&logoColor=white)
+![No database](https://img.shields.io/badge/database-none-2E7D32?style=for-the-badge)
+![Runs offline](https://img.shields.io/badge/dashboard-offline%20%2F%20no%20CDN-2E7D32?style=for-the-badge)
+![Tests](https://img.shields.io/badge/tests-188%20passing-2E7D32?style=for-the-badge)
+![License](https://img.shields.io/badge/license-unlicensed-9E9E9E?style=for-the-badge)
 
-1. Install dependencies:
-   ```
-   pip install -r requirements.txt
-   ```
-2. **Google Cloud OAuth Client** (one-time, done once by the developer - the client never touches this): a "Sign in with Google" button requires a registered OAuth Client ID, which is Google's requirement for any app showing their login screen. In Google Cloud Console:
-   - Create a project, enable the **Gmail API** and the **Google Calendar API**.
-   - Configure the **OAuth consent screen**: External, add every Gmail address that will ever click "Connect Gmail" (yours and the client's) as a **test user** - the app runs in Testing mode, which skips Google's weeks-long verification process and is the right fit for a single client's tool, but restricts sign-in to that test-user list.
-   - Scopes requested by the app: `gmail.send`, `gmail.readonly` (read replies), `calendar.events` (create invites), `calendar.freebusy` (check the calendar for conflicts), plus `openid` / `userinfo.email`. All are Google "sensitive/restricted" scopes; Testing mode with whitelisted test users is fine for them.
-   - Create an **OAuth Client ID** of type "Desktop app", download the JSON, and save it as `client_secret.json` in this project folder.
+</div>
 
-   > If you already set this up with only `gmail.send`: add the Calendar API + the new scopes above, then have each connected account click **Connect Gmail** again to re-consent. The old token doesn't carry the new permissions.
-3. Start the dashboard:
-   ```
-   python -m outreach
-   ```
-   There is no setup wizard. `config.json` is created with defaults on first run;
-   everything - business details, the path to `clients.xlsx`, column mapping,
-   sending limits, the scheduled task - is configured on the **Settings** page.
-   The dashboard shows a short checklist until the essentials are filled in.
-4. In Settings, click **Connect Gmail** - this is the client's *entire* part of the setup: a normal Google sign-in page opens, they log in, click Allow, done. No passwords typed anywhere, no Google Cloud Console. The token is stored in the Windows Credential Manager via `keyring` and auto-refreshes, so this is a true one-time login.
+---
 
-## Excel file (`clients.xlsx`)
+## What it is
 
-Default columns (created automatically if missing; the reply-handling columns are added to an existing sheet automatically on first run):
+Freight Outreach is a desktop app for one freight brokerage to run its own outbound email.
+It reads leads from an Excel spreadsheet on the PC, sends personalised cold-intro emails,
+chases the non-responders with a multi-touch follow-up drip, and emails a reminder about
+24 hours before any scheduled call. Optionally it also **reads the replies**: Claude Haiku
+classifies each response (yes / no / maybe / question) and, for a "yes", drafts a Google
+Calendar invite plus a confirmation email that you approve on a **Replies** page. Nothing is
+ever sent or booked automatically — every outbound action waits for a click.
 
-| Name | Company | Email | Phone | MeetingDateTime | Status | ColdEmailSentAt | ReminderSentAt | Suppressed | Notes | ReplyStatus | LastReplyAt | MeetingEventId |
-|------|---------|-------|-------|------------------|--------|------------------|-----------------|------------|-------|-------------|-------------|----------------|
+There is no database, no server, and no hosting. Everything — the leads file, the settings,
+the logs, the OAuth token — lives in one folder on the user's machine. Email goes out through
+the user's own Gmail account over a real Google sign-in (OAuth), not SMTP or app passwords.
 
-- `MeetingDateTime`: `YYYY-MM-DD HH:MM` (24h clock), e.g. `2026-08-27 14:00`. Set automatically when a booking is approved, which then feeds the normal 24h reminder.
-- `ColdEmailSentAt` / `ReminderSentAt` fill in automatically - leave blank for leads not yet contacted.
-- `ReplyStatus` (`awaiting` / `yes` / `no` / `maybe` / `question` / `scheduling` / `booked`), `LastReplyAt`, and `MeetingEventId` are maintained by the reply scan and the Replies page - leave them blank.
-- `Suppressed`: set to `yes`/`1`/`true` to permanently exclude a lead from both flows (e.g. after a STOP reply). Checked automatically before every send.
-- **Your sheet can use its own headers.** The app matches them automatically - `Surname`, `Organisation`, `E-mail Address`, a split first-name / last-name pair, etc. Settings → *Lead spreadsheet columns* shows what it detected and lets you correct any guess. The mapping is stored in `config.json` as `column_map`.
-- **A row with only an email still works.** The greeting name is derived from the address (`j.doe@acme-freight.com` → "Doe"), and the company from the domain (→ "Acme Freight"). Real values in the sheet always take precedence.
+---
 
-## Dashboard
+## Screenshots
 
-A local web UI, styled after a classic admin dashboard (dark sidebar, stat cards, data tables):
-```
+<table>
+  <tr>
+    <td align="center"><img src="docs/img/dashboard-light.png" alt="Dashboard (light mode)" width="420"><br><sub>Dashboard — stat tiles and the Run now panel</sub></td>
+    <td align="center"><img src="docs/img/dashboard-dark.png" alt="Dashboard (dark mode)" width="420"><br><sub>Dark mode</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/img/replies.png" alt="Replies page" width="420"><br><sub>Replies — drafted actions awaiting approval</sub></td>
+    <td align="center"><img src="docs/img/diagnostics.png" alt="Diagnostics page" width="420"><br><sub>Diagnostics — live connection checks</sub></td>
+  </tr>
+</table>
+
+> Screenshot files live in `docs/img/` and may be added after this document.
+
+---
+
+## Features
+
+| Feature | What it does |
+|---|---|
+| **Cold intro** | Emails every lead in the sheet that has no `ColdEmailSentAt` yet, using your own Jinja2 templates with each lead's details merged in. |
+| **Follow-up drip** | Up to three spaced nudges to cold leads who never replied. Configurable cadence (default 3 / 7 / 14 days after the intro), with a soft "breakup" email on the last touch. Stops the instant a lead replies or books. Opt-in. |
+| **24h reminders** | A background scan finds leads whose `MeetingDateTime` is roughly 24 hours away and sends one reminder each. The scan window overlaps between runs so no meeting slips through. |
+| **Reply handling & auto-scheduling** | Reads the latest inbound message per lead thread, classifies it with Claude Haiku, and drafts the follow-up: a calendar invite + confirmation for a free "yes", a "here are some open times" email otherwise, a polite acknowledgement for a "no". Draft-and-approve only. Optional. |
+| **Lead priority score** | When the daily cap can't fit every queued lead, the highest-priority ones send first. Uses a numeric `Priority` column from the sheet if present, otherwise a small rules score from company / phone / notes-keyword hits. No AI, nothing written back. |
+| **Blocklist & suppression** | A permanent blocklist by domain or address, plus a per-lead `Suppressed` flag on the sheet. Both are checked before every send. |
+| **Daily send cap** | One combined cap across all flows (default 150, well under Gmail's own limit). Cold and follow-up overflow defers to the next run; reminders log a critical warning if capped. |
+| **Excel column auto-detection** | Matches your own headers — `Surname`, `Organisation`, `E-mail Address`, a split first/last name — to the logical fields, with a manual override per field in Settings. A row with only an email address still works (name from the local part, company from the domain). |
+| **Scheduled tasks** | Two optional Windows Task Scheduler jobs run the reminder + follow-up scan and the reply scan hands-off, whether or not the dashboard is open. |
+| **Native desktop app** | `python -m outreach` or a double-click opens a real application window via pywebview and the WebView2 runtime already built into Windows 11 — no bundled Chromium. `--web` forces a browser tab. |
+| **Offline dashboard** | Black / white / green, light and dark mode, all styling served locally — no CDN, works with no internet. |
+
+---
+
+## Quick start
+
+```bash
+git clone https://github.com/Nightdreams-bat/freight-outreach.git
+cd freight-outreach
+pip install -r requirements.txt
 python -m outreach
 ```
-Opens your browser to `http://127.0.0.1:5000` (bound to localhost only, no network exposure). Everything is driven from **Settings**, no terminal required:
 
-- **Excel file** - a "Browse..." button opens a real Windows file picker (via `tkinter`) to point the tool at your `clients.xlsx` anywhere on disk.
-- **Lead spreadsheet columns** - the auto-detected Name/Company/Email/Phone mapping, with a dropdown per field to override a wrong guess.
-- **Gmail account** - a "Connect Gmail" button opens the real Google sign-in screen (OAuth) - see [One-time setup](#one-time-setup). Shows the connected address once done, with a "Reconnect" option.
-- **Automation** - shows whether the 24h-before-meeting reminder scan is currently running in the background (Windows Task Scheduler) with an Enable/Disable button, plus a plain-language explanation of what it actually does.
-- **Business details & email templates** - every field has its explanation right next to it (what it affects, what happens if left blank), plus a live From-line preview so the effect of the name/company fields is visible immediately.
-- **Sending limits** - the four numeric caps, each with an explanation of what it protects against.
+`python -m outreach` opens the dashboard in a native window. `config.json` is created with
+defaults on first run — there is no setup wizard; everything is configured on the **Settings**
+page, and the dashboard shows a short checklist until the essentials are filled in.
 
-The Leads page shows every column from the sheet (including Phone and Notes) with per-lead Suppress/Unsuppress, and Send lets you trigger a batch on demand. All of it is backed by the same `clients.xlsx` and `outreach/core.py` logic the CLI and scheduled task use, so nothing behaves differently depending on which interface you used.
+Before real sending works you need a one-time Google Cloud OAuth client (Gmail API + Calendar
+API + an OAuth consent screen with your sending addresses as test users), and — only for reply
+handling — an Anthropic API key from [console.anthropic.com](https://console.anthropic.com)
+(a pay-as-you-go key, roughly $0.001 per reply on Haiku; **not** a Claude.ai subscription).
+The full walkthrough is in **[`docs/SETUP.md`](docs/SETUP.md)**.
 
-## Email templates
+### Packaged build (client gets no Python)
 
-Cold-intro and reminder emails are fully custom, written as [Jinja2](https://jinja.palletsprojects.com/) text in Settings (or by editing `cold_subject_template` / `cold_body_template` / `reminder_subject_template` / `reminder_body_template` in `config.json` directly). Available variables:
-
-- Cold intro: `name`, `company`, `phone`, `sender_name`, `sender_company`, `sender_phone`, `sender_pitch`
-- Reminder: the same, plus `meeting_time`
-
-Use `{{ variable }}` to insert a value. To skip a line cleanly when a field is empty (e.g. a lead with no `Phone`, or a business that leaves `sender_phone` blank) rather than leaving an awkward gap, wrap it in a conditional on one line:
-```
-{% if sender_phone %}{{ sender_phone }}{% endif %}
-```
-Before any real batch is sent, both templates are rendered once against dummy data as a pre-flight check - a typo (like an unmatched `{% if %}`) shows one clear error and sends **nothing**, instead of crashing partway through a batch of real leads.
-
-## Reply handling & auto-scheduling
-
-Optional. When enabled, a second background scan reads replies to the cold emails and prepares the follow-up, but **never sends or books anything itself** — every action waits for the client's approval on the dashboard's **Replies** page.
-
-### What it does per reply
-
-1. **Read** — finds the most recent inbound message in the Gmail thread with that lead (`gmail.readonly`), strips the quoted history.
-2. **Classify** — Claude (`claude-haiku-4-5`) returns `intent` (`yes` / `no` / `maybe` / `question`), any proposed date/time, and a one-line summary. Conservative: anything ambiguous is `maybe`, not `yes`.
-3. **Plan a drafted action**:
-   - **yes + a time that's free** on the client's calendar → draft a calendar invite + a confirmation email.
-   - **yes + that time is taken, or no time given** → draft an email proposing 2–3 open slots (pulled from `freebusy` within business hours/days, respecting a minimum notice).
-   - **no** → draft a short polite acknowledgement (queued, not auto-sent).
-   - **maybe / question / calendar error** → flag as "needs manual scheduling" with a link to the Gmail thread. No draft.
-4. **Queue** — the drafted action lands on the Replies page.
-
-### Approving
-
-On **Replies**, each item shows the lead, Claude's read of their message, and the draft. **Approve** does the real work: creates the calendar event (`sendUpdates=all`, so the lead gets a normal invite), sends the email through the same Gmail account, and — for a booking — writes `MeetingDateTime` back to the sheet so the **existing 24h reminder fires with no extra setup**. **Reject** discards it. Approvals count against the same daily send cap; if the cap is hit the item stays pending.
-
-### Turning it on
-
-1. **Re-connect Gmail** (Settings → Connect Gmail) so the new Gmail/Calendar scopes are granted.
-2. Paste an **Anthropic API key** into Settings → *Reply handling & auto-scheduling* (stored in the OS credential store, never written to a file). ~$0.001 per reply on Haiku.
-3. Click **Enable** on the reply automation toggle — this registers a second Windows scheduled task, `FreightOutreach_ReplyCheck`, that runs the scan on the same interval as the reminder task.
-
-Run the scan manually any time:
-```
-python -m outreach --replies            # or: FreightOutreach.exe --replies
-python -m outreach.process_replies --dry-run
+```powershell
+.\build.ps1
 ```
 
-### Config keys (all optional, sensible defaults)
+`build.ps1` runs PyInstaller against `FreightOutreach.spec`, self-checks the result, and
+assembles `release\FreightOutreach\` — a single folder (`FreightOutreach.exe`, `_internal\`,
+`client_secret.json`, `Source code\`, `START HERE.txt`) that runs entirely on the client's PC.
+See **[`BUILD.md`](BUILD.md)**.
 
-`reply_scan_enabled`, `llm_model`, `meeting_duration_minutes` (30), `business_hours` (`{"start":9,"end":17}`), `business_days` (`[0,1,2,3,4]`), `scheduling_window_days` (10), `min_notice_hours` (24), `calendar_id` (`"primary"`), `reply_lookback_days` (30). Plus the three new templates: `meeting_confirm_*`, `propose_times_*`, `decline_ack_*` (edit in Settings like the others).
+---
 
-## Usage
+## How it works
 
-**Mode 1 - on demand**, whenever you decide to reach out to new leads in the sheet:
 ```
-python -m outreach.send_cold --dry-run   # preview first
-python -m outreach.send_cold             # sends after a y/n confirmation showing the count
-python -m outreach.send_cold --yes       # skip the confirmation (e.g. for scripting)
-```
-
-**Mode 2 - scheduled**, runs automatically via the Windows Task Scheduler task created during setup (`FreightOutreach_ReminderCheck`), checking every N hours for leads whose `MeetingDateTime` is ~24h away and emailing a reminder. Can also be run manually:
-```
-python -m outreach.send_reminders --dry-run
-python -m outreach.send_reminders
-```
-The check window equals the check interval, so consecutive runs always overlap and no meeting slips through the gap between two runs - this trades a little timing precision (reminder may go out anywhere from ~1-2x the interval before the meeting) for the guarantee that every lead gets exactly one reminder, which was the original point of automating this.
-
-As a safety net, if a single run ever matches more reminders than the configured cap (default 25), it sends **none** of them and logs a critical warning instead - protects against a data-entry mistake (e.g. many rows sharing one date) turning into an accidental mass-email.
-
-To re-create or change the scheduled task later:
-```
-python -m outreach.schedule_task
+              clients.xlsx  (the entire lead "database")
+                     |
+                     v
+             outreach/core.py   <-- all sending logic: candidates, daily-cap trim, send loop
+             outreach/excel_store.py, scoring.py, templates.py, ...
+                     |
+      +--------------+---------------+----------------------+
+      |              |               |                     |
+  Flask dashboard    CLI flags   Windows scheduled tasks   Replies approval queue
+  (native window)   (--cold ...)  (--reminders / --replies)  (reply_queue.jsonl)
 ```
 
-## Daily send cap and blocklist
+Every interface calls into the same `outreach/core.py` functions, so the dashboard, the CLI,
+and the scheduled tasks can never behave differently. Email is sent through the Gmail API and
+calendar invites are created through the Google Calendar API, both under a single real OAuth
+sign-in; the token is stored in the Windows Credential Manager via `keyring` and auto-refreshes.
+Reply text is the only thing sent to Claude, and only when reply handling is switched on.
 
-Both flows share one **daily send cap** (default 150, well under Gmail's own ~500/day limit) so a burst of new leads can't accidentally blast the inbox's reputation in one go - `send_cold` defers the overflow to the next run, `send_reminders` prioritizes the soonest meetings and logs a critical warning for any reminder it couldn't send. Tracked in `send_log.json`.
+For the reply-handling design and contract, see
+**[`docs/reply-handling-design.md`](docs/reply-handling-design.md)**.
 
-There's also a **permanent blocklist**, separate from the per-lead `Suppressed` column, for blocking an entire domain or a specific address once and having it apply forever (e.g. after a bounce, or a company that asked never to be contacted again):
+---
+
+## CLI reference
+
+Run `python -m outreach <flag>` from source, or `FreightOutreach.exe <flag>` from the build.
+
+| Flag | Effect |
+|---|---|
+| _(none)_ | Open the dashboard in a native desktop window. |
+| `--web` | Open the dashboard in the default browser instead of a window. |
+| `--cold` | Send the cold-intro batch now, headless. |
+| `--followup` | Send any due follow-up nudges now, headless (opt-in via config). |
+| `--reminders` | Run the reminder + follow-up scan now, headless (used by the `FreightOutreach_ReminderCheck` task). |
+| `--replies` | Scan for lead replies and draft actions, headless (used by the `FreightOutreach_ReplyCheck` task). Never sends or books. |
+| `--selfcheck` | Verify a freshly built `.exe` has everything it needs. |
+
+---
+
+## Dashboard pages
+
+| Page | Purpose |
+|---|---|
+| **Dashboard** | Stat tiles (leads, sent today, remaining under the cap, pending replies, ...) plus a **Run now** panel that triggers the cold / follow-up / reminder / reply-scan jobs in the background with a live log tail. |
+| **Leads** | Every column from the sheet, the derived name/company for email-only rows, the computed priority score, and per-lead Suppress / Unsuppress. |
+| **Send** | Everything currently queued for each flow, ordered by priority, with a button to send a batch on demand. |
+| **Replies** | Each drafted action from a lead reply — Claude's read of the message and the draft invite/email. **Approve** does the real work; **Reject** discards it. |
+| **History** | A log of every email actually sent. |
+| **Blocklist** | Add or remove blocked domains and addresses. |
+| **Diagnostics** | Active connection checks — Gmail send, Gmail read, Google Calendar, Anthropic, scheduled tasks, spreadsheet — each OK / WARN / FAIL. |
+| **Settings** | Business details, Excel file picker, column mapping, Connect Gmail, follow-up drip, reply handling + API key, email templates, sending limits, automation toggles. |
+
+---
+
+## Configuration
+
+`config.json` is written with sensible defaults on first run and migrated forward on later
+upgrades. There is no wizard — every field is editable on the **Settings** page:
+
+- **Business details** — sender name, company, phone, one-line pitch (merged into templates).
+- **Excel file & column map** — path to the leads sheet and the Name / Company / Email / Phone / Priority mapping.
+- **Email templates** — cold intro, reminder, the three follow-up bodies, and the reply-handling emails, all Jinja2.
+- **Sending limits** — daily send cap, reminder window / interval, per-run safety caps.
+- **Reply handling** — Anthropic API key (stored in the credential store, never in a file), model, meeting duration, business hours/days, scheduling window, minimum notice.
+
+Credentials (`client_secret.json`, the OAuth token, the Anthropic key) and user data
+(`config.json`, `clients.xlsx`, `send_log.json`) are gitignored. Full setup:
+**[`docs/SETUP.md`](docs/SETUP.md)**.
+
+---
+
+## Development
+
+```bash
+python -m pytest tests/          # 188 tests, fully network-free (Gmail / Calendar / Anthropic are faked)
 ```
-python -m outreach.manage_blocklist block-domain example.com
-python -m outreach.manage_blocklist block-email person@example.com
-python -m outreach.manage_blocklist list
-```
 
-## Reliability notes
+### Project layout — `outreach/` package
 
-- Every send is written back to `clients.xlsx` immediately, so a crash mid-batch never causes a duplicate send on the next run.
-- If `clients.xlsx` is open in Excel when a script tries to save, it logs a clear error (`ExcelFileLocked`) instead of losing the write - close the file and re-run.
-- Malformed rows (bad email format, unparsable `MeetingDateTime`) are skipped with a logged warning rather than silently dropped or crashing the whole batch.
-- The scheduled task runs via `pythonw.exe` (no console window flashing every run) and logs are written to `outreach.log`, which auto-rotates at 1MB (keeps 3 backups) so it won't grow unbounded over months of unattended use.
-- `config.json`, `client_secret.json`, `clients.xlsx`, and `send_log.json` are gitignored - if this folder is ever put under version control, credentials, lead data, settings, and send counts won't be committed.
-- Every email's From line shows "Sender Name - Company \<gmail address\>" (via `email.utils.formataddr` in `outreach/mailer.py`), not a bare address - so recipients see who and what business it's from at a glance.
-- Sending goes through the Gmail API (OAuth), not raw SMTP - no App Passwords involved anywhere in this version.
+| Module | Responsibility |
+|---|---|
+| `__main__.py` | Single entry point; dispatches the CLI flags or opens the dashboard. |
+| `desktop.py` | Runs the dashboard in a native pywebview window (WebView2), with browser fallbacks. |
+| `web/app.py` | The Flask dashboard — all routes and the background "Run now" job runner. |
+| `web/templates/`, `web/static/` | The eight dashboard pages and the offline stylesheet. |
+| `core.py` | Shared sending logic: candidate selection, daily-cap trim, the cold / reminder / follow-up send loops. |
+| `config.py` | Load / save / migrate `config.json`. |
+| `excel_store.py` | Read and write `clients.xlsx` — the whole lead store. |
+| `column_map.py` | Detect which of the sheet's headers map to Name / Company / Email / Phone / Priority. |
+| `lead_fields.py` | Derive a greeting name and company for rows that have only an email address. |
+| `templates.py` | The default Jinja2 email templates and the render helper. |
+| `scoring.py` | Rules-based lead priority score. |
+| `mailer.py` | Build and send the MIME message through the Gmail API. |
+| `gmail_oauth.py`, `credentials.py` | The Connect Gmail OAuth flow and the `keyring` token store. |
+| `gmail_read.py` | Fetch the latest inbound message per lead thread, strip quoted history. |
+| `llm.py` | `classify_reply()` — one forced-tool-use Claude Haiku call. |
+| `calendar_api.py` | Google Calendar free/busy, open-slot search, event creation. |
+| `scheduling.py` | Turn a classification into a drafted action (`book` / `propose` / `decline_ack` / `manual`). |
+| `reply_queue.py` | The approval queue; `approve()` is the only code that sends or books. |
+| `process_replies.py` | The headless reply scan (`--replies`). |
+| `send_cold.py`, `send_reminders.py`, `send_followups.py` | The headless send entry points. |
+| `blocklist.py`, `manage_blocklist.py` | Permanent block-by-domain-or-address. |
+| `send_tracker.py` | Daily send counter and the History log. |
+| `schedule_task.py` | Create / remove / query the Windows Task Scheduler jobs. |
+| `diagnostics.py` | The active connection checks behind the Diagnostics page and `--selfcheck`. |
+| `paths.py` | The one place that resolves file locations for source vs. frozen builds. |
 
-## Known limitations (by design, not oversights)
+---
 
-- Reply handling reads the inbox only when enabled and only for threads with known leads; a "not interested" still has to be turned into a `Suppressed` / blocklist entry by hand (the drafted acknowledgement is a convenience, not an unsubscribe system).
-- Since data stays in a local Excel file, the scheduled reminder only runs while this PC is on. If that becomes a problem, migrating `excel_store.py`'s storage to Google Sheets and the scheduler to a cloud cron job is the natural upgrade path.
-- No open/click tracking (the "which leads are actually engaging" view some cold-email tools have) - that requires a hosted server to serve a tracking pixel and receive webhooks, which is a different class of infrastructure than a local script. Worth adding later if this grows into something bigger.
+## Privacy
+
+Everything runs on the user's own PC. The only data that ever leaves the machine is:
+
+1. The emails the user chooses to send, through the user's own Gmail account.
+2. Calendar invites the user approves, created in the user's own Google Calendar.
+3. If reply handling is enabled — the text of each lead reply, sent to Anthropic for a
+   yes/no/maybe/question reading.
+
+There is no telemetry, no analytics, no third-party hosting, and no open/click tracking.
+
+---
+
+## License
+
+This project does not currently carry a license file. Check the
+[repository](https://github.com/Nightdreams-bat/freight-outreach) for a `LICENSE` before reuse.

@@ -40,7 +40,7 @@ Everything below was exercised for real, not mocked.
 | 13 | **Dashboard "Run now" panel** | Triggered each action over HTTP | ✅ `idle → running → success` with a summary; log tail updates; a second job while one runs returns HTTP 409. |
 | 14 | **Every dashboard route** | GET all 8 pages + `/run/status` + `/logs/tail` | ✅ All 200, no errors. |
 | 15 | **Offline styling** | Dashboard with no internet | ✅ Fully styled (no CDN dependency). Light + dark. |
-| 16 | **Automated test suite** | `pytest` | ✅ 181 passed. |
+| 16 | **Automated test suite** | `pytest` | ✅ 188 passed (network-free). |
 
 ## Notes / things the client should know
 
