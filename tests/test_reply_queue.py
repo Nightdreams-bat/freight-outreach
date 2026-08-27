@@ -169,3 +169,25 @@ def test_approve_send_failure_leaves_item_pending():
     result = reply_queue.approve(qid, cfg=CFG, store=FakeStore(), mailer=Boom())
     assert result["status"] == "error"
     assert reply_queue.get(qid)["status"] == "pending"
+
+
+def test_approve_retry_after_send_failure_does_not_rebook(monkeypatch):
+    """create_event succeeded, the email send failed. Re-approving must reuse the
+    existing event id, not book a second calendar slot."""
+    calls = []
+    monkeypatch.setattr(
+        reply_queue.calendar_api, "create_event",
+        lambda *a, **k: calls.append(1) or "evt_once",
+    )
+    qid = _enqueue_book()
+
+    class Boom(FakeMailer):
+        def send(self, *a):
+            raise RuntimeError("smtp down")
+
+    reply_queue.approve(qid, cfg=CFG, store=FakeStore(), mailer=Boom())
+    assert reply_queue.get(qid)["event_id"] == "evt_once"
+
+    result = reply_queue.approve(qid, cfg=CFG, store=FakeStore(), mailer=FakeMailer())
+    assert result["status"] == "done"
+    assert len(calls) == 1  # event created once, not twice
