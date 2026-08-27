@@ -2,60 +2,105 @@
 {% block title %}Send{% endblock %}
 {% block content %}
 
-<div class="page-header">
-  <h1>Send</h1>
-</div>
-
-<div class="content-card">
-  <div class="d-flex justify-content-between align-items-center mb-3">
-    <h5 class="mb-0">Cold intros pending &mdash; {{ cold|length }}</h5>
+<div class="card">
+  <div class="card-head">
+    <h2>Cold intros pending — {{ cold|length }}</h2>
+    <div class="spacer"></div>
     {% if cold %}
-    <form method="post" action="{{ url_for('send_cold_now') }}"
-          onsubmit="return confirm('Send {{ cold|length }} cold intro email(s) now?');">
-      <button type="submit" class="btn btn-primary"><i class="bi bi-send"></i> Send Now</button>
+    <form method="post" action="{{ url_for('send_cold_now') }}" class="inline"
+          data-confirm="Send {{ cold|length }} cold intro email(s) now?">
+      <button type="submit" class="btn primary">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/></svg> Send now
+      </button>
     </form>
     {% endif %}
   </div>
-  <div class="table-responsive">
-    <table class="table">
-      <thead><tr><th>Name</th><th>Company</th><th>Email</th></tr></thead>
+  <div class="table-wrap">
+    <table class="grid">
+      <thead><tr><th>Priority</th><th>Name</th><th>Company</th><th>Email</th></tr></thead>
       <tbody>
         {% for row_idx, row in cold %}
-        <tr><td>{{ row.Name or "-" }}</td><td>{{ row.Company or "-" }}</td><td>{{ row.Email }}</td></tr>
+        <tr>
+          <td><span class="prio">{{ '%g' % score_lead(row) }}</span></td>
+          <td>{{ row.Name or "—" }}</td><td>{{ row.Company or "—" }}</td><td class="mono">{{ row.Email }}</td>
+        </tr>
         {% else %}
-        <tr><td colspan="3" class="text-center text-muted py-3">Nothing queued.</td></tr>
+        <tr><td colspan="4" class="empty">Nothing queued.</td></tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
 </div>
 
-<div class="content-card">
-  <div class="d-flex justify-content-between align-items-center mb-3">
-    <h5 class="mb-0">Reminders due this scan &mdash; {{ reminders|length }}</h5>
-    {% if reminders %}
-    <form method="post" action="{{ url_for('send_reminders_now') }}"
-          onsubmit="return confirm('Send {{ reminders|length }} reminder(s) now?');">
-      <button type="submit" class="btn btn-outline-primary"><i class="bi bi-alarm"></i> Run Reminder Check Now</button>
+<div class="card">
+  <div class="card-head">
+    <h2>Follow-ups due — {{ followups|length }}</h2>
+    {% if not followup_enabled %}<span class="chip">drip off</span>{% endif %}
+    <div class="spacer"></div>
+    {% if followups and followup_enabled %}
+    <form method="post" action="{{ url_for('send_followups_now') }}" class="inline"
+          data-confirm="Send {{ followups|length }} follow-up nudge(s) now?">
+      <button type="submit" class="btn primary">Send follow-ups</button>
     </form>
     {% endif %}
   </div>
-  <div class="table-responsive">
-    <table class="table">
+  {% if followup_enabled %}
+  <div class="table-wrap">
+    <table class="grid">
+      <thead><tr><th>Next touch</th><th>Name</th><th>Company</th><th>Email</th><th>Cold sent</th></tr></thead>
+      <tbody>
+        {% for row_idx, row, stage in followups %}
+        <tr>
+          <td><span class="badge stage">#{{ stage + 1 }}</span></td>
+          <td>{{ row.Name or "—" }}</td><td>{{ row.Company or "—" }}</td>
+          <td class="mono">{{ row.Email }}</td><td class="muted">{{ row.ColdEmailSentAt or "—" }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="empty">Nothing due right now.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="muted" style="font-size:12px;margin:10px 0 0">
+    Stops automatically the moment a lead replies or a meeting is booked.
+  </p>
+  {% else %}
+  <p class="muted" style="margin:0">
+    The follow-up drip is off. Turn it on under
+    <a href="{{ url_for('settings') }}#followup-drip">Settings → Follow-up drip</a>.
+  </p>
+  {% endif %}
+</div>
+
+<div class="card">
+  <div class="card-head">
+    <h2>Reminders due this scan — {{ reminders|length }}</h2>
+    <div class="spacer"></div>
+    {% if reminders %}
+    <form method="post" action="{{ url_for('send_reminders_now') }}" class="inline"
+          data-confirm="Send {{ reminders|length }} reminder(s) now?">
+      <button type="submit" class="btn">Run reminder check</button>
+    </form>
+    {% endif %}
+  </div>
+  <div class="table-wrap">
+    <table class="grid">
       <thead><tr><th>Name</th><th>Company</th><th>Email</th><th>Meeting</th></tr></thead>
       <tbody>
         {% for row_idx, row, meeting_time in reminders %}
         <tr>
-          <td>{{ row.Name or "-" }}</td><td>{{ row.Company or "-" }}</td><td>{{ row.Email }}</td>
+          <td>{{ row.Name or "—" }}</td><td>{{ row.Company or "—" }}</td><td class="mono">{{ row.Email }}</td>
           <td>{{ meeting_time.strftime("%a %b %d, %I:%M %p") }}</td>
         </tr>
         {% else %}
-        <tr><td colspan="4" class="text-center text-muted py-3">Nothing due right now.</td></tr>
+        <tr><td colspan="4" class="empty">Nothing due right now.</td></tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
-  <div class="text-muted small">This also runs automatically via the scheduled task; use this button for on-demand testing.</div>
+  <p class="muted" style="font-size:12px;margin:10px 0 0">
+    This also runs automatically via the scheduled task; use the button for on-demand testing.
+  </p>
 </div>
 
 {% endblock %}

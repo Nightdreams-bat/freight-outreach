@@ -1,21 +1,27 @@
 import socket
+import threading
 import webbrowser
+from datetime import datetime
 
-from flask import Flask, flash, redirect, render_template, request, url_for
+from flask import Flask, flash, jsonify, redirect, render_template, request, url_for
 
 from outreach import reply_queue
 from outreach.config import get as cfg_get
 from outreach.config import load_config, save_config
 from outreach.credentials import get_anthropic_key, set_anthropic_key
-from outreach.paths import resource_path
+from outreach.paths import LOG_PATH, resource_path
 from outreach.core import (
     apply_daily_cap,
     build_mailer,
     cold_candidates,
+    followup_candidates,
+    priority_sort_key,
     reminder_candidates,
     send_cold_batch,
+    send_followup_batch,
     send_reminder_batch,
 )
+from outreach.diagnostics import run_checks
 from outreach.excel_store import ExcelFileLocked, ExcelStore, sheet_headers
 from outreach.column_map import detect as detect_columns
 from outreach.gmail_oauth import run_oauth_flow
@@ -25,9 +31,68 @@ from outreach.schedule_task import (
     task_status,
     unregister_task,
 )
+from outreach.scoring import is_manual as priority_is_manual
+from outreach.scoring import score_lead
 from outreach.send_tracker import recent_history, remaining_today, sent_today
 
 SUPPRESSED_TRUE_VALUES = ("1", "true", "yes", "y")
+
+# ---- manual "Run now" jobs (Dashboard) ------------------------------------
+# One background job at a time, in-process (no subprocess - avoids a PyInstaller
+# re-exec). The scheduled tasks are entirely separate from this.
+_JOB = {"status": "idle", "action": None, "started": None, "finished": None, "summary": None}
+_JOB_LOCK = threading.Lock()
+_RUN_ACTIONS = ("cold", "followups", "reminders", "replies")
+
+
+def _run_job(action):
+    cfg = load_config()
+    try:
+        store = ExcelStore(
+            cfg["excel_path"],
+            column_map=cfg.get("column_map"),
+            disallowed_emails=cfg.get("disallowed_emails"),
+            disallowed_domains=cfg.get("disallowed_domains"),
+        ) if action != "replies" else None
+
+        if action == "cold":
+            cands, _, deferred = apply_daily_cap(
+                cold_candidates(store), cfg.get("daily_send_cap", 150),
+                sort_key=priority_sort_key(cfg),
+            )
+            r = send_cold_batch(cfg, store, build_mailer(cfg), cands) if cands else {"sent": 0, "errors": []}
+            summary = f"{r['sent']} cold intro(s) sent"
+            if deferred:
+                summary += f", {deferred} deferred (daily cap)"
+        elif action == "followups":
+            cands, _, deferred = apply_daily_cap(
+                followup_candidates(store, cfg), cfg.get("daily_send_cap", 150),
+                sort_key=priority_sort_key(cfg),
+            )
+            r = send_followup_batch(cfg, store, build_mailer(cfg), cands) if cands else {"sent": 0, "errors": []}
+            summary = f"{r['sent']} follow-up(s) sent"
+        elif action == "reminders":
+            cands = reminder_candidates(store, cfg.get("reminder_window_hours", 2))
+            cands, _, _ = apply_daily_cap(cands, cfg.get("daily_send_cap", 150), sort_key=lambda c: c[2])
+            r = send_reminder_batch(cfg, store, build_mailer(cfg), cands) if cands else {"sent": 0, "errors": []}
+            summary = f"{r['sent']} reminder(s) sent"
+        else:  # replies
+            from outreach.process_replies import main as scan_replies
+
+            scan_replies([])
+            r = {"errors": []}
+            summary = "Reply scan finished - check the Replies page"
+
+        errs = r.get("errors") or []
+        with _JOB_LOCK:
+            _JOB["status"] = "failed" if errs else "success"
+            _JOB["summary"] = summary + (f" ({len(errs)} error(s) - see the log)" if errs else "")
+            _JOB["finished"] = datetime.now().strftime("%H:%M:%S")
+    except Exception as e:  # noqa: BLE001
+        with _JOB_LOCK:
+            _JOB["status"] = "failed"
+            _JOB["summary"] = f"{action}: {e}"
+            _JOB["finished"] = datetime.now().strftime("%H:%M:%S")
 
 
 def create_app():
@@ -49,15 +114,25 @@ def create_app():
             "replies_page": "replies",
             "history": "history",
             "blocklist_page": "blocklist",
+            "diagnostics_page": "diagnostics",
             "settings": "settings",
         }
         active = endpoint_to_active.get(request.endpoint)
-        # The nav badge needs the count on every page, cheap to read.
         try:
-            pending_replies = len(reply_queue.pending())
-        except Exception:
-            pending_replies = 0
-        return {"active": active, "pending_replies": pending_replies}
+            cfg = load_config()
+        except Exception:  # noqa: BLE001
+            cfg = {}
+        try:
+            pending = len(reply_queue.pending())
+        except Exception:  # noqa: BLE001
+            pending = 0
+        return {
+            "active": active,
+            "pending_replies": pending,
+            "gmail_connected": bool((cfg.get("gmail_address") or "").strip()),
+            "gmail_address": cfg.get("gmail_address") or "",
+            "sender_company": cfg.get("sender_company") or "",
+        }
 
     def get_config_and_store():
         cfg = load_config()
@@ -95,10 +170,14 @@ def create_app():
             "remaining_today": remaining_today(daily_cap),
             "cold_pending": len(cold_candidates(store)),
             "reminders_due": len(reminder_candidates(store, cfg.get("reminder_window_hours", 2))),
+            "followups_due": len(followup_candidates(store, cfg)) if cfg_get(cfg, "followup_enabled") else 0,
             "blocklist_count": len(cfg.get("disallowed_domains", [])) + len(cfg.get("disallowed_emails", [])),
             "pending_replies": len(reply_queue.pending()),
         }
-        return render_template("dashboard.html", stats=stats, cfg=cfg, setup_todo=setup_todo)
+        return render_template(
+            "dashboard.html", stats=stats, cfg=cfg, setup_todo=setup_todo,
+            followup_enabled=cfg_get(cfg, "followup_enabled"),
+        )
 
     @app.route("/leads")
     def leads():
@@ -116,6 +195,8 @@ def create_app():
                 "display_company": company,
                 "name_derived": not str(values.get("Name") or "").strip() and name != "there",
                 "company_derived": not str(values.get("Company") or "").strip() and company != "your company",
+                "score": score_lead(values, cfg),
+                "score_manual": priority_is_manual(values),
             })
         return render_template("leads.html", rows=rows, excel_path=cfg["excel_path"])
 
@@ -131,17 +212,22 @@ def create_app():
     @app.route("/send")
     def send_page():
         cfg, store = get_config_and_store()
+        by_priority = priority_sort_key(cfg)
         return render_template(
             "send.html",
-            cold=cold_candidates(store),
+            cold=sorted(cold_candidates(store), key=by_priority),
             reminders=reminder_candidates(store, cfg.get("reminder_window_hours", 2)),
+            followups=sorted(followup_candidates(store, cfg), key=by_priority),
+            followup_enabled=cfg_get(cfg, "followup_enabled"),
+            score_lead=lambda row: score_lead(row, cfg),
         )
 
     @app.route("/send/cold", methods=["POST"])
     def send_cold_now():
         cfg, store = get_config_and_store()
         candidates, _, deferred = apply_daily_cap(
-            cold_candidates(store), cfg.get("daily_send_cap", 150)
+            cold_candidates(store), cfg.get("daily_send_cap", 150),
+            sort_key=priority_sort_key(cfg),
         )
         if not candidates:
             flash("Nothing to send - empty queue or today's send cap already reached.", "warning")
@@ -156,6 +242,40 @@ def create_app():
         if result["errors"]:
             msg += f" {len(result['errors'])} error(s) - check outreach.log."
         flash(msg, "warning" if result["errors"] else "success")
+        return redirect(url_for("send_page"))
+
+    @app.route("/send/followups", methods=["POST"])
+    def send_followups_now():
+        cfg, store = get_config_and_store()
+        if not cfg_get(cfg, "followup_enabled"):
+            flash("Turn on the follow-up drip in Settings first.", "warning")
+            return redirect(url_for("send_page"))
+
+        candidates = followup_candidates(store, cfg)
+        max_per_run = cfg_get(cfg, "max_followups_per_run")
+        if len(candidates) > max_per_run:
+            flash(
+                f"{len(candidates)} follow-ups matched, over the safety cap of {max_per_run}. "
+                f"Sent none - check clients.xlsx for a data problem.",
+                "danger",
+            )
+            return redirect(url_for("send_page"))
+
+        candidates, _, deferred = apply_daily_cap(
+            candidates, cfg.get("daily_send_cap", 150), sort_key=priority_sort_key(cfg)
+        )
+        if not candidates:
+            flash("Nothing to send - empty queue or today's send cap already reached.", "warning")
+            return redirect(url_for("send_page"))
+
+        mailer = build_mailer(cfg)
+        result = send_followup_batch(cfg, store, mailer, candidates, dry_run=False)
+        msg = f"Sent {result['sent']} follow-up(s)."
+        if deferred:
+            msg += f" {deferred} deferred (daily cap)."
+        if result["errors"]:
+            msg += f" {len(result['errors'])} error(s) - check outreach.log."
+        flash(msg, "warning" if (result["errors"] or deferred) else "success")
         return redirect(url_for("send_page"))
 
     @app.route("/send/reminders", methods=["POST"])
@@ -187,6 +307,33 @@ def create_app():
         flash(msg, "warning" if (result["errors"] or deferred) else "success")
         return redirect(url_for("send_page"))
 
+    # ---- Run now (background jobs) ---------------------------------------
+    @app.route("/run/<action>", methods=["POST"])
+    def run_action(action):
+        if action not in _RUN_ACTIONS:
+            return jsonify({"error": "unknown action"}), 404
+        with _JOB_LOCK:
+            if _JOB["status"] == "running":
+                return jsonify({"error": "a job is already running", "job": _JOB}), 409
+            _JOB.update(status="running", action=action,
+                        started=datetime.now().strftime("%H:%M:%S"),
+                        finished=None, summary=None)
+        threading.Thread(target=_run_job, args=(action,), daemon=True).start()
+        return jsonify({"job": _JOB})
+
+    @app.route("/run/status")
+    def run_status():
+        with _JOB_LOCK:
+            return jsonify(dict(_JOB))
+
+    @app.route("/logs/tail")
+    def logs_tail():
+        try:
+            lines = LOG_PATH.read_text(encoding="utf-8", errors="replace").splitlines()
+            return ("\n".join(lines[-200:]) or "(log is empty)"), 200, {"Content-Type": "text/plain; charset=utf-8"}
+        except FileNotFoundError:
+            return "(no log yet)", 200, {"Content-Type": "text/plain; charset=utf-8"}
+
     @app.route("/replies")
     def replies_page():
         return render_template("replies.html", items=reply_queue.pending())
@@ -215,6 +362,11 @@ def create_app():
     @app.route("/history")
     def history():
         return render_template("history.html", entries=recent_history(200))
+
+    @app.route("/diagnostics")
+    def diagnostics_page():
+        cfg = load_config()
+        return render_template("diagnostics.html", checks=run_checks(cfg))
 
     @app.route("/blocklist")
     def blocklist_page():
@@ -274,6 +426,8 @@ def create_app():
             for field in (
                 "sender_name", "sender_company", "sender_phone", "sender_pitch",
                 "cold_subject_template", "cold_body_template",
+                "followup_subject_template", "followup_body_template",
+                "followup_breakup_body_template",
                 "reminder_subject_template", "reminder_body_template",
                 "meeting_confirm_subject_template", "meeting_confirm_body_template",
                 "propose_times_subject_template", "propose_times_body_template",
@@ -285,6 +439,7 @@ def create_app():
                 "reminder_interval_hours",
                 "reminder_window_hours",
                 "max_reminders_per_run",
+                "max_followups_per_run",
                 "daily_send_cap",
                 "meeting_duration_minutes",
                 "scheduling_window_days",
@@ -296,9 +451,29 @@ def create_app():
                         cfg[key] = int(raw)
                     except ValueError:
                         flash(f"Ignored invalid value for {key}.", "warning")
-            if any(f"col_{f}" in request.form for f in ("Name", "Company", "Email", "Phone")):
+
+            if "followup_settings" in request.form:
+                cfg["followup_enabled"] = request.form.get("followup_enabled") == "on"
+                raw_offsets = request.form.get("followup_offsets_days", "")
+                offsets = []
+                for part in raw_offsets.replace(";", ",").split(","):
+                    part = part.strip()
+                    if not part:
+                        continue
+                    try:
+                        offsets.append(int(float(part)))
+                    except ValueError:
+                        flash(f"Ignored non-number in the follow-up cadence: '{part}'.", "warning")
+                if offsets:
+                    cfg["followup_offsets_days"] = offsets
+
+            if "scoring_keywords" in request.form:
+                kws = [k.strip() for k in request.form["scoring_keywords"].split(",") if k.strip()]
+                cfg["scoring_keywords"] = kws
+
+            if any(f"col_{f}" in request.form for f in ("Name", "Company", "Email", "Phone", "Priority")):
                 column_map = {}
-                for logical in ("Name", "Company", "Email", "Phone"):
+                for logical in ("Name", "Company", "Email", "Phone", "Priority"):
                     choice = (request.form.get(f"col_{logical}") or "").strip()
                     # "" = auto-detect, "__none__" = the sheet doesn't have this field
                     if choice and choice != "__none__":
@@ -316,14 +491,13 @@ def create_app():
         headers = sheet_headers(cfg["excel_path"])
         detected = detect_columns(headers)
         column_view = []
-        for logical in ("Name", "Company", "Email", "Phone"):
+        for logical in ("Name", "Company", "Email", "Phone", "Priority"):
             configured = cfg.get("column_map", {}).get(logical)
             auto = detected.get(logical)
             column_view.append({
                 "logical": logical,
                 "configured": configured,
                 "auto": auto,
-                # what's actually in force right now
                 "effective": configured if configured is not None else auto,
             })
         return render_template(
@@ -333,6 +507,7 @@ def create_app():
             reply_task=task_status(REPLY_TASK_NAME),
             anthropic_key_set=bool(get_anthropic_key()),
             reply_scan_enabled=cfg_get(cfg, "reply_scan_enabled"),
+            followup_enabled=cfg_get(cfg, "followup_enabled"),
             sheet_headers=headers,
             column_view=column_view,
         )

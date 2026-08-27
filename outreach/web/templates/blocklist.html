@@ -2,52 +2,46 @@
 {% block title %}Blocklist{% endblock %}
 {% block content %}
 
-<div class="page-header">
-  <h1>Blocklist</h1>
-</div>
+<p class="subtitle">Leads on this list are never emailed, even if they're in your spreadsheet.</p>
 
-<div class="row g-3">
-  <div class="col-md-6">
-    <div class="content-card">
-      <h5 class="mb-3">Blocked domains</h5>
-      <form method="post" action="{{ url_for('add_domain') }}" class="input-group mb-3">
-        <input type="text" name="domain" class="form-control" placeholder="example.com" required>
-        <button class="btn btn-outline-dark" type="submit">Block</button>
-      </form>
-      <ul class="list-group">
-        {% for d in domains %}
-        <li class="list-group-item d-flex justify-content-between align-items-center">
-          {{ d }}
-          <form method="post" action="{{ url_for('remove_domain', domain=d) }}">
-            <button class="btn btn-sm btn-outline-danger" type="submit">Remove</button>
-          </form>
-        </li>
-        {% else %}
-        <li class="list-group-item text-muted">None blocked.</li>
-        {% endfor %}
-      </ul>
+<div class="tiles two">
+  <div class="card" style="margin:0">
+    <h2>Blocked domains</h2>
+    <form method="post" action="{{ url_for('add_domain') }}" class="input-join" style="margin-bottom:12px">
+      <input type="text" name="domain" class="field" placeholder="example.com" required>
+      <button class="btn" type="submit">Block</button>
+    </form>
+    <div class="list">
+      {% for d in domains %}
+      <div class="list-item">
+        <span class="mono">{{ d }}</span><span class="spacer"></span>
+        <form method="post" action="{{ url_for('remove_domain', domain=d) }}" class="inline">
+          <button class="btn sm danger" type="submit">Remove</button>
+        </form>
+      </div>
+      {% else %}
+      <div class="list-item muted">None blocked.</div>
+      {% endfor %}
     </div>
   </div>
 
-  <div class="col-md-6">
-    <div class="content-card">
-      <h5 class="mb-3">Blocked email addresses</h5>
-      <form method="post" action="{{ url_for('add_email') }}" class="input-group mb-3">
-        <input type="email" name="email" class="form-control" placeholder="person@example.com" required>
-        <button class="btn btn-outline-dark" type="submit">Block</button>
-      </form>
-      <ul class="list-group">
-        {% for e in emails %}
-        <li class="list-group-item d-flex justify-content-between align-items-center">
-          {{ e }}
-          <form method="post" action="{{ url_for('remove_email', email=e) }}">
-            <button class="btn btn-sm btn-outline-danger" type="submit">Remove</button>
-          </form>
-        </li>
-        {% else %}
-        <li class="list-group-item text-muted">None blocked.</li>
-        {% endfor %}
-      </ul>
+  <div class="card" style="margin:0">
+    <h2>Blocked email addresses</h2>
+    <form method="post" action="{{ url_for('add_email') }}" class="input-join" style="margin-bottom:12px">
+      <input type="email" name="email" class="field" placeholder="person@example.com" required>
+      <button class="btn" type="submit">Block</button>
+    </form>
+    <div class="list">
+      {% for e in emails %}
+      <div class="list-item">
+        <span class="mono">{{ e }}</span><span class="spacer"></span>
+        <form method="post" action="{{ url_for('remove_email', email=e) }}" class="inline">
+          <button class="btn sm danger" type="submit">Remove</button>
+        </form>
+      </div>
+      {% else %}
+      <div class="list-item muted">None blocked.</div>
+      {% endfor %}
     </div>
   </div>
 </div>

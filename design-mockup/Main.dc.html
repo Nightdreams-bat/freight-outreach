@@ -1,0 +1,862 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
+
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+
+    .app {
+      --bg: #f4f5f1;
+      --surface: #ffffff;
+      --surface-2: #fbfcfa;
+      --ink: #14160f;
+      --ink-soft: #5c6156;
+      --ink-faint: #8a8f82;
+      --line: #e3e5dd;
+      --line-strong: #d0d3c8;
+      --side-bg: #0d0f0b;
+      --side-ink: #9aa091;
+      --side-ink-bright: #ffffff;
+      --side-line: rgba(255,255,255,0.08);
+      --accent: #5aa626;
+      --accent-hover: #4c8f1e;
+      --accent-ink: #ffffff;
+      --accent-soft: #edf5e2;
+      --accent-soft-ink: #3c6a17;
+      --amber: #b07016;
+      --amber-soft: #f6ecd9;
+      --red: #b23b32;
+      --red-soft: #f6e2e0;
+      --slate: #445;
+      --slate-soft: #eceef1;
+
+      font-family: 'IBM Plex Sans', system-ui, -apple-system, sans-serif;
+      color: var(--ink);
+      background: var(--bg);
+      min-height: 100vh;
+      display: flex;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .app[data-theme="dark"] {
+      --bg: #101208;
+      --surface: #191c12;
+      --surface-2: #15180f;
+      --ink: #e9ebe0;
+      --ink-soft: #a0a596;
+      --ink-faint: #6f7565;
+      --line: #2a2e20;
+      --line-strong: #363b2a;
+      --side-bg: #0a0b07;
+      --side-ink: #8b9180;
+      --accent-soft: #23301400;
+      --accent-soft: #1e2a12;
+      --accent-soft-ink: #9fd06f;
+      --amber-soft: #2e2410;
+      --red-soft: #2f1a17;
+      --slate-soft: #20242a;
+    }
+
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { color: var(--accent-hover); text-decoration: underline; }
+
+    /* ---------- Sidebar ---------- */
+    .side {
+      width: 236px;
+      flex-shrink: 0;
+      background: var(--side-bg);
+      color: var(--side-ink);
+      display: flex;
+      flex-direction: column;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 20px 20px 18px;
+      border-bottom: 1px solid var(--side-line);
+      color: var(--side-ink-bright);
+      font-weight: 700;
+      font-size: 15px;
+      letter-spacing: 0.01em;
+    }
+    .brand .mark {
+      width: 26px; height: 26px;
+      display: grid; place-items: center;
+      background: var(--accent);
+      color: #fff;
+      border-radius: 6px;
+      flex-shrink: 0;
+    }
+    .nav { padding: 12px 12px; display: flex; flex-direction: column; gap: 2px; flex: 1; }
+    .navitem {
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      padding: 9px 12px;
+      border-radius: 6px;
+      color: var(--side-ink);
+      font-weight: 500;
+      cursor: pointer;
+      border-left: 2px solid transparent;
+      user-select: none;
+    }
+    .navitem svg { width: 18px; height: 18px; flex-shrink: 0; }
+    .navitem:hover { background: rgba(255,255,255,0.05); color: var(--side-ink-bright); text-decoration: none; }
+    .navitem.active {
+      background: rgba(90,166,38,0.14);
+      color: #fff;
+      border-left-color: var(--accent);
+    }
+    .navitem .count {
+      margin-left: auto;
+      background: var(--accent);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      min-width: 18px;
+      height: 18px;
+      padding: 0 5px;
+      border-radius: 9px;
+      display: grid;
+      place-items: center;
+    }
+    .side-foot {
+      padding: 14px 20px 18px;
+      border-top: 1px solid var(--side-line);
+      font-size: 12px;
+      color: #6b7061;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+    .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
+
+    /* ---------- Main column ---------- */
+    .main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+    .topbar {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 16px 28px;
+      border-bottom: 1px solid var(--line);
+      background: var(--surface);
+      position: sticky;
+      top: 0;
+      z-index: 5;
+    }
+    .topbar h1 { font-size: 18px; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+    .topbar .spacer { flex: 1; }
+    .conn {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--accent-soft-ink);
+      background: var(--accent-soft);
+      border: 1px solid transparent;
+      padding: 5px 10px;
+      border-radius: 999px;
+    }
+    .conn svg { width: 13px; height: 13px; }
+    .content { padding: 24px 28px 40px; max-width: 1180px; }
+
+    /* ---------- Buttons ---------- */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      font: inherit;
+      font-weight: 600;
+      font-size: 13px;
+      padding: 8px 14px;
+      border-radius: 6px;
+      border: 1px solid var(--line-strong);
+      background: var(--surface);
+      color: var(--ink);
+      cursor: pointer;
+      line-height: 1;
+    }
+    .btn svg { width: 15px; height: 15px; }
+    .btn:hover { border-color: var(--ink-faint); text-decoration: none; }
+    .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+    .btn.primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+    .btn.ghost { background: transparent; }
+    .btn.danger { color: var(--red); border-color: var(--red-soft); }
+    .btn.danger:hover { border-color: var(--red); }
+    .btn.sm { padding: 5px 10px; font-size: 12px; }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    /* ---------- Cards ---------- */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 18px 20px;
+      margin-bottom: 18px;
+    }
+    .card h2 {
+      font-size: 13px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--ink-soft);
+      margin: 0 0 14px;
+    }
+    .card-head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+    .card-head h2 { margin: 0; }
+    .card-head .spacer { flex: 1; }
+
+    /* ---------- Stat tiles ---------- */
+    .tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-bottom: 22px; }
+    .tile {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .tile .ic {
+      width: 32px; height: 32px;
+      border-radius: 7px;
+      display: grid; place-items: center;
+      background: var(--accent-soft);
+      color: var(--accent-soft-ink);
+    }
+    .tile .ic svg { width: 17px; height: 17px; }
+    .tile .ic.amber { background: var(--amber-soft); color: var(--amber); }
+    .tile .ic.slate { background: var(--slate-soft); color: var(--slate); }
+    .tile .num { font-size: 25px; font-weight: 700; letter-spacing: -0.02em; line-height: 1; }
+    .tile .lbl { font-size: 12px; color: var(--ink-soft); }
+    .tile .sub { font-size: 11px; color: var(--ink-faint); }
+
+    /* ---------- Tables ---------- */
+    table.grid { width: 100%; border-collapse: collapse; font-size: 13px; }
+    table.grid th {
+      text-align: left;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--ink-faint);
+      padding: 0 12px 8px;
+      border-bottom: 1px solid var(--line);
+    }
+    table.grid td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+      color: var(--ink);
+    }
+    table.grid tr:last-child td { border-bottom: none; }
+    table.grid tr:hover td { background: var(--surface-2); }
+    .muted { color: var(--ink-faint); }
+    .mono { font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 12px; }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 3px 8px;
+      border-radius: 4px;
+      letter-spacing: 0.01em;
+    }
+    .badge.new { background: var(--amber-soft); color: var(--amber); }
+    .badge.cold { background: var(--slate-soft); color: var(--slate); }
+    .badge.done { background: var(--accent-soft); color: var(--accent-soft-ink); }
+    .badge.off { background: var(--slate-soft); color: var(--ink-faint); }
+    .badge.stage { background: var(--accent-soft); color: var(--accent-soft-ink); }
+
+    .prio { font-weight: 600; }
+    .prio.manual { color: var(--accent-soft-ink); }
+
+    /* ---------- Run panel ---------- */
+    .runrow { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+    .runstatus {
+      display: flex; align-items: center; gap: 9px;
+      font-size: 13px; color: var(--ink-soft);
+      padding: 9px 12px;
+      background: var(--surface-2);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      margin-bottom: 10px;
+    }
+    .runstatus .pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+    .logtail {
+      font-family: 'IBM Plex Mono', ui-monospace, monospace;
+      font-size: 12px;
+      line-height: 1.7;
+      background: #0d0f0b;
+      color: #c7cdbb;
+      border-radius: 6px;
+      padding: 12px 14px;
+      max-height: 168px;
+      overflow: auto;
+      white-space: pre;
+    }
+    .logtail .g { color: #8fd15a; }
+    .logtail .a { color: #e0aa5a; }
+
+    /* ---------- Replies ---------- */
+    .reply-card { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 18px 20px; margin-bottom: 14px; }
+    .reply-top { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 10px; }
+    .reply-top .who { font-weight: 600; }
+    .reply-top .spacer { flex: 1; }
+    .quote {
+      border-left: 2px solid var(--accent);
+      padding: 2px 0 2px 12px;
+      color: var(--ink-soft);
+      font-style: italic;
+      margin: 10px 0 14px;
+    }
+    .kv { font-size: 12px; color: var(--ink-faint); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 3px; }
+    .draft {
+      font-family: 'IBM Plex Mono', ui-monospace, monospace;
+      font-size: 12.5px;
+      white-space: pre-wrap;
+      background: var(--surface-2);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 12px 14px;
+      margin-bottom: 14px;
+    }
+
+    /* ---------- Settings ---------- */
+    .setrow { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start; padding: 14px 0; border-bottom: 1px solid var(--line); }
+    .setrow:last-child { border-bottom: none; }
+    .setrow .help { font-size: 12.5px; color: var(--ink-soft); }
+    .field {
+      width: 100%;
+      font: inherit;
+      font-size: 13px;
+      padding: 8px 10px;
+      border: 1px solid var(--line-strong);
+      border-radius: 6px;
+      background: var(--surface);
+      color: var(--ink);
+    }
+    .field:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
+    label.lab { display: block; font-weight: 600; font-size: 13px; margin-bottom: 6px; }
+    .toggle {
+      width: 40px; height: 22px; border-radius: 999px; background: var(--line-strong);
+      position: relative; cursor: pointer; flex-shrink: 0; border: none;
+    }
+    .toggle::after { content: ""; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: left .12s; }
+    .toggle.on { background: var(--accent); }
+    .toggle.on::after { left: 20px; }
+    .flagrow { display: flex; align-items: center; gap: 12px; }
+
+    .newpill { font-size: 10px; font-weight: 700; letter-spacing: 0.04em; color: var(--accent-soft-ink); background: var(--accent-soft); padding: 2px 6px; border-radius: 4px; text-transform: uppercase; }
+  </style>
+</helmet>
+
+<div class="app" data-theme="{{theme}}">
+
+  <!-- ================= SIDEBAR ================= -->
+  <aside class="side">
+    <div class="brand">
+      <span class="mark">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h11v10H3zM14 10h4l3 3v4h-7z"/><circle cx="7" cy="17.5" r="1.6"/><circle cx="17.5" cy="17.5" r="1.6"/></svg>
+      </span>
+      Freight Outreach
+    </div>
+
+    <nav class="nav">
+      <div class="{{cd}}" onClick="{{go_dashboard}}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>
+        Dashboard
+      </div>
+      <div class="{{cl}}" onClick="{{go_leads}}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        Leads / CRM
+      </div>
+      <div class="{{cs}}" onClick="{{go_send}}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
+        Send
+      </div>
+      <div class="{{cr}}" onClick="{{go_replies}}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        Replies
+        <span class="count">3</span>
+      </div>
+      <div class="{{ch}}" onClick="{{go_history}}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><path d="M12 7v5l4 2"/></svg>
+        History
+      </div>
+      <div class="{{cb}}" onClick="{{go_blocklist}}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m4.5 4.5 15 15"/></svg>
+        Blocklist
+      </div>
+      <div class="{{cg}}" onClick="{{go_settings}}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>
+        Settings
+      </div>
+    </nav>
+
+    <div class="side-foot">
+      <span class="dot"></span> Local only · 127.0.0.1
+    </div>
+  </aside>
+
+  <!-- ================= MAIN ================= -->
+  <div class="main">
+    <header class="topbar">
+      <h1>{{pageTitle}}</h1>
+      <div class="spacer"></div>
+      <span class="conn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+        alex@carterfreight.com
+      </span>
+      <button class="btn sm ghost" onClick="{{toggle_theme}}">{{themeLabel}}</button>
+    </header>
+
+    <div class="content">
+
+      <!-- ---------- DASHBOARD ---------- -->
+      <sc-if value="{{isDashboard}}" hint-placeholder-val="{{true}}">
+      <div>
+        <div class="tiles">
+          <div class="tile">
+            <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></div>
+            <div class="num">248</div>
+            <div class="lbl">Total leads</div>
+          </div>
+          <div class="tile">
+            <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 5L2 7"/></svg></div>
+            <div class="num">37 <span class="muted" style="font-size:15px;font-weight:500">/ 150</span></div>
+            <div class="lbl">Sent today</div>
+            <div class="sub">113 left under the daily cap</div>
+          </div>
+          <div class="tile">
+            <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/></svg></div>
+            <div class="num">62</div>
+            <div class="lbl">Cold intros pending</div>
+          </div>
+          <div class="tile">
+            <div class="ic amber"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2M5 3 2 6M22 6l-3-3"/></svg></div>
+            <div class="num">4</div>
+            <div class="lbl">Reminders due this scan</div>
+          </div>
+        </div>
+
+        <div class="tiles" style="grid-template-columns:repeat(2,minmax(0,1fr))">
+          <div class="tile">
+            <div class="ic slate"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3 21 7l-4 4M3 11V9a4 4 0 0 1 4-4h14M7 21l-4-4 4-4M21 13v2a4 4 0 0 1-4 4H3"/></svg></div>
+            <div class="num">19</div>
+            <div class="lbl">Follow-ups due <span class="newpill">new</span></div>
+          </div>
+          <div class="tile">
+            <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>
+            <div class="num">3</div>
+            <div class="lbl">Replies waiting for approval</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <h2>Run now</h2>
+            <div class="spacer"></div>
+            <span class="muted" style="font-size:12px">Also runs on the hourly scheduled task</span>
+          </div>
+          <div class="runrow">
+            <button class="btn primary" onClick="{{noop}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/></svg> Cold intros</button>
+            <button class="btn" onClick="{{noop}}">Follow-ups</button>
+            <button class="btn" onClick="{{noop}}">Reminder check</button>
+            <button class="btn" onClick="{{noop}}">Scan replies</button>
+          </div>
+          <div class="runstatus"><span class="pulse"></span> Reminder check — running… started 10:42:03</div>
+          <div class="logtail">2026-08-27 10:42:03  <span class="g">INFO</span>  core: reminder scan started (window 2h)
+2026-08-27 10:42:04  <span class="g">INFO</span>  core: 4 leads with a meeting ~24h out
+2026-08-27 10:42:06  <span class="g">INFO</span>  mailer: sent reminder to dispatch@nolanlogistics.com
+2026-08-27 10:42:09  <span class="g">INFO</span>  mailer: sent reminder to ops@brightlanefreight.com
+2026-08-27 10:42:12  <span class="a">WARN</span>  core: row 88 MeetingDateTime empty — skipped
+2026-08-27 10:42:14  <span class="g">INFO</span>  core: reminder scan complete — 3 sent, 0 errors</div>
+        </div>
+      </div>
+      </sc-if>
+
+      <!-- ---------- LEADS ---------- -->
+      <sc-if value="{{isLeads}}" hint-placeholder-val="{{true}}">
+      <div>
+        <div class="card-head">
+          <input class="field" style="max-width:280px" placeholder="Search name, company, email…">
+          <button class="btn sm ghost">All statuses</button>
+          <button class="btn sm ghost">Sort: Priority</button>
+          <div class="spacer"></div>
+          <span class="muted mono" style="font-size:11px">clients.xlsx</span>
+        </div>
+        <div class="card" style="padding:6px 4px">
+          <table class="grid">
+            <thead><tr>
+              <th>Name</th><th>Company</th><th>Email</th><th>Priority</th><th>Meeting</th><th>Status</th><th style="text-align:right">Action</th>
+            </tr></thead>
+            <tbody>
+              <tr>
+                <td>Dana Whitfield</td><td>Nolan Logistics</td><td class="mono">dana@nolanlog.com</td>
+                <td><span class="prio manual">8</span></td><td>Aug 28, 9:00 AM</td>
+                <td><span class="badge done">Reminded</span></td>
+                <td style="text-align:right"><button class="btn sm ghost">Suppress</button></td>
+              </tr>
+              <tr>
+                <td>Marcus Bell</td><td>Brightlane Freight</td><td class="mono">ops@brightlanefreight.com</td>
+                <td><span class="prio">5</span></td><td class="muted">—</td>
+                <td><span class="badge cold">Cold sent</span></td>
+                <td style="text-align:right"><button class="btn sm ghost">Suppress</button></td>
+              </tr>
+              <tr>
+                <td>Priya Anand</td><td>Cross-Dock Partners</td><td class="mono">priya@crossdockpartners.io</td>
+                <td><span class="prio">4</span></td><td class="muted">—</td>
+                <td><span class="badge new">New</span></td>
+                <td style="text-align:right"><button class="btn sm ghost">Suppress</button></td>
+              </tr>
+              <tr>
+                <td class="muted">—</td><td class="muted">—</td><td class="mono">shipping@fenwayhaul.com</td>
+                <td><span class="prio">2</span></td><td class="muted">—</td>
+                <td><span class="badge new">New</span></td>
+                <td style="text-align:right"><button class="btn sm ghost">Suppress</button></td>
+              </tr>
+              <tr>
+                <td>Grant Ochoa</td><td>Halifax Carriers</td><td class="mono">grant@halifaxcarriers.com</td>
+                <td><span class="prio">3</span></td><td class="muted">—</td>
+                <td><span class="badge off">Suppressed</span></td>
+                <td style="text-align:right"><button class="btn sm ghost">Unsuppress</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      </sc-if>
+
+      <!-- ---------- SEND ---------- -->
+      <sc-if value="{{isSend}}" hint-placeholder-val="{{true}}">
+      <div>
+        <div class="card">
+          <div class="card-head">
+            <h2>Cold intros pending — 62</h2>
+            <div class="spacer"></div>
+            <button class="btn primary" onClick="{{noop}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/></svg> Send now</button>
+          </div>
+          <table class="grid">
+            <thead><tr><th>Priority</th><th>Name</th><th>Company</th><th>Email</th></tr></thead>
+            <tbody>
+              <tr><td><span class="prio">5</span></td><td>Marcus Bell</td><td>Brightlane Freight</td><td class="mono">ops@brightlanefreight.com</td></tr>
+              <tr><td><span class="prio">4</span></td><td>Priya Anand</td><td>Cross-Dock Partners</td><td class="mono">priya@crossdockpartners.io</td></tr>
+              <tr><td><span class="prio">2</span></td><td class="muted">—</td><td class="muted">—</td><td class="mono">shipping@fenwayhaul.com</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <h2>Follow-ups due — 19 <span class="newpill">new</span></h2>
+            <div class="spacer"></div>
+            <button class="btn primary" onClick="{{noop}}">Send follow-ups</button>
+          </div>
+          <table class="grid">
+            <thead><tr><th>Stage</th><th>Name</th><th>Company</th><th>Cold sent</th><th>Next touch</th></tr></thead>
+            <tbody>
+              <tr><td><span class="badge stage">2 of 3</span></td><td>Owen Reyes</td><td>Tri-State Haul</td><td class="muted">Aug 13</td><td>bump — due now</td></tr>
+              <tr><td><span class="badge stage">1 of 3</span></td><td>Kim Alvarez</td><td>Redwood Freight Co</td><td class="muted">Aug 20</td><td>bump — due now</td></tr>
+              <tr><td><span class="badge stage">3 of 3</span></td><td>Sana Rahman</td><td>Cobalt Carriers</td><td class="muted">Aug 9</td><td>breakup — due now</td></tr>
+            </tbody>
+          </table>
+          <div class="muted" style="font-size:12px;margin-top:10px">Stops automatically the moment a lead replies or a meeting is booked.</div>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <h2>Reminders due this scan — 4</h2>
+            <div class="spacer"></div>
+            <button class="btn" onClick="{{noop}}">Run reminder check</button>
+          </div>
+          <table class="grid">
+            <thead><tr><th>Name</th><th>Company</th><th>Email</th><th>Meeting</th></tr></thead>
+            <tbody>
+              <tr><td>Dana Whitfield</td><td>Nolan Logistics</td><td class="mono">dana@nolanlog.com</td><td>Thu Aug 28, 9:00 AM</td></tr>
+              <tr><td>Leah Cho</td><td>Summit Drayage</td><td class="mono">leah@summitdrayage.com</td><td>Thu Aug 28, 2:30 PM</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      </sc-if>
+
+      <!-- ---------- REPLIES ---------- -->
+      <sc-if value="{{isReplies}}" hint-placeholder-val="{{true}}">
+      <div>
+        <div class="muted" style="margin-bottom:16px">Drafted from lead replies. Nothing is sent or booked until you approve it.</div>
+
+        <div class="reply-card">
+          <div class="reply-top">
+            <div>
+              <div class="who">Owen Reyes · Tri-State Haul</div>
+              <div class="muted" style="font-size:12px">owen@tristatehaul.com · queued 10:31</div>
+            </div>
+            <div class="spacer"></div>
+            <span class="badge done">Book &amp; confirm</span>
+          </div>
+          <div class="quote">Yeah, Thursday afternoon works — let's say 3pm your time.</div>
+          <div><span class="kv">Proposed time</span> Thursday, Aug 28 at 3:00 PM</div>
+          <div style="margin:12px 0 4px"><span class="kv">Message</span></div>
+          <div class="draft">Hi Owen,
+
+Great — I've put us down for Thursday, Aug 28 at 3:00 PM and sent a calendar invite so it's on both our schedules.
+
+Looking forward to talking through Tri-State Haul's freight needs then.
+
+Best,
+Alex Carter
+Carter Freight Solutions</div>
+          <div style="display:flex;gap:8px">
+            <button class="btn primary"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Approve &amp; book</button>
+            <button class="btn danger">Reject</button>
+          </div>
+        </div>
+
+        <div class="reply-card">
+          <div class="reply-top">
+            <div>
+              <div class="who">Kim Alvarez · Redwood Freight Co</div>
+              <div class="muted" style="font-size:12px">kim@redwoodfreight.co · queued 09:58</div>
+            </div>
+            <div class="spacer"></div>
+            <span class="badge cold">Propose times</span>
+          </div>
+          <div class="quote">Interested — what times do you have next week?</div>
+          <div><span class="kv">Times to offer</span></div>
+          <ul style="margin:6px 0 12px;padding-left:18px;color:var(--ink-soft)">
+            <li>Mon Sep 1, 10:00 AM</li><li>Tue Sep 2, 1:00 PM</li><li>Wed Sep 3, 11:30 AM</li>
+          </ul>
+          <div style="display:flex;gap:8px">
+            <button class="btn primary">Send proposal</button>
+            <button class="btn danger">Reject</button>
+          </div>
+        </div>
+
+        <div class="reply-card">
+          <div class="reply-top">
+            <div>
+              <div class="who">Sana Rahman · Cobalt Carriers</div>
+              <div class="muted" style="font-size:12px">sana@cobaltcarriers.com · queued 08:12</div>
+            </div>
+            <div class="spacer"></div>
+            <span class="badge new">Needs you</span>
+          </div>
+          <div class="quote">Can you send pricing for a dedicated lane LA→Phoenix first?</div>
+          <div style="margin-bottom:12px">Needs manual scheduling: lead asked a question before committing.</div>
+          <div style="display:flex;gap:8px">
+            <button class="btn">Open the email thread</button>
+            <button class="btn danger">Dismiss</button>
+          </div>
+        </div>
+      </div>
+      </sc-if>
+
+      <!-- ---------- HISTORY ---------- -->
+      <sc-if value="{{isHistory}}" hint-placeholder-val="{{true}}">
+      <div class="card" style="padding:6px 4px">
+        <table class="grid">
+          <thead><tr><th>When</th><th>Type</th><th>Name</th><th>Company</th><th>Email</th><th>Subject</th></tr></thead>
+          <tbody>
+            <tr><td class="muted">10:42</td><td><span class="badge done">Reminder</span></td><td>Dana Whitfield</td><td>Nolan Logistics</td><td class="mono">dana@nolanlog.com</td><td>Our call Thu Aug 28 at 9:00 AM</td></tr>
+            <tr><td class="muted">10:20</td><td><span class="badge stage">Follow-up</span></td><td>Owen Reyes</td><td>Tri-State Haul</td><td class="mono">owen@tristatehaul.com</td><td>Circling back — Tri-State Haul freight</td></tr>
+            <tr><td class="muted">09:15</td><td><span class="badge cold">Cold intro</span></td><td>Priya Anand</td><td>Cross-Dock Partners</td><td class="mono">priya@crossdockpartners.io</td><td>Cross-Dock Partners freight — quick question</td></tr>
+            <tr><td class="muted">Aug 26</td><td><span class="badge cold">Cold intro</span></td><td>Marcus Bell</td><td>Brightlane Freight</td><td class="mono">ops@brightlanefreight.com</td><td>Brightlane Freight freight — quick question</td></tr>
+          </tbody>
+        </table>
+      </div>
+      </sc-if>
+
+      <!-- ---------- BLOCKLIST ---------- -->
+      <sc-if value="{{isBlocklist}}" hint-placeholder-val="{{true}}">
+      <div class="tiles" style="grid-template-columns:repeat(2,minmax(0,1fr))">
+        <div class="card" style="margin:0">
+          <h2>Blocked domains</h2>
+          <div style="display:flex;gap:8px;margin-bottom:12px">
+            <input class="field" placeholder="example.com">
+            <button class="btn">Block</button>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <div style="display:flex;align-items:center;padding:8px 10px;border:1px solid var(--line);border-radius:6px"><span class="mono">competitorfreight.com</span><span class="spacer" style="flex:1"></span><button class="btn sm danger">Remove</button></div>
+            <div style="display:flex;align-items:center;padding:8px 10px;border:1px solid var(--line);border-radius:6px"><span class="mono">no-reply.com</span><span class="spacer" style="flex:1"></span><button class="btn sm danger">Remove</button></div>
+          </div>
+        </div>
+        <div class="card" style="margin:0">
+          <h2>Blocked email addresses</h2>
+          <div style="display:flex;gap:8px;margin-bottom:12px">
+            <input class="field" placeholder="person@example.com">
+            <button class="btn">Block</button>
+          </div>
+          <div style="display:flex;align-items:center;padding:8px 10px;border:1px solid var(--line);border-radius:6px"><span class="mono">angry.customer@bigco.com</span><span class="spacer" style="flex:1"></span><button class="btn sm danger">Remove</button></div>
+        </div>
+      </div>
+      </sc-if>
+
+      <!-- ---------- SETTINGS ---------- -->
+      <sc-if value="{{isSettings}}" hint-placeholder-val="{{true}}">
+      <div>
+        <div class="card">
+          <h2>Gmail account</h2>
+          <div class="setrow" style="border:none;padding-top:0">
+            <div>
+              <div style="margin-bottom:8px">Connected as <strong>alex@carterfreight.com</strong></div>
+              <button class="btn sm">Reconnect Gmail</button>
+            </div>
+            <div class="help">Opens the real Google sign-in screen in your browser. No password ever touches this app.</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><h2>Follow-up drip</h2><span class="newpill">new</span></div>
+          <div class="setrow" style="padding-top:0">
+            <div class="flagrow">
+              <button class="toggle on" onClick="{{noop}}"></button>
+              <span style="font-weight:600">Send spaced follow-ups to cold leads</span>
+            </div>
+            <div class="help">After a cold intro, sends up to 3 nudges on the schedule below — unless the lead replies or books first, which stops the sequence immediately.</div>
+          </div>
+          <div class="setrow">
+            <div>
+              <label class="lab">Cadence (days after the cold intro)</label>
+              <input class="field" value="3, 7, 14">
+            </div>
+            <div class="help">Comma-separated. The last touch uses the breakup template. Respects the daily send cap, blocklist and suppression like every other send.</div>
+          </div>
+          <div class="setrow">
+            <div>
+              <label class="lab">Max follow-ups per run</label>
+              <input class="field" type="number" value="25">
+            </div>
+            <div class="help">Safety brake — if one pass ever matches more than this, it sends none and warns you.</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Automation</h2>
+          <div class="setrow" style="border:none;padding-top:0">
+            <div class="flagrow">
+              <span class="badge done">Enabled</span>
+              <span class="muted" style="font-size:12px">next run 11:00</span>
+            </div>
+            <div class="help">Checks every 2 hours for meetings ~24h away and sends reminders. Runs via Windows Task Scheduler whether or not this window is open.</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Reply handling &amp; auto-scheduling</h2>
+          <div class="setrow" style="padding-top:0">
+            <div>
+              <label class="lab">Anthropic API key</label>
+              <input class="field" type="password" value="sk-ant-xxxxxxxxxxxx">
+            </div>
+            <div class="help">Used to tell a “yes” from a “no” and pull a suggested time out of a reply. Stored in Windows Credential Manager.</div>
+          </div>
+          <div class="setrow">
+            <div class="flagrow"><span class="badge done">Enabled</span></div>
+            <div class="help">A scheduled task classifies new replies, checks your calendar and drafts an invite or a “here are some times” email onto the Replies page.</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Business details</h2>
+          <div class="setrow" style="padding-top:0">
+            <div><label class="lab">Sender name</label><input class="field" value="Alex Carter"></div>
+            <div class="help">Who the email is from — shows first in the recipient's inbox.</div>
+          </div>
+          <div class="setrow">
+            <div><label class="lab">Company</label><input class="field" value="Carter Freight Solutions"></div>
+            <div class="help">From-line preview: <strong>Alex Carter — Carter Freight Solutions &lt;alex@carterfreight.com&gt;</strong></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Email templates</h2>
+          <div style="margin-bottom:8px"><label class="lab">Cold intro — body</label></div>
+          <textarea class="field mono" rows="7">Hi &#123;&#123;name&#125;&#125;,
+
+&#123;&#123;sender_name&#125;&#125; here, with &#123;&#123;sender_company&#125;&#125;. &#123;&#123;sender_pitch&#125;&#125;
+
+I thought &#123;&#123;company&#125;&#125; might be worth connecting with — happy to
+share more if you're open to a short call this week.
+
+Best,
+&#123;&#123;sender_name&#125;&#125;</textarea>
+          <div style="margin:16px 0 8px"><label class="lab">Follow-up — body <span class="newpill">new</span></label></div>
+          <textarea class="field mono" rows="5">Hi &#123;&#123;name&#125;&#125;,
+
+Circling back on my note about &#123;&#123;company&#125;&#125;'s freight. Still happy
+to walk through it on a quick call if the timing is better now.
+
+Best, &#123;&#123;sender_name&#125;&#125;</textarea>
+        </div>
+
+        <button class="btn primary">Save settings</button>
+      </div>
+      </sc-if>
+
+    </div>
+  </div>
+</div>
+
+</x-dc>
+<script data-dc-script data-props='{"dark":{"editor":"boolean","default":false,"section":"Theme"}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { view: "dashboard" };
+  }
+  renderVals() {
+    const v = this.state.view;
+    const nav = (id) => "navitem" + (v === id ? " active" : "");
+    const titles = {
+      dashboard: "Dashboard",
+      leads: "Leads / CRM",
+      send: "Send",
+      replies: "Replies",
+      history: "Send history",
+      blocklist: "Blocklist",
+      settings: "Settings",
+    };
+    const dark = this.props.dark ?? false;
+    return {
+      theme: dark ? "dark" : "light",
+      themeLabel: dark ? "Light" : "Dark",
+      toggle_theme: () => this.forceUpdate(),
+      pageTitle: titles[v],
+      isDashboard: v === "dashboard",
+      isLeads: v === "leads",
+      isSend: v === "send",
+      isReplies: v === "replies",
+      isHistory: v === "history",
+      isBlocklist: v === "blocklist",
+      isSettings: v === "settings",
+      cd: nav("dashboard"), cl: nav("leads"), cs: nav("send"),
+      cr: nav("replies"), ch: nav("history"), cb: nav("blocklist"), cg: nav("settings"),
+      go_dashboard: () => this.setState({ view: "dashboard" }),
+      go_leads: () => this.setState({ view: "leads" }),
+      go_send: () => this.setState({ view: "send" }),
+      go_replies: () => this.setState({ view: "replies" }),
+      go_history: () => this.setState({ view: "history" }),
+      go_blocklist: () => this.setState({ view: "blocklist" }),
+      go_settings: () => this.setState({ view: "settings" }),
+      noop: () => {},
+    };
+  }
+}
+</script>
+</body>
+</html>

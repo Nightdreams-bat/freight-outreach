@@ -1,379 +1,332 @@
 {% extends "base.html" %}
 {% block title %}Settings{% endblock %}
+{% block content_class %}narrow{% endblock %}
+{% block topbar_actions %}
+  <a href="{{ url_for('diagnostics_page') }}" class="btn sm">Run diagnostics</a>
+{% endblock %}
 {% block content %}
 
-<div class="page-header">
-  <h1>Settings</h1>
-</div>
-
-<div class="content-card" style="max-width:960px" id="excel-file">
-  <h5 class="mb-3">Excel file</h5>
-  <div class="row align-items-center mb-1">
-    <div class="col-md-6">
-      <div class="d-flex align-items-center gap-2">
-        <code class="flex-grow-1 text-truncate">{{ cfg.excel_path }}</code>
-        <form method="post" action="{{ url_for('browse_excel') }}">
-          <button type="submit" class="btn btn-outline-dark btn-sm text-nowrap"><i class="bi bi-folder2-open"></i> Browse...</button>
-        </form>
-      </div>
+<div class="card" id="excel-file">
+  <h2>Excel file</h2>
+  <div class="setrow">
+    <div class="input-join">
+      <code style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ cfg.excel_path }}</code>
+      <form method="post" action="{{ url_for('browse_excel') }}" class="inline">
+        <button type="submit" class="btn sm">Browse…</button>
+      </form>
     </div>
-    <div class="col-md-6 text-muted small">
-      <strong>Excel file</strong> is the only place leads live - no database, nothing else to install or manage. Click Browse to point this at any <code>.xlsx</code> on this PC.
+    <div class="help">
+      Your Excel file is the only place leads live — no database, nothing else to install.
+      Point this at any <code>.xlsx</code> on this PC.
     </div>
   </div>
 </div>
 
-<div class="content-card" style="max-width:960px" id="lead-columns">
-  <h5 class="mb-2">Lead spreadsheet columns</h5>
-  <p class="text-muted small">
-    The app reads your file's headers and works out which column is the name, company, email and phone -
-    it handles things like <em>Surname</em>, <em>Organisation</em>, <em>E-mail Address</em>, or a split
-    first/last name. Only change these if it guessed wrong. A row with just an email still works: the
-    name and company are filled in from the address.
+<div class="card" id="lead-columns">
+  <h2>Lead spreadsheet columns</h2>
+  <p class="help" style="margin:0 0 12px">
+    The app reads your headers and works out which column is the name, company, email, phone and
+    (optionally) priority — it handles <em>Surname</em>, <em>Organisation</em>, <em>E-mail Address</em>,
+    a split first/last name, and so on. Only change these if it guessed wrong.
   </p>
-
   {% if not sheet_headers %}
-    <p class="text-warning small"><i class="bi bi-exclamation-triangle"></i>
-      Couldn't read any headers from that file yet. Point the Excel file above at your leads sheet, or
-      it'll be created with the standard columns on first send.</p>
+    <p class="help" style="color:var(--amber)">Couldn't read any headers from that file yet — it'll be created with the standard columns on first send.</p>
   {% endif %}
-
   <form method="post">
     {% for cv in column_view %}
-    <div class="row align-items-center mb-2">
-      <div class="col-md-3"><label class="form-label mb-0">{{ cv.logical }}</label></div>
-      <div class="col-md-4">
-        <select class="form-select form-select-sm" name="col_{{ cv.logical }}">
-          <option value="">
-            Auto{% if cv.auto is string %} (found "{{ cv.auto }}"){% elif cv.auto %} ({{ cv.auto|join(' + ') }}){% else %} (nothing found){% endif %}
-          </option>
-          {% for h in sheet_headers %}
-            <option value="{{ h }}" {{ "selected" if cv.configured == h }}>{{ h }}</option>
-          {% endfor %}
-          <option value="__none__" {{ "selected" if cv.configured == '__none__' }}>Not in my sheet</option>
-        </select>
-      </div>
-      <div class="col-md-5 text-muted small">
-        {% if cv.effective is string %}Using column <code>{{ cv.effective }}</code>.
+    <div class="setrow" style="grid-template-columns:120px 1fr 1fr;align-items:center">
+      <label class="lab" style="margin:0">{{ cv.logical }}</label>
+      <select class="field" name="col_{{ cv.logical }}">
+        <option value="">Auto{% if cv.auto is string %} (found "{{ cv.auto }}"){% elif cv.auto %} ({{ cv.auto|join(' + ') }}){% else %} (nothing found){% endif %}</option>
+        {% for h in sheet_headers %}
+          <option value="{{ h }}" {{ "selected" if cv.configured == h }}>{{ h }}</option>
+        {% endfor %}
+        <option value="__none__" {{ "selected" if cv.configured == '__none__' }}>Not in my sheet</option>
+      </select>
+      <div class="help">
+        {% if cv.effective is string %}Using <code>{{ cv.effective }}</code>.
         {% elif cv.effective %}Joining <code>{{ cv.effective|join('</code> + <code>')|safe }}</code>.
-        {% else %}<em>Not mapped.</em>{% if cv.logical in ('Name', 'Company') %} Filled from the email address where possible.{% endif %}
+        {% else %}<em>Not mapped.</em>{% if cv.logical in ('Name', 'Company') %} Filled from the email address.{% endif %}
         {% endif %}
       </div>
     </div>
     {% endfor %}
-    <button type="submit" class="btn btn-outline-dark btn-sm mt-2">Save column mapping</button>
+    <button type="submit" class="btn sm" style="margin-top:12px">Save column mapping</button>
   </form>
 </div>
 
-<div class="content-card" style="max-width:960px">
-  <h5 class="mb-3">Gmail account</h5>
-  <div class="row align-items-center mb-1">
-    <div class="col-md-6">
+<div class="card">
+  <h2>Gmail account</h2>
+  <div class="setrow">
+    <div>
       {% if cfg.gmail_address %}
-        <p class="mb-2">Connected as <strong>{{ cfg.gmail_address }}</strong></p>
+        <p style="margin:0 0 8px">Connected as <strong>{{ cfg.gmail_address }}</strong></p>
       {% else %}
-        <p class="mb-2 text-muted">Not connected yet</p>
+        <p class="muted" style="margin:0 0 8px">Not connected yet</p>
       {% endif %}
-      <form method="post" action="{{ url_for('connect_gmail') }}">
-        <button type="submit" class="btn btn-outline-dark btn-sm">
-          <i class="bi bi-google"></i> {{ "Reconnect" if cfg.gmail_address else "Connect Gmail" }}
-        </button>
+      <form method="post" action="{{ url_for('connect_gmail') }}" class="inline">
+        <button type="submit" class="btn sm">{{ "Reconnect Gmail" if cfg.gmail_address else "Connect Gmail" }}</button>
       </form>
     </div>
-    <div class="col-md-6 text-muted small">
-      Opens the real Google sign-in screen in your browser - log in, click Allow, done.
-      <strong>Nothing is typed here</strong>: no password ever touches this app or this file.
-      Sign in once; it stays connected until you disconnect it.
+    <div class="help">
+      Opens the real Google sign-in screen in your browser — log in, click Allow, done.
+      <strong>Nothing is typed here</strong>: no password ever touches this app.
     </div>
   </div>
 </div>
 
-<div class="content-card" style="max-width:960px">
-  <h5 class="mb-3">Automation</h5>
-  <div class="row align-items-start mb-1">
-    <div class="col-md-6">
+<div class="card" id="followup-drip">
+  <div class="card-head"><h2>Follow-up drip</h2><span class="newpill">new</span></div>
+  <form method="post">
+    <input type="hidden" name="followup_settings" value="1">
+    <div class="setrow">
+      <label class="flagrow" style="cursor:pointer">
+        <input type="checkbox" name="followup_enabled" {{ "checked" if followup_enabled }}>
+        <span style="font-weight:600">Send spaced follow-ups to cold leads</span>
+      </label>
+      <div class="help">
+        After a cold intro, sends up to a few nudges on the schedule below — unless the lead
+        replies or a meeting gets booked, which <strong>stops the sequence immediately</strong>.
+      </div>
+    </div>
+    <div class="setrow">
+      <div>
+        <label class="lab">Cadence — days after the cold intro</label>
+        <input class="field" name="followup_offsets_days" value="{{ cfg.followup_offsets_days|join(', ') }}">
+      </div>
+      <div class="help">Comma-separated. Each number is one nudge; the last one uses the breakup template. Respects the daily send cap, blocklist and suppression like every other send.</div>
+    </div>
+    <div class="setrow">
+      <div>
+        <label class="lab">Max follow-ups per run</label>
+        <input class="field" type="number" min="1" name="max_followups_per_run" value="{{ cfg.max_followups_per_run }}">
+      </div>
+      <div class="help">Safety brake — if one pass ever matches more than this, it sends none and warns you.</div>
+    </div>
+    <button type="submit" class="btn primary sm">Save follow-up settings</button>
+  </form>
+</div>
+
+<div class="card">
+  <h2>Automation</h2>
+  <div class="setrow">
+    <div>
       {% if task and task.registered %}
-        <p><span class="badge text-bg-success badge-status mb-2">Enabled</span></p>
-        <p class="text-muted small">Status: {{ task.status }} &middot; Next run: {{ task.next_run }}</p>
-        <form method="post" action="{{ url_for('automation_disable') }}"
-              onsubmit="return confirm('Turn off automatic reminders?');">
-          <button type="submit" class="btn btn-outline-danger btn-sm">Disable</button>
+        <p style="margin:0 0 6px"><span class="badge done">Enabled</span></p>
+        <p class="help" style="margin:0 0 8px">Status: {{ task.status }} · Next run: {{ task.next_run }}</p>
+        <form method="post" action="{{ url_for('automation_disable') }}" class="inline" data-confirm="Turn off automatic reminders?">
+          <button type="submit" class="btn sm danger">Disable</button>
         </form>
       {% else %}
-        <p><span class="badge text-bg-secondary badge-status mb-2">Not enabled</span></p>
-        <form method="post" action="{{ url_for('automation_enable') }}">
-          <button type="submit" class="btn btn-outline-success btn-sm">Enable automatic reminders</button>
+        <p style="margin:0 0 8px"><span class="badge off">Not enabled</span></p>
+        <form method="post" action="{{ url_for('automation_enable') }}" class="inline">
+          <button type="submit" class="btn sm">Enable automatic reminders</button>
         </form>
       {% endif %}
     </div>
-    <div class="col-md-6 text-muted small">
-      When <strong>enabled</strong>, this checks every {{ cfg.reminder_interval_hours }} hour(s) for any lead
-      whose meeting is about 24 hours away and emails them a reminder automatically - it doesn't matter
-      whether that meeting was booked yesterday or a month from now, it fires on its own the day before,
-      with no manual step. Runs via Windows Task Scheduler, independent of this dashboard being open.
+    <div class="help">
+      When enabled, an hourly Windows task checks for meetings ~24h away and sends reminders —
+      and, if the follow-up drip is on, sends any due nudges too. Runs whether or not this window is open.
     </div>
   </div>
 </div>
 
-<div class="content-card" style="max-width:960px" id="reply-handling">
-  <h5 class="mb-3">Reply handling &amp; auto-scheduling</h5>
-
-  <div class="row align-items-start mb-3">
-    <div class="col-md-6">
-      <p class="mb-1">
-        Anthropic API key:
-        <strong>{{ "configured" if anthropic_key_set else "not set" }}</strong>
-      </p>
-      <input class="form-control form-control-sm" type="password" name="anthropic_api_key"
-             placeholder="sk-ant-..." autocomplete="off" form="settings-form">
-      <div class="form-text">Paste a key and click <em>Save Settings</em> below. Stored in Windows Credential Manager, never shown again.</div>
+<div class="card" id="reply-handling">
+  <h2>Reply handling &amp; auto-scheduling</h2>
+  <div class="setrow">
+    <div>
+      <label class="lab">Anthropic API key: <span class="muted">{{ "configured" if anthropic_key_set else "not set" }}</span></label>
+      <input class="field" type="password" name="anthropic_api_key" placeholder="sk-ant-…" autocomplete="off" form="settings-form">
+      <div class="form-hint">Paste a key and click <em>Save settings</em> below. Stored in Windows Credential Manager, never shown again. Needs a paid key from console.anthropic.com — a Claude subscription won't work.</div>
     </div>
-    <div class="col-md-6 text-muted small">
-      Reading replies uses Claude to tell a "yes" from a "no" and pull out any time the lead suggests.
-      Without a key, reply checking stays off.
-    </div>
+    <div class="help">Reading replies uses Claude to tell a "yes" from a "no" and pull out any time the lead suggests. Without a key, reply checking stays off.</div>
   </div>
-
-  <div class="row align-items-start">
-    <div class="col-md-6">
+  <div class="setrow">
+    <div>
       {% if reply_task and reply_task.registered %}
-        <p><span class="badge text-bg-success badge-status mb-2">Enabled</span></p>
-        <p class="text-muted small">Status: {{ reply_task.status }} &middot; Next run: {{ reply_task.next_run }}</p>
-        <form method="post" action="{{ url_for('replies_disable') }}">
-          <button type="submit" class="btn btn-outline-danger btn-sm">Disable</button>
+        <p style="margin:0 0 6px"><span class="badge done">Enabled</span></p>
+        <p class="help" style="margin:0 0 8px">Status: {{ reply_task.status }} · Next run: {{ reply_task.next_run }}</p>
+        <form method="post" action="{{ url_for('replies_disable') }}" class="inline">
+          <button type="submit" class="btn sm danger">Disable</button>
         </form>
       {% else %}
-        <p><span class="badge text-bg-secondary badge-status mb-2">Not enabled</span></p>
-        <form method="post" action="{{ url_for('replies_enable') }}">
-          <button type="submit" class="btn btn-outline-success btn-sm"
-                  {{ "disabled" if not anthropic_key_set }}>Enable automatic reply checking</button>
+        <p style="margin:0 0 8px"><span class="badge off">Not enabled</span></p>
+        <form method="post" action="{{ url_for('replies_enable') }}" class="inline">
+          <button type="submit" class="btn sm" {{ "disabled" if not anthropic_key_set }}>Enable automatic reply checking</button>
         </form>
       {% endif %}
     </div>
-    <div class="col-md-6 text-muted small">
-      When <strong>enabled</strong>, a scheduled task checks the inbox every {{ cfg.reminder_interval_hours }} hour(s),
-      classifies each new reply, checks your Google Calendar for conflicts, and drafts a calendar invite or a
-      "here are some times" email. Everything lands on the <strong>Replies</strong> page for you to approve -
-      nothing is sent or booked automatically.
+    <div class="help">
+      When enabled, a scheduled task checks the inbox every {{ cfg.reminder_interval_hours }} hour(s),
+      classifies each new reply, checks your Google Calendar, and drafts an invite or a "here are some times"
+      email onto the <strong>Replies</strong> page for you to approve — nothing is sent or booked automatically.
     </div>
   </div>
 </div>
 
 <form method="post" id="settings-form">
-<div class="content-card" style="max-width:960px">
-  <h5 class="mb-3">Business details</h5>
 
-  <div class="row mb-3">
-    <div class="col-md-6">
-      <input class="form-control" name="sender_name" placeholder="Sender name" value="{{ cfg.sender_name or '' }}">
-    </div>
-    <div class="col-md-6 text-muted small pt-2">
-      <strong>Sender name</strong> is who the email is from - shows first in the recipient's inbox.
-    </div>
+<div class="card">
+  <h2>Business details</h2>
+  <div class="setrow">
+    <div><label class="lab">Sender name</label>
+      <input class="field" name="sender_name" value="{{ cfg.sender_name or '' }}"></div>
+    <div class="help">Who the email is from — shows first in the recipient's inbox.</div>
   </div>
-
-  <div class="row mb-3">
-    <div class="col-md-6">
-      <input class="form-control" name="sender_company" placeholder="Company" value="{{ cfg.sender_company or '' }}">
-    </div>
-    <div class="col-md-6 text-muted small pt-2">
-      <strong>Company</strong> is appended to the From line right after your name (e.g. "Alex Carter - Carter Freight Solutions"), so recipients see the business, not just a bare Gmail address.
-    </div>
+  <div class="setrow">
+    <div><label class="lab">Company</label>
+      <input class="field" name="sender_company" value="{{ cfg.sender_company or '' }}"></div>
+    <div class="help">Appended to the From line after your name, so recipients see the business, not a bare Gmail address.</div>
   </div>
-
-  <div class="row mb-3">
-    <div class="col-md-6">
-      <input class="form-control" name="sender_phone" placeholder="Phone (optional)" value="{{ cfg.sender_phone or '' }}">
-    </div>
-    <div class="col-md-6 text-muted small pt-2">
-      <strong>Phone</strong> is entirely optional - leave it blank and it's skipped cleanly everywhere, no empty line left behind in the signature.
-    </div>
+  <div class="setrow">
+    <div><label class="lab">Phone <span class="muted">(optional)</span></label>
+      <input class="field" name="sender_phone" value="{{ cfg.sender_phone or '' }}"></div>
+    <div class="help">Leave blank and it's skipped cleanly everywhere — no empty line in the signature.</div>
   </div>
-
-  <div class="row mb-1">
-    <div class="col-md-6">
-      <textarea class="form-control" name="sender_pitch" rows="2" placeholder="One-line pitch">{{ cfg.sender_pitch or '' }}</textarea>
-    </div>
-    <div class="col-md-6 text-muted small pt-2">
-      <strong>Pitch</strong> is a short description of what you do - available as a variable in the templates below, not required to use it there.
-    </div>
+  <div class="setrow">
+    <div><label class="lab">One-line pitch</label>
+      <textarea class="field" name="sender_pitch" rows="2">{{ cfg.sender_pitch or '' }}</textarea></div>
+    <div class="help">A short description of what you do — available as a template variable.</div>
   </div>
+  <div class="setrow">
+    <div class="help">From-line preview: <strong id="fromPreview">—</strong></div>
+    <div></div>
+  </div>
+</div>
 
-  <div class="row mt-3">
-    <div class="col-md-6 text-muted small">
-      From line preview: <strong id="fromPreview">-</strong>
+<div class="card">
+  <h2>Lead priority</h2>
+  <div class="setrow">
+    <div>
+      <label class="lab">Priority keywords</label>
+      <input class="field" name="scoring_keywords" value="{{ cfg.scoring_keywords|join(', ') }}">
+    </div>
+    <div class="help">
+      Comma-separated. A lead whose <code>Notes</code> contain any of these scores higher and sends first
+      when the daily cap trims the queue. A number in a <code>Priority</code> column in your sheet always wins.
     </div>
   </div>
 </div>
 
-<div class="content-card" style="max-width:960px">
-  <h5 class="mb-2">Email templates</h5>
-  <p class="text-muted small">
-    This is the actual email - written by you, in full. <strong>Every</strong> "Send Now" click uses exactly
-    this text, merging in each lead's own details. Variables: <code>{{ '{{ name }}' }}</code>, <code>{{ '{{ company }}' }}</code>,
+<div class="card">
+  <h2>Email templates</h2>
+  <p class="help" style="margin:0 0 6px">
+    Written by you, in full. Variables: <code>{{ '{{ name }}' }}</code>, <code>{{ '{{ company }}' }}</code>,
     <code>{{ '{{ phone }}' }}</code>, <code>{{ '{{ sender_name }}' }}</code>, <code>{{ '{{ sender_company }}' }}</code>,
     <code>{{ '{{ sender_phone }}' }}</code>, <code>{{ '{{ sender_pitch }}' }}</code>
-    (reminders also get <code>{{ '{{ meeting_time }}' }}</code>). Wrap a line in
-    <code>{% raw %}{% if phone %}...{% endif %}{% endraw %}</code> and it's <strong>skipped entirely</strong> when that lead's field is empty - no blank line left behind.
+    (reminders also get <code>{{ '{{ meeting_time }}' }}</code>; follow-ups also get <code>{{ '{{ stage }}' }}</code>).
+    Wrap a line in <code>{% raw %}{% if phone %}…{% endif %}{% endraw %}</code> to skip it when a field is empty.
   </p>
 
-  <h6 class="mt-4">Cold intro</h6>
-  <div class="row mb-2">
-    <div class="col-md-6">
-      <input class="form-control" name="cold_subject_template" placeholder="Subject" value="{{ cfg.cold_subject_template or '' }}">
-    </div>
-    <div class="col-md-6 text-muted small pt-2">Subject line for the first-contact email to a new lead.</div>
+  <h3 class="section">Cold intro</h3>
+  <div class="setrow">
+    <div><label class="lab">Subject</label>
+      <input class="field" name="cold_subject_template" value="{{ cfg.cold_subject_template or '' }}"></div>
+    <div class="help">Subject for the first-contact email to a new lead.</div>
   </div>
-  <div class="row mb-3">
-    <div class="col-md-6">
-      <textarea class="form-control" name="cold_body_template" rows="10" style="font-family:monospace">{{ cfg.cold_body_template or '' }}</textarea>
-    </div>
-    <div class="col-md-6 text-muted small pt-2">The full message body sent to every lead on "Send Now" (Send page).</div>
+  <div class="setrow">
+    <div><textarea class="field mono" name="cold_body_template" rows="9">{{ cfg.cold_body_template or '' }}</textarea></div>
+    <div class="help">The full first-contact message body.</div>
   </div>
 
-  <h6 class="mt-4">Reminder</h6>
-  <div class="row mb-2">
-    <div class="col-md-6">
-      <input class="form-control" name="reminder_subject_template" placeholder="Subject" value="{{ cfg.reminder_subject_template or '' }}">
-    </div>
-    <div class="col-md-6 text-muted small pt-2">Subject line for the automatic 24h-before-meeting reminder.</div>
+  <h3 class="section">Follow-up <span class="newpill">new</span></h3>
+  <div class="setrow">
+    <div><label class="lab">Subject</label>
+      <input class="field" name="followup_subject_template" value="{{ cfg.followup_subject_template or '' }}"></div>
+    <div class="help">Subject for every follow-up nudge.</div>
   </div>
-  <div class="row mb-3">
-    <div class="col-md-6">
-      <textarea class="form-control" name="reminder_body_template" rows="10" style="font-family:monospace">{{ cfg.reminder_body_template or '' }}</textarea>
-    </div>
-    <div class="col-md-6 text-muted small pt-2">The full reminder message - sent automatically by the automation above, or on demand from the Send page.</div>
+  <div class="setrow">
+    <div><label class="lab">Nudge body</label>
+      <textarea class="field mono" name="followup_body_template" rows="8">{{ cfg.followup_body_template or '' }}</textarea></div>
+    <div class="help">Used for every follow-up except the last.</div>
   </div>
-
-  <h6 class="mt-4">Scheduling replies</h6>
-  <p class="text-muted small">
-    Used only when reply handling is on. Extra variables: <code>{{ '{{ meeting_time }}' }}</code> (confirm),
-    <code>{{ '{{ slots }}' }}</code> (a list, in "Propose times").
-  </p>
-
-  <div class="row mb-2">
-    <div class="col-md-6">
-      <input class="form-control" name="meeting_confirm_subject_template" placeholder="Subject" value="{{ cfg.meeting_confirm_subject_template or '' }}">
-    </div>
-    <div class="col-md-6 text-muted small pt-2">Subject of the confirmation sent when you approve a booking.</div>
-  </div>
-  <div class="row mb-3">
-    <div class="col-md-6">
-      <textarea class="form-control" name="meeting_confirm_body_template" rows="8" style="font-family:monospace">{{ cfg.meeting_confirm_body_template or '' }}</textarea>
-    </div>
-    <div class="col-md-6 text-muted small pt-2">Goes out alongside the calendar invite.</div>
+  <div class="setrow">
+    <div><label class="lab">Breakup body</label>
+      <textarea class="field mono" name="followup_breakup_body_template" rows="6">{{ cfg.followup_breakup_body_template or '' }}</textarea></div>
+    <div class="help">The final touch — a polite "I'll stop here".</div>
   </div>
 
-  <div class="row mb-2">
-    <div class="col-md-6">
-      <input class="form-control" name="propose_times_subject_template" placeholder="Subject" value="{{ cfg.propose_times_subject_template or '' }}">
-    </div>
-    <div class="col-md-6 text-muted small pt-2">Subject when offering the lead a few open slots.</div>
+  <h3 class="section">Reminder</h3>
+  <div class="setrow">
+    <div><label class="lab">Subject</label>
+      <input class="field" name="reminder_subject_template" value="{{ cfg.reminder_subject_template or '' }}"></div>
+    <div class="help">Subject for the automatic 24h-before-meeting reminder.</div>
   </div>
-  <div class="row mb-3">
-    <div class="col-md-6">
-      <textarea class="form-control" name="propose_times_body_template" rows="8" style="font-family:monospace">{{ cfg.propose_times_body_template or '' }}</textarea>
-    </div>
-    <div class="col-md-6 text-muted small pt-2">Sent when the lead said yes but gave no time, or their time was taken.</div>
+  <div class="setrow">
+    <div><textarea class="field mono" name="reminder_body_template" rows="8">{{ cfg.reminder_body_template or '' }}</textarea></div>
+    <div class="help">Sent automatically the day before a meeting, or on demand from Send.</div>
   </div>
 
-  <div class="row mb-2">
-    <div class="col-md-6">
-      <input class="form-control" name="decline_ack_subject_template" placeholder="Subject" value="{{ cfg.decline_ack_subject_template or '' }}">
-    </div>
-    <div class="col-md-6 text-muted small pt-2">Subject of the short acknowledgement when a lead says no.</div>
+  <h3 class="section">Scheduling replies</h3>
+  <p class="help" style="margin:0 0 6px">Used only when reply handling is on. Extra vars: <code>{{ '{{ meeting_time }}' }}</code> (confirm), <code>{{ '{{ slots }}' }}</code> (a list, in "Propose times").</p>
+  <div class="setrow">
+    <div><label class="lab">Confirm — subject</label>
+      <input class="field" name="meeting_confirm_subject_template" value="{{ cfg.meeting_confirm_subject_template or '' }}"></div>
+    <div class="help">Subject of the confirmation sent when you approve a booking.</div>
   </div>
-  <div class="row mb-3">
-    <div class="col-md-6">
-      <textarea class="form-control" name="decline_ack_body_template" rows="6" style="font-family:monospace">{{ cfg.decline_ack_body_template or '' }}</textarea>
-    </div>
-    <div class="col-md-6 text-muted small pt-2">Only sent if you approve it on the Replies page.</div>
+  <div class="setrow">
+    <div><textarea class="field mono" name="meeting_confirm_body_template" rows="7">{{ cfg.meeting_confirm_body_template or '' }}</textarea></div>
+    <div class="help">Goes out alongside the calendar invite.</div>
+  </div>
+  <div class="setrow">
+    <div><label class="lab">Propose times — subject</label>
+      <input class="field" name="propose_times_subject_template" value="{{ cfg.propose_times_subject_template or '' }}"></div>
+    <div class="help">Subject when offering the lead a few open slots.</div>
+  </div>
+  <div class="setrow">
+    <div><textarea class="field mono" name="propose_times_body_template" rows="7">{{ cfg.propose_times_body_template or '' }}</textarea></div>
+    <div class="help">Sent when the lead said yes but gave no time, or their time was taken.</div>
+  </div>
+  <div class="setrow">
+    <div><label class="lab">Decline ack — subject</label>
+      <input class="field" name="decline_ack_subject_template" value="{{ cfg.decline_ack_subject_template or '' }}"></div>
+    <div class="help">Subject of the short acknowledgement when a lead says no.</div>
+  </div>
+  <div class="setrow">
+    <div><textarea class="field mono" name="decline_ack_body_template" rows="6">{{ cfg.decline_ack_body_template or '' }}</textarea></div>
+    <div class="help">Only sent if you approve it on the Replies page.</div>
   </div>
 </div>
 
-<div class="content-card" style="max-width:960px">
-  <h5 class="mb-3">Sending limits</h5>
-
-  <div class="row mb-3">
-    <div class="col-md-6">
-      <input class="form-control" type="number" min="1" name="reminder_interval_hours" placeholder="Reminder check interval (hours)" value="{{ cfg.reminder_interval_hours }}">
-    </div>
-    <div class="col-md-6 text-muted small pt-2">
-      <strong>Reminder check interval</strong> - how often the automation wakes up and looks for meetings ~24h away.
-    </div>
+<div class="card">
+  <h2>Sending limits</h2>
+  {% for f in [
+      ("reminder_interval_hours", "Reminder check interval (hours)", "How often the automation wakes up and looks for meetings ~24h away."),
+      ("reminder_window_hours", "Reminder window (hours)", "How wide the \"~24h\" net is. Kept equal to the interval so consecutive checks overlap."),
+      ("max_reminders_per_run", "Max reminders per run", "Safety brake — if one scan matches more than this, it sends none and warns you."),
+      ("daily_send_cap", "Daily send cap", "Total cold + follow-up + reminder emails per day. Keeps the account under Gmail's own limit."),
+      ("meeting_duration_minutes", "Meeting length (minutes)", "How long a booked call is, and the size of proposed slots."),
+      ("min_notice_hours", "Minimum notice (hours)", "Never propose or accept a slot sooner than this many hours from now."),
+      ("scheduling_window_days", "Scheduling window (days)", "How far ahead to look for open slots when proposing times."),
+  ] %}
+  <div class="setrow">
+    <div><label class="lab">{{ f[1] }}</label>
+      <input class="field" type="number" min="1" name="{{ f[0] }}" value="{{ cfg[f[0]] if cfg[f[0]] is not none else '' }}"></div>
+    <div class="help">{{ f[2] }}</div>
   </div>
-
-  <div class="row mb-3">
-    <div class="col-md-6">
-      <input class="form-control" type="number" min="1" name="reminder_window_hours" placeholder="Reminder window (hours)" value="{{ cfg.reminder_window_hours }}">
-    </div>
-    <div class="col-md-6 text-muted small pt-2">
-      <strong>Reminder window</strong> - how wide that "~24h" net is. Kept equal to the interval so two consecutive checks always overlap and nobody falls through the gap between them.
-    </div>
-  </div>
-
-  <div class="row mb-3">
-    <div class="col-md-6">
-      <input class="form-control" type="number" min="1" name="max_reminders_per_run" placeholder="Max reminders per run" value="{{ cfg.max_reminders_per_run }}">
-    </div>
-    <div class="col-md-6 text-muted small pt-2">
-      <strong>Max reminders per run</strong> - a safety brake. If one scan ever matches more than this, it sends none and warns you instead, in case of a data mistake (e.g. many rows sharing one date).
-    </div>
-  </div>
-
-  <div class="row mb-3">
-    <div class="col-md-6">
-      <input class="form-control" type="number" min="1" name="daily_send_cap" placeholder="Daily send cap" value="{{ cfg.daily_send_cap }}">
-    </div>
-    <div class="col-md-6 text-muted small pt-2">
-      <strong>Daily send cap</strong> - total cold + reminder emails allowed per day, combined. Keeps the account well under Gmail's own daily limit so it doesn't get flagged as spam.
-    </div>
-  </div>
-
-  <div class="row mb-3">
-    <div class="col-md-6">
-      <input class="form-control" type="number" min="5" name="meeting_duration_minutes" placeholder="Meeting length (minutes)" value="{{ cfg.meeting_duration_minutes or 30 }}">
-    </div>
-    <div class="col-md-6 text-muted small pt-2">
-      <strong>Meeting length</strong> - how long a booked call is, and the size of the slots offered when proposing times.
-    </div>
-  </div>
-
-  <div class="row mb-3">
-    <div class="col-md-6">
-      <input class="form-control" type="number" min="1" name="min_notice_hours" placeholder="Minimum notice (hours)" value="{{ cfg.min_notice_hours or 24 }}">
-    </div>
-    <div class="col-md-6 text-muted small pt-2">
-      <strong>Minimum notice</strong> - never propose or accept a slot sooner than this many hours from now.
-    </div>
-  </div>
-
-  <div class="row mb-3">
-    <div class="col-md-6">
-      <input class="form-control" type="number" min="1" name="scheduling_window_days" placeholder="Scheduling window (days)" value="{{ cfg.scheduling_window_days or 10 }}">
-    </div>
-    <div class="col-md-6 text-muted small pt-2">
-      <strong>Scheduling window</strong> - how far ahead to look for open slots when proposing times.
-    </div>
-  </div>
-
-  <button type="submit" class="btn btn-primary">Save Settings</button>
+  {% endfor %}
+  <button type="submit" class="btn primary">Save settings</button>
 </div>
 </form>
 
+{% endblock %}
+
+{% block scripts %}
 <script>
-  function updateFromPreview() {
-    const name = document.querySelector('input[name="sender_name"]').value.trim();
-    const company = document.querySelector('input[name="sender_company"]').value.trim();
-    const email = {{ (cfg.gmail_address or "you@example.com") | tojson }};
-    let display = name;
+(function () {
+  var nameEl = document.querySelector('input[name="sender_name"]');
+  var companyEl = document.querySelector('input[name="sender_company"]');
+  var out = document.getElementById('fromPreview');
+  var email = {{ (cfg.gmail_address or "you@example.com") | tojson }};
+  function update() {
+    var name = nameEl.value.trim(), company = companyEl.value.trim(), display = name;
     if (name && company) display = name + " - " + company;
     else if (!name && company) display = company;
-    document.getElementById('fromPreview').textContent = (display ? display + " " : "") + "<" + email + ">";
+    out.textContent = (display ? display + " " : "") + "<" + email + ">";
   }
-  document.querySelector('input[name="sender_name"]').addEventListener('input', updateFromPreview);
-  document.querySelector('input[name="sender_company"]').addEventListener('input', updateFromPreview);
-  updateFromPreview();
+  nameEl.addEventListener('input', update);
+  companyEl.addEventListener('input', update);
+  update();
+})();
 </script>
-
 {% endblock %}

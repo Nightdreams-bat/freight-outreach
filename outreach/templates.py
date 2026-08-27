@@ -6,6 +6,7 @@ import jinja2
 #
 # Available variables:
 #   Cold intro:      name, company, phone, sender_name, sender_company, sender_phone, sender_pitch
+#   Follow-up:       name, company, phone, sender_name, sender_company, sender_phone, sender_pitch, stage, is_last
 #   Reminder:        name, company, phone, sender_name, sender_company, sender_phone, meeting_time
 #   Meeting confirm: name, company, sender_name, sender_company, sender_phone, meeting_time
 #   Propose times:   name, company, sender_name, sender_company, sender_phone, slots (list of strings)
@@ -26,6 +27,33 @@ Best,
 {{ sender_company }}
 {% if sender_phone %}{{ sender_phone }}{% endif %}
 """
+
+FOLLOWUP_SUBJECT = "Following up - {{ company }} freight"
+
+FOLLOWUP_BODY = """Hi {{ name }},
+
+Circling back on my earlier note about {{ company }}'s freight. I know inboxes get busy, so no pressure - just wanted to make sure it didn't slip through.
+
+If a short call would be useful, I'm happy to work around your schedule. And if it's not the right time, let me know and I'll stop here.
+
+Best,
+{{ sender_name }}
+{{ sender_company }}
+{% if sender_phone %}{{ sender_phone }}{% endif %}
+"""
+
+FOLLOWUP_BREAKUP_BODY = """Hi {{ name }},
+
+I've reached out a couple of times about {{ company }}'s freight without hearing back, so I'll leave it here and won't keep filling your inbox.
+
+If things change down the line, you're always welcome to reach out - I'd be glad to help.
+
+Best,
+{{ sender_name }}
+{{ sender_company }}
+{% if sender_phone %}{{ sender_phone }}{% endif %}
+"""
+
 
 REMINDER_SUBJECT = "Our call {{ meeting_time }}"
 

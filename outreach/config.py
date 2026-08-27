@@ -6,6 +6,9 @@ from outreach.templates import (
     COLD_INTRO_SUBJECT,
     DECLINE_ACK_BODY,
     DECLINE_ACK_SUBJECT,
+    FOLLOWUP_BODY,
+    FOLLOWUP_BREAKUP_BODY,
+    FOLLOWUP_SUBJECT,
     MEETING_CONFIRM_BODY,
     MEETING_CONFIRM_SUBJECT,
     PROPOSE_TIMES_BODY,
@@ -28,6 +31,16 @@ DEFAULTS = {
     "min_notice_hours": 24,
     "calendar_id": "primary",
     "reply_lookback_days": 30,
+    # Multi-touch follow-up drip (outreach/send_followups.py). Off until the
+    # client turns it on in Settings.
+    "followup_enabled": False,
+    "followup_offsets_days": [3, 7, 14],  # days after the cold intro for touch 1, 2, 3...
+    "max_followups_per_run": 25,
+    # Rules-based lead priority (outreach/scoring.py) - used to order the send
+    # queue when the daily cap trims it. A numeric "Priority" cell in the sheet
+    # always wins; otherwise this is the fallback score.
+    "scoring_rules": {"has_company": 2, "has_phone": 1, "keyword_hit": 3},
+    "scoring_keywords": ["urgent", "asap", "quote", "rfp", "rfq", "lane", "dedicated", "contract"],
 }
 
 
@@ -52,6 +65,9 @@ def default_config():
         "disallowed_emails": [],
         "cold_subject_template": COLD_INTRO_SUBJECT,
         "cold_body_template": COLD_INTRO_BODY,
+        "followup_subject_template": FOLLOWUP_SUBJECT,
+        "followup_body_template": FOLLOWUP_BODY,
+        "followup_breakup_body_template": FOLLOWUP_BREAKUP_BODY,
         "reminder_subject_template": REMINDER_SUBJECT,
         "reminder_body_template": REMINDER_BODY,
         "meeting_confirm_subject_template": MEETING_CONFIRM_SUBJECT,

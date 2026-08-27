@@ -5,7 +5,8 @@ frozen build.
     configured on the dashboard's Settings page; there is no setup wizard.
   * Explicit flags:
         --cold        send the cold-intro batch now (headless)
-        --reminders   run the reminder scan now (headless; used by the scheduled task)
+        --followup    send due follow-up nudges now (headless; opt-in via config)
+        --reminders   run the reminder + follow-up scan now (headless; scheduled task)
         --replies     scan for lead replies and draft actions (headless; scheduled task)
         --selfcheck   verify a freshly built .exe has everything it needs
 """
@@ -28,7 +29,7 @@ def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
 
     # Downstream mains parse their own args with argparse; hide our dispatch flags from them.
-    dispatch_flags = {"--cold", "--reminders", "--replies", "--selfcheck"}
+    dispatch_flags = {"--cold", "--followup", "--reminders", "--replies", "--selfcheck"}
     sys.argv = [sys.argv[0]] + [a for a in argv if a not in dispatch_flags]
 
     if "--selfcheck" in argv:
@@ -39,9 +40,18 @@ def main(argv=None):
         run()
         _pause_if_frozen()
         return
-    elif "--reminders" in argv:
-        from outreach.send_reminders import main as run
+    elif "--followup" in argv:
+        from outreach.send_followups import main as run
         run()
+        _pause_if_frozen()
+        return
+    elif "--reminders" in argv:
+        # The hourly scheduled task runs both scans - reminders first, then any
+        # due follow-up nudges (which self-gate on followup_enabled).
+        from outreach.send_reminders import main as run_reminders
+        from outreach.send_followups import main as run_followups
+        run_reminders()
+        run_followups()
         return  # scheduled task: no one is watching, don't pause
     elif "--replies" in argv:
         from outreach.process_replies import main as run
@@ -105,13 +115,24 @@ def _selfcheck():
         from outreach import templates as _t
         from outreach.templates import render as _render
         _dummy = dict(name="A", company="B", sender_name="C", sender_company="D",
-                      sender_phone="", meeting_time="Mon", slots=["Mon 9am", "Tue 2pm"])
-        for tname in ("MEETING_CONFIRM_BODY", "PROPOSE_TIMES_BODY", "DECLINE_ACK_BODY"):
+                      sender_phone="", meeting_time="Mon", slots=["Mon 9am", "Tue 2pm"],
+                      stage=1, is_last=False, phone="", sender_pitch="")
+        for tname in ("MEETING_CONFIRM_BODY", "PROPOSE_TIMES_BODY", "DECLINE_ACK_BODY",
+                      "FOLLOWUP_BODY", "FOLLOWUP_BREAKUP_BODY"):
             _render(getattr(_t, tname), **_dummy)
-        print("scheduling templates render: OK")
+        print("scheduling + follow-up templates render: OK")
     except Exception as e:
         ok = False
-        print(f"scheduling templates render: FAILED - {e}")
+        print(f"scheduling + follow-up templates render: FAILED - {e}")
+
+    try:
+        from outreach.config import load_config
+        from outreach.diagnostics import run_checks
+        print("\nConnection checks:")
+        for c in run_checks(load_config()):
+            print(f"  [{c['status'].upper():>4}] {c['name']} - {c['detail']}")
+    except Exception as e:
+        print(f"  connection checks skipped - {e}")
 
     print("\nSELF-CHECK", "PASSED" if ok else "FAILED")
     raise SystemExit(0 if ok else 1)

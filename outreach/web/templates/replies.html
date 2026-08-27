@@ -2,79 +2,74 @@
 {% block title %}Replies{% endblock %}
 {% block content %}
 
-<div class="page-header">
-  <h1>Replies</h1>
-  <div class="text-muted">Drafted from lead replies. Nothing is sent or booked until you approve it.</div>
-</div>
+<p class="subtitle">Drafted from lead replies. Nothing is sent or booked until you approve it.</p>
 
 {% if not items %}
-<div class="content-card">
-  <p class="text-center text-muted py-4 mb-0">
-    Nothing waiting. Replies are picked up automatically when reply-checking is enabled
-    (Settings &rarr; Automatic reply checking), or run a scan on demand.
+<div class="card">
+  <p class="empty" style="margin:0">
+    Nothing waiting. Replies are picked up when reply-checking is enabled
+    (Settings → Reply handling), or run a scan on demand from the dashboard.
   </p>
 </div>
 {% endif %}
 
 {% for item in items %}
 {% set a = item.action %}
-<div class="content-card">
-  <div class="d-flex justify-content-between align-items-start mb-2">
+<div class="reply-card">
+  <div class="reply-top">
     <div>
-      <h5 class="mb-1">{{ item.lead_name or "-" }} &middot; {{ item.lead_company or "-" }}</h5>
-      <div class="text-muted small">{{ item.lead_email }}{% if item.created_at %} &middot; queued {{ item.created_at }}{% endif %}</div>
+      <div class="who">{{ item.lead_name or "—" }} · {{ item.lead_company or "—" }}</div>
+      <div class="muted" style="font-size:12px">{{ item.lead_email }}{% if item.created_at %} · queued {{ item.created_at }}{% endif %}</div>
     </div>
-    {% if a.kind == "book" %}<span class="badge text-bg-success">Book &amp; confirm</span>
-    {% elif a.kind == "propose" %}<span class="badge text-bg-primary">Propose times</span>
-    {% elif a.kind == "decline_ack" %}<span class="badge text-bg-secondary">Acknowledge decline</span>
-    {% else %}<span class="badge text-bg-warning">Needs you</span>{% endif %}
+    <div class="spacer"></div>
+    {% if a.kind == "book" %}<span class="badge done">Book &amp; confirm</span>
+    {% elif a.kind == "propose" %}<span class="badge cold">Propose times</span>
+    {% elif a.kind == "decline_ack" %}<span class="badge off">Acknowledge decline</span>
+    {% else %}<span class="badge new">Needs you</span>{% endif %}
   </div>
 
   {% if item.reply_summary %}
-  <p class="mb-3"><i class="bi bi-chat-left-quote"></i> <em>{{ item.reply_summary }}</em></p>
+  <div class="quote">{{ item.reply_summary }}</div>
   {% endif %}
 
   {% if a.kind == "manual" %}
-    <p class="mb-2">Needs manual scheduling{% if a.reason %}: {{ a.reason }}{% endif %}.</p>
-    {% if item.thread_id %}
-    <a class="btn btn-outline-dark btn-sm" target="_blank"
-       href="https://mail.google.com/mail/u/0/#all/{{ item.thread_id }}">
-      <i class="bi bi-box-arrow-up-right"></i> Open the email thread
-    </a>
-    {% endif %}
-    <form method="post" action="{{ url_for('reply_reject', qid=item.id) }}" class="d-inline ms-2">
-      <button class="btn btn-outline-danger btn-sm" type="submit">Dismiss</button>
-    </form>
+    <p style="margin:0 0 12px">Needs manual scheduling{% if a.reason %}: {{ a.reason }}{% endif %}.</p>
+    <div class="btn-row">
+      {% if item.thread_id %}
+      <a class="btn sm" target="_blank" rel="noopener"
+         href="https://mail.google.com/mail/u/0/#all/{{ item.thread_id }}">Open the email thread</a>
+      {% endif %}
+      <form method="post" action="{{ url_for('reply_reject', qid=item.id) }}" class="inline">
+        <button class="btn sm danger" type="submit">Dismiss</button>
+      </form>
+    </div>
 
   {% else %}
     {% if a.kind == "book" %}
-    <p class="mb-2"><strong>Proposed time:</strong> {{ a.start_display or a.start }}</p>
+    <div><span class="kv">Proposed time</span> {{ a.start_display or a.start }}</div>
     {% elif a.kind == "propose" %}
-    <p class="mb-1"><strong>Times to offer:</strong></p>
-    <ul>
+    <div class="kv">Times to offer</div>
+    <ul style="margin:6px 0 12px 18px">
       {% for slot in (a.slots_display or a.slots) %}<li>{{ slot }}</li>{% endfor %}
     </ul>
     {% endif %}
 
-    <div class="mb-2">
-      <div class="text-muted small">Subject</div>
-      <div>{{ a.email_subject }}</div>
-    </div>
-    <div class="mb-3">
-      <div class="text-muted small">Message</div>
-      <pre class="border rounded p-2 bg-light" style="white-space:pre-wrap">{{ a.email_body }}</pre>
-    </div>
+    <div style="margin:12px 0 3px"><span class="kv">Subject</span></div>
+    <div style="margin-bottom:10px">{{ a.email_subject }}</div>
+    <div class="kv">Message</div>
+    <div class="draft">{{ a.email_body }}</div>
 
-    <form method="post" action="{{ url_for('reply_approve', qid=item.id) }}" class="d-inline"
-          onsubmit="return confirm('{% if a.kind == "book" %}Book the meeting and send the confirmation?{% else %}Send this email now?{% endif %}');">
-      <button class="btn btn-primary" type="submit">
-        <i class="bi bi-check-lg"></i>
-        {% if a.kind == "book" %}Approve &amp; book{% elif a.kind == "propose" %}Send proposal{% else %}Send{% endif %}
-      </button>
-    </form>
-    <form method="post" action="{{ url_for('reply_reject', qid=item.id) }}" class="d-inline ms-2">
-      <button class="btn btn-outline-danger" type="submit">Reject</button>
-    </form>
+    <div class="btn-row">
+      <form method="post" action="{{ url_for('reply_approve', qid=item.id) }}" class="inline"
+            data-confirm="{% if a.kind == 'book' %}Book the meeting and send the confirmation?{% else %}Send this email now?{% endif %}">
+        <button class="btn primary" type="submit">
+          {% if a.kind == "book" %}Approve &amp; book{% elif a.kind == "propose" %}Send proposal{% else %}Send{% endif %}
+        </button>
+      </form>
+      <form method="post" action="{{ url_for('reply_reject', qid=item.id) }}" class="inline">
+        <button class="btn danger" type="submit">Reject</button>
+      </form>
+    </div>
   {% endif %}
 </div>
 {% endfor %}

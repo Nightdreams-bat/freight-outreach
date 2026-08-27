@@ -31,6 +31,10 @@ SYNONYMS = {
         "phone", "phone number", "phone no", "tel", "telephone", "mobile",
         "mobile number", "cell", "cell phone", "contact number",
     ],
+    "Priority": [
+        "priority", "lead score", "score", "rating", "tier", "rank",
+        "importance",
+    ],
 }
 
 FIRST_NAME_SYNS = ["first name", "firstname", "first", "given name", "givenname"]

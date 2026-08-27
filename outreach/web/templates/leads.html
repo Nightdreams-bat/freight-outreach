@@ -1,91 +1,110 @@
 {% extends "base.html" %}
 {% block title %}Leads{% endblock %}
+{% block page_title %}Leads / CRM{% endblock %}
+{% block topbar_actions %}
+  <input id="leadSearch" type="search" class="field" style="max-width:240px" placeholder="Search anything…">
+{% endblock %}
 {% block content %}
 
-<div class="page-header">
-  <h1>Leads / CRM</h1>
-  <input id="leadSearch" type="search" class="form-control" style="max-width:260px"
-         placeholder="Search anything...">
-</div>
+<p class="subtitle">
+  Reading from <code>{{ excel_path }}</code> ·
+  <a href="{{ url_for('settings') }}#lead-columns">change file or column mapping</a>
+</p>
 
-<div class="text-muted small mb-3">
-  Reading from <code>{{ excel_path }}</code> &middot;
-  <a href="{{ url_for('settings') }}#excel-file">change Excel file</a>
-</div>
-
-<div class="content-card">
-  <div class="table-responsive">
-    <table class="table align-middle" id="leadsTable">
+<div class="card pad-tight">
+  <div class="table-wrap">
+    <table class="grid" id="leadsTable">
       <thead>
         <tr>
           <th>Name</th>
           <th>Company</th>
           <th>Email</th>
-          <th>Phone</th>
+          <th class="sortable" data-sort="num" style="cursor:pointer">Priority &#8597;</th>
           <th>Meeting</th>
-          <th>Cold Sent</th>
-          <th>Reminded</th>
+          <th>Follow-ups</th>
           <th>Notes</th>
           <th>Status</th>
-          <th class="text-end">Action</th>
+          <th class="right">Action</th>
         </tr>
       </thead>
       <tbody>
         {% for r in rows %}
         <tr>
           <td>
-            {{ r.display_name if r.display_name != "there" else "-" }}
-            {% if r.name_derived %}<span class="badge text-bg-light border text-muted" title="Filled in from the email address">from email</span>{% endif %}
+            {{ r.display_name if r.display_name != "there" else "—" }}
+            {% if r.name_derived %}<span class="chip" title="Filled in from the email address">from email</span>{% endif %}
           </td>
           <td>
-            {{ r.display_company if r.display_company != "your company" else "-" }}
-            {% if r.company_derived %}<span class="badge text-bg-light border text-muted" title="Filled in from the email domain">from email</span>{% endif %}
+            {{ r.display_company if r.display_company != "your company" else "—" }}
+            {% if r.company_derived %}<span class="chip" title="Filled in from the email domain">from email</span>{% endif %}
           </td>
-          <td>{{ r.v.Email }}</td>
-          <td>{{ r.v.Phone or "-" }}</td>
-          <td>{{ r.v.MeetingDateTime or "-" }}</td>
-          <td>{{ r.v.ColdEmailSentAt or "-" }}</td>
-          <td>{{ r.v.ReminderSentAt or "-" }}</td>
-          <td class="text-truncate" style="max-width:180px">{{ r.v.Notes or "-" }}</td>
+          <td class="mono">{{ r.v.Email }}</td>
+          <td data-sort-value="{{ r.score }}">
+            <span class="prio {{ 'manual' if r.score_manual }}"
+                  title="{{ 'Set in your spreadsheet' if r.score_manual else 'Computed from company / phone / notes' }}">
+              {{ '%g' % r.score }}
+            </span>
+          </td>
+          <td>{{ r.v.MeetingDateTime or "—" }}</td>
+          <td>{{ r.v.FollowupStage or "—" }}</td>
+          <td class="truncate">{{ r.v.Notes or "—" }}</td>
           <td>
             {% if r.reason == "suppressed" %}
-              <span class="badge text-bg-secondary badge-status">Suppressed</span>
+              <span class="badge off">Suppressed</span>
             {% elif r.reason == "blocked" %}
-              <span class="badge text-bg-dark badge-status">Blocklisted</span>
+              <span class="badge danger">Blocklisted</span>
             {% else %}
-              {% if r.v.ColdEmailSentAt %}<span class="badge text-bg-info badge-status me-1">Cold Sent</span>{% endif %}
-              {% if r.v.ReminderSentAt %}<span class="badge text-bg-success badge-status">Reminded</span>{% endif %}
-              {% if not r.v.ColdEmailSentAt and not r.v.ReminderSentAt %}
-                <span class="badge text-bg-warning badge-status">New</span>
-              {% endif %}
+              {% if r.v.ReplyStatus %}<span class="badge done">Replied: {{ r.v.ReplyStatus }}</span>
+              {% elif r.v.ReminderSentAt %}<span class="badge done">Reminded</span>
+              {% elif r.v.FollowupStage %}<span class="badge stage">Follow-up {{ r.v.FollowupStage }}</span>
+              {% elif r.v.ColdEmailSentAt %}<span class="badge cold">Cold sent</span>
+              {% else %}<span class="badge new">New</span>{% endif %}
             {% endif %}
           </td>
-          <td class="text-end">
+          <td class="right">
             {% if r.reason != "blocked" %}
-            <form method="post" action="{{ url_for('toggle_suppress', row_idx=r.row_idx) }}" class="d-inline">
-              {% if r.reason == "suppressed" %}
-                <button class="btn btn-sm btn-outline-success" type="submit">Unsuppress</button>
-              {% else %}
-                <button class="btn btn-sm btn-outline-secondary" type="submit">Suppress</button>
-              {% endif %}
+            <form method="post" action="{{ url_for('toggle_suppress', row_idx=r.row_idx) }}" class="inline">
+              <button class="btn sm ghost" type="submit">{{ "Unsuppress" if r.reason == "suppressed" else "Suppress" }}</button>
             </form>
             {% endif %}
           </td>
         </tr>
         {% else %}
-        <tr><td colspan="10" class="text-center text-muted py-4">No leads yet - add rows to clients.xlsx.</td></tr>
+        <tr><td colspan="9" class="empty">No leads yet — add rows to your spreadsheet.</td></tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
 </div>
 
+{% endblock %}
+
+{% block scripts %}
 <script>
-  document.getElementById("leadSearch").addEventListener("input", function () {
-    const q = this.value.toLowerCase();
-    document.querySelectorAll("#leadsTable tbody tr").forEach(function (row) {
-      row.style.display = row.textContent.toLowerCase().includes(q) ? "" : "none";
+(function () {
+  var search = document.getElementById("leadSearch");
+  var table = document.getElementById("leadsTable");
+  if (search) {
+    search.addEventListener("input", function () {
+      var q = this.value.toLowerCase();
+      table.querySelectorAll("tbody tr").forEach(function (row) {
+        row.style.display = row.textContent.toLowerCase().indexOf(q) !== -1 ? "" : "none";
+      });
     });
+  }
+  var hdr = table.querySelector("th.sortable");
+  var asc = false;
+  if (hdr) hdr.addEventListener("click", function () {
+    asc = !asc;
+    var body = table.querySelector("tbody");
+    var rows = Array.prototype.slice.call(body.querySelectorAll("tr"));
+    rows.sort(function (a, b) {
+      var av = parseFloat(a.children[3].getAttribute("data-sort-value")) || 0;
+      var bv = parseFloat(b.children[3].getAttribute("data-sort-value")) || 0;
+      return asc ? av - bv : bv - av;
+    });
+    rows.forEach(function (r) { body.appendChild(r); });
   });
+})();
 </script>
 {% endblock %}

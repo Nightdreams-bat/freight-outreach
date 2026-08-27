@@ -2,60 +2,143 @@
 {% block title %}Dashboard{% endblock %}
 {% block content %}
 
-<div class="page-header">
-  <h1>Dashboard</h1>
-  <div class="text-muted">{{ cfg.sender_company }}</div>
-</div>
-
 {% if setup_todo %}
-<div class="content-card border-start border-4 border-warning">
-  <h5 class="mb-2"><i class="bi bi-stars text-warning"></i> Finish setting up</h5>
-  <p class="text-muted small mb-2">A few things to do before you can send. All of it lives on the Settings page.</p>
-  <ul class="mb-3">
+<div class="card warn-edge">
+  <h2>Finish setting up</h2>
+  <p class="muted" style="margin:0 0 10px">A few things to do before you can send. All of it lives on the Settings page.</p>
+  <ul style="margin:0 0 14px 18px">
     {% for item in setup_todo %}<li>{{ item }}</li>{% endfor %}
   </ul>
-  <a href="{{ url_for('settings') }}" class="btn btn-warning btn-sm"><i class="bi bi-gear"></i> Open Settings</a>
+  <a href="{{ url_for('settings') }}" class="btn sm primary">Open Settings</a>
 </div>
 {% endif %}
 
-<div class="row g-3 mb-2">
-  <div class="col-6 col-xl-3">
-    <div class="stat-card bg-grad-purple">
-      <i class="bi bi-people-fill stat-icon"></i>
-      <div class="stat-value">{{ stats.total_leads }}</div>
-      <div class="stat-label">Total leads</div>
-    </div>
+<div class="tiles">
+  <div class="tile">
+    <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></div>
+    <div class="num">{{ stats.total_leads }}</div>
+    <div class="lbl">Total leads</div>
   </div>
-  <div class="col-6 col-xl-3">
-    <div class="stat-card bg-grad-teal">
-      <i class="bi bi-envelope-check-fill stat-icon"></i>
-      <div class="stat-value">{{ stats.sent_today }} / {{ stats.daily_cap }}</div>
-      <div class="stat-label">Sent today (of daily cap)</div>
-    </div>
+  <div class="tile">
+    <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 5L2 7"/></svg></div>
+    <div class="num">{{ stats.sent_today }} <small>/ {{ stats.daily_cap }}</small></div>
+    <div class="lbl">Sent today</div>
+    <div class="sub">{{ stats.remaining_today }} left under the daily cap</div>
   </div>
-  <div class="col-6 col-xl-3">
-    <div class="stat-card bg-grad-orange">
-      <i class="bi bi-send-fill stat-icon"></i>
-      <div class="stat-value">{{ stats.cold_pending }}</div>
-      <div class="stat-label">Cold intros pending</div>
-    </div>
+  <div class="tile">
+    <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/></svg></div>
+    <div class="num">{{ stats.cold_pending }}</div>
+    <div class="lbl">Cold intros pending</div>
   </div>
-  <div class="col-6 col-xl-3">
-    <div class="stat-card bg-grad-pink">
-      <i class="bi bi-alarm-fill stat-icon"></i>
-      <div class="stat-value">{{ stats.reminders_due }}</div>
-      <div class="stat-label">Reminders due this scan</div>
-    </div>
+  <div class="tile">
+    <div class="ic amber"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2M5 3 2 6M22 6l-3-3"/></svg></div>
+    <div class="num">{{ stats.reminders_due }}</div>
+    <div class="lbl">Reminders due this scan</div>
   </div>
 </div>
 
-<div class="content-card">
-  <h5 class="mb-3">Quick actions</h5>
-  <a href="{{ url_for('send_page') }}" class="btn btn-primary me-2"><i class="bi bi-send"></i> Go to Send</a>
-  <a href="{{ url_for('leads') }}" class="btn btn-outline-secondary me-2"><i class="bi bi-people"></i> View Leads</a>
-  <a href="{{ url_for('blocklist_page') }}" class="btn btn-outline-secondary">
-    <i class="bi bi-shield-slash"></i> Blocklist ({{ stats.blocklist_count }})
-  </a>
+<div class="tiles two">
+  <div class="tile">
+    <div class="ic slate"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3 21 7l-4 4M3 11V9a4 4 0 0 1 4-4h14M7 21l-4-4 4-4M21 13v2a4 4 0 0 1-4 4H3"/></svg></div>
+    <div class="num">{{ stats.followups_due }}</div>
+    <div class="lbl">Follow-ups due {% if not followup_enabled %}<span class="chip">drip off</span>{% endif %}</div>
+  </div>
+  <div class="tile">
+    <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>
+    <div class="num">{{ stats.pending_replies }}</div>
+    <div class="lbl">Replies waiting for approval</div>
+  </div>
 </div>
 
+<div class="card">
+  <div class="card-head">
+    <h2>Run now</h2>
+    <div class="spacer"></div>
+    <span class="muted" style="font-size:12px">Also runs on the hourly scheduled task</span>
+  </div>
+  <div class="btn-row" id="runButtons">
+    <button class="btn primary" data-action="cold" data-confirm="Send cold intro emails now?">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/></svg> Cold intros
+    </button>
+    <button class="btn" data-action="followups" data-confirm="Send due follow-up nudges now?">Follow-ups</button>
+    <button class="btn" data-action="reminders">Reminder check</button>
+    <button class="btn" data-action="replies">Scan replies</button>
+  </div>
+  <div class="runstatus" id="runStatus" style="display:none"><span class="pulse"></span> <span id="runStatusText"></span></div>
+  <details id="logBox">
+    <summary class="muted" style="font-size:12px;cursor:pointer;margin-top:6px">Show recent log</summary>
+    <pre class="logtail" id="logTail" style="margin-top:8px">(loading…)</pre>
+  </details>
+</div>
+
+<div class="card">
+  <h2>Quick links</h2>
+  <div class="btn-row">
+    <a href="{{ url_for('send_page') }}" class="btn">Go to Send</a>
+    <a href="{{ url_for('leads') }}" class="btn">View leads</a>
+    <a href="{{ url_for('blocklist_page') }}" class="btn">Blocklist ({{ stats.blocklist_count }})</a>
+    <a href="{{ url_for('diagnostics_page') }}" class="btn">Run diagnostics</a>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  var buttons = document.querySelectorAll("#runButtons button");
+  var statusBox = document.getElementById("runStatus");
+  var statusText = document.getElementById("runStatusText");
+  var logTail = document.getElementById("logTail");
+  var logBox = document.getElementById("logBox");
+  var polling = null;
+
+  function setButtons(disabled) {
+    buttons.forEach(function (b) { b.disabled = disabled; });
+  }
+
+  function refreshLog() {
+    fetch("{{ url_for('logs_tail') }}").then(function (r) { return r.text(); })
+      .then(function (t) { logTail.textContent = t; logTail.scrollTop = logTail.scrollHeight; });
+  }
+
+  function render(job) {
+    if (!job || job.status === "idle") { statusBox.style.display = "none"; setButtons(false); return; }
+    statusBox.style.display = "flex";
+    statusBox.className = "runstatus " + job.status;
+    if (job.status === "running") {
+      statusText.textContent = (job.action || "job") + " — running… started " + (job.started || "");
+      setButtons(true);
+    } else {
+      statusText.textContent = (job.summary || job.status) + (job.finished ? "  ·  " + job.finished : "");
+      setButtons(false);
+      if (polling) { clearInterval(polling); polling = null; }
+      refreshLog();
+    }
+  }
+
+  function poll() {
+    fetch("{{ url_for('run_status') }}").then(function (r) { return r.json(); }).then(render);
+  }
+
+  buttons.forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var msg = btn.getAttribute("data-confirm");
+      if (msg && !window.confirm(msg)) return;
+      setButtons(true);
+      fetch("/run/" + btn.getAttribute("data-action"), { method: "POST" })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          render(data.job);
+          logBox.open = true;
+          if (!polling) polling = setInterval(poll, 2000);
+        })
+        .catch(function () { setButtons(false); });
+    });
+  });
+
+  poll();
+  logBox.addEventListener("toggle", function () { if (logBox.open) refreshLog(); });
+})();
+</script>
 {% endblock %}

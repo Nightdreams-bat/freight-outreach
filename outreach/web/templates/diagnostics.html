@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Diagnostics{% endblock %}
+{% block topbar_actions %}
+  <a href="{{ url_for('diagnostics_page') }}" class="btn sm">Re-run</a>
+{% endblock %}
+{% block content %}
+
+<p class="subtitle">Live checks of every connection the tool needs. Re-run after connecting Gmail or changing settings.</p>
+
+<div class="card">
+  {% for c in checks %}
+  <div class="diag-row {{ 'ok' if c.status == 'ok' else ('warn' if c.status == 'warn' else 'fail') }}">
+    <span class="lamp"></span>
+    <div>
+      <div class="name">{{ c.name }}
+        <span class="badge {{ 'ok' if c.status == 'ok' else ('new' if c.status == 'warn' else 'danger') }}">{{ c.status|upper }}</span>
+      </div>
+      {% if c.detail %}<div class="detail">{{ c.detail }}</div>{% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<p class="muted" style="font-size:12px">
+  <strong>WARN</strong> means optional or not-yet-configured (e.g. no Anthropic key, automation off) —
+  not a failure. <strong>FAIL</strong> is something that will stop a real send or booking.
+</p>
+
+{% endblock %}

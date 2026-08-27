@@ -11,7 +11,9 @@ log = get_logger("excel_store")
 
 # The lead's own data - supplied by the client, in whatever shape their file has.
 # We never add or rename these; column_map.detect() finds them by header text.
-DATA_COLUMNS = ["Name", "Company", "Email", "Phone"]
+# "Priority" is optional: a number the client can put in their sheet to push a
+# lead to the front of the send queue when the daily cap bites (outreach/scoring.py).
+DATA_COLUMNS = ["Name", "Company", "Email", "Phone", "Priority"]
 
 # Columns this app owns to track outreach state. These are appended to the
 # client's file if missing, and are the only columns we ever write to.
@@ -25,6 +27,8 @@ STATE_COLUMNS = [
     "ReplyStatus",     # "", awaiting, yes, no, maybe, question, scheduling, booked
     "LastReplyAt",     # YYYY-MM-DD HH:MM:SS of the most recent inbound reply
     "MeetingEventId",  # Google Calendar event id, set when a booking is approved
+    "FollowupStage",   # int: how many follow-up nudges have been sent (blank/0 = none)
+    "FollowupSentAt",  # YYYY-MM-DD HH:MM:SS of the most recent follow-up
 ]
 
 LOGICAL_COLUMNS = DATA_COLUMNS + STATE_COLUMNS
