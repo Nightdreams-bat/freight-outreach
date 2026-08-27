@@ -1,5 +1,10 @@
 # Reply handling + auto-scheduling — design & contract
 
+**STATUS: shipped 2026-08-27.** Built in 4 waves; ~120 unit tests (network-free,
+fakes for Gmail/Calendar/Anthropic). `anthropic` bundled into the `.exe`. Two
+manual steps to switch it on: re-connect Gmail for the new scopes, and add an
+Anthropic API key in Settings. This doc is kept as the interface reference.
+
 _Feature added 2026-08-27. This doc is the interface contract every module below
 must honour so the pieces fit together. Read `STATUS.md` and `README.md` first
 for how the existing tool works._

@@ -49,12 +49,27 @@ Run either `.exe` (or `python -m outreach` from source) with:
 |---|---|
 | `--setup` | setup wizard (same as running `Setup.exe`) |
 | `--cold` | send the cold-intro batch now, headless |
-| `--reminders` | run the reminder scan now, headless (used by the scheduled task) |
-| `--selfcheck` | verify a freshly built `.exe` has everything it needs |
+| `--reminders` | run the reminder scan now, headless (used by the `FreightOutreach_ReminderCheck` task) |
+| `--replies` | run the reply scan now, headless (used by the `FreightOutreach_ReplyCheck` task) — reads replies, drafts actions, never sends/books |
+| `--selfcheck` | verify a freshly built `.exe` has everything it needs (now also checks `anthropic` imports) |
 
-## Automatic reminders
+## Bundled dependencies
 
-The "Enable automatic reminders" button in Settings registers a Windows Task
-Scheduler job. In the frozen build it runs `FreightOutreach.exe --reminders`;
-from source it runs `python -m outreach --reminders`. The job's working
-directory is the folder holding `config.json`.
+`anthropic` (reply classification) and its stack — `httpx2`, `jiter` (compiled),
+`pydantic` — are collected in `FreightOutreach.spec` via `collect_all`, since none
+are covered by PyInstaller's built-in hooks the way plain `httpx` is. The frozen
+`--selfcheck` prints `import anthropic: OK` when this worked. Adds ~35 MB to the
+folder (~185 MB total).
+
+## Scheduled tasks
+
+The Settings page registers two Windows Task Scheduler jobs, each on its own
+Enable/Disable toggle:
+
+| Task | Runs | What |
+|---|---|---|
+| `FreightOutreach_ReminderCheck` | `--reminders` | 24h-before-meeting reminders |
+| `FreightOutreach_ReplyCheck` | `--replies` | scan for lead replies, draft follow-ups |
+
+In the frozen build each runs `FreightOutreach.exe <flag>`; from source,
+`python -m outreach <flag>`. Working directory is the folder holding `config.json`.

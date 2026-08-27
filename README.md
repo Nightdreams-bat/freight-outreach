@@ -2,6 +2,8 @@
 
 Sends personalized cold-intro emails to leads and automatic reminders ~24h before a scheduled call, reading from a local Excel file (`clients.xlsx`).
 
+It can also **read the replies**: Claude classifies each response (yes / no / maybe / question), and for a "yes" it drafts a Google Calendar invite plus a confirmation email — or, if the lead's time is taken, an email proposing open slots from the client's calendar. Nothing is sent or booked until the client approves it on the **Replies** page. See [Reply handling & auto-scheduling](#reply-handling--auto-scheduling).
+
 ## One-time setup
 
 1. Install dependencies:
@@ -9,9 +11,12 @@ Sends personalized cold-intro emails to leads and automatic reminders ~24h befor
    pip install -r requirements.txt
    ```
 2. **Google Cloud OAuth Client** (one-time, done once by the developer - the client never touches this): a "Sign in with Google" button requires a registered OAuth Client ID, which is Google's requirement for any app showing their login screen. In Google Cloud Console:
-   - Create a project, enable the **Gmail API**.
-   - Configure the **OAuth consent screen**: External, add the `gmail.send` scope, add every Gmail address that will ever click "Connect Gmail" (yours and the client's) as a **test user** - the app runs in Testing mode, which skips Google's weeks-long verification process and is the right fit for a single client's tool, but restricts sign-in to that test-user list.
+   - Create a project, enable the **Gmail API** and the **Google Calendar API**.
+   - Configure the **OAuth consent screen**: External, add every Gmail address that will ever click "Connect Gmail" (yours and the client's) as a **test user** - the app runs in Testing mode, which skips Google's weeks-long verification process and is the right fit for a single client's tool, but restricts sign-in to that test-user list.
+   - Scopes requested by the app: `gmail.send`, `gmail.readonly` (read replies), `calendar.events` (create invites), `calendar.freebusy` (check the calendar for conflicts), plus `openid` / `userinfo.email`. All are Google "sensitive/restricted" scopes; Testing mode with whitelisted test users is fine for them.
    - Create an **OAuth Client ID** of type "Desktop app", download the JSON, and save it as `client_secret.json` in this project folder.
+
+   > If you already set this up with only `gmail.send`: add the Calendar API + the new scopes above, then have each connected account click **Connect Gmail** again to re-consent. The old token doesn't carry the new permissions.
 3. Run the setup wizard:
    ```
    python -m outreach.setup
@@ -21,13 +26,14 @@ Sends personalized cold-intro emails to leads and automatic reminders ~24h befor
 
 ## Excel file (`clients.xlsx`)
 
-Default columns (created automatically if missing):
+Default columns (created automatically if missing; the reply-handling columns are added to an existing sheet automatically on first run):
 
-| Name | Company | Email | Phone | MeetingDateTime | Status | ColdEmailSentAt | ReminderSentAt | Suppressed | Notes |
-|------|---------|-------|-------|------------------|--------|------------------|-----------------|------------|-------|
+| Name | Company | Email | Phone | MeetingDateTime | Status | ColdEmailSentAt | ReminderSentAt | Suppressed | Notes | ReplyStatus | LastReplyAt | MeetingEventId |
+|------|---------|-------|-------|------------------|--------|------------------|-----------------|------------|-------|-------------|-------------|----------------|
 
-- `MeetingDateTime`: `YYYY-MM-DD HH:MM` (24h clock), e.g. `2026-08-27 14:00`.
+- `MeetingDateTime`: `YYYY-MM-DD HH:MM` (24h clock), e.g. `2026-08-27 14:00`. Set automatically when a booking is approved, which then feeds the normal 24h reminder.
 - `ColdEmailSentAt` / `ReminderSentAt` fill in automatically - leave blank for leads not yet contacted.
+- `ReplyStatus` (`awaiting` / `yes` / `no` / `maybe` / `question` / `scheduling` / `booked`), `LastReplyAt`, and `MeetingEventId` are maintained by the reply scan and the Replies page - leave them blank.
 - `Suppressed`: set to `yes`/`1`/`true` to permanently exclude a lead from both flows (e.g. after a STOP reply). Checked automatically before every send.
 - If your real sheet uses different column headers, the setup wizard asks for them and stores the mapping in `config.json` - no code editing needed.
 
@@ -59,6 +65,41 @@ Use `{{ variable }}` to insert a value. To skip a line cleanly when a field is e
 {% if sender_phone %}{{ sender_phone }}{% endif %}
 ```
 Before any real batch is sent, both templates are rendered once against dummy data as a pre-flight check - a typo (like an unmatched `{% if %}`) shows one clear error and sends **nothing**, instead of crashing partway through a batch of real leads.
+
+## Reply handling & auto-scheduling
+
+Optional. When enabled, a second background scan reads replies to the cold emails and prepares the follow-up, but **never sends or books anything itself** — every action waits for the client's approval on the dashboard's **Replies** page.
+
+### What it does per reply
+
+1. **Read** — finds the most recent inbound message in the Gmail thread with that lead (`gmail.readonly`), strips the quoted history.
+2. **Classify** — Claude (`claude-haiku-4-5`) returns `intent` (`yes` / `no` / `maybe` / `question`), any proposed date/time, and a one-line summary. Conservative: anything ambiguous is `maybe`, not `yes`.
+3. **Plan a drafted action**:
+   - **yes + a time that's free** on the client's calendar → draft a calendar invite + a confirmation email.
+   - **yes + that time is taken, or no time given** → draft an email proposing 2–3 open slots (pulled from `freebusy` within business hours/days, respecting a minimum notice).
+   - **no** → draft a short polite acknowledgement (queued, not auto-sent).
+   - **maybe / question / calendar error** → flag as "needs manual scheduling" with a link to the Gmail thread. No draft.
+4. **Queue** — the drafted action lands on the Replies page.
+
+### Approving
+
+On **Replies**, each item shows the lead, Claude's read of their message, and the draft. **Approve** does the real work: creates the calendar event (`sendUpdates=all`, so the lead gets a normal invite), sends the email through the same Gmail account, and — for a booking — writes `MeetingDateTime` back to the sheet so the **existing 24h reminder fires with no extra setup**. **Reject** discards it. Approvals count against the same daily send cap; if the cap is hit the item stays pending.
+
+### Turning it on
+
+1. **Re-connect Gmail** (Settings → Connect Gmail) so the new Gmail/Calendar scopes are granted.
+2. Paste an **Anthropic API key** into Settings → *Reply handling & auto-scheduling* (stored in the OS credential store, never written to a file). ~$0.001 per reply on Haiku.
+3. Click **Enable** on the reply automation toggle — this registers a second Windows scheduled task, `FreightOutreach_ReplyCheck`, that runs the scan on the same interval as the reminder task.
+
+Run the scan manually any time:
+```
+python -m outreach --replies            # or: FreightOutreach.exe --replies
+python -m outreach.process_replies --dry-run
+```
+
+### Config keys (all optional, sensible defaults)
+
+`reply_scan_enabled`, `llm_model`, `meeting_duration_minutes` (30), `business_hours` (`{"start":9,"end":17}`), `business_days` (`[0,1,2,3,4]`), `scheduling_window_days` (10), `min_notice_hours` (24), `calendar_id` (`"primary"`), `reply_lookback_days` (30). Plus the three new templates: `meeting_confirm_*`, `propose_times_*`, `decline_ack_*` (edit in Settings like the others).
 
 ## Usage
 
@@ -106,6 +147,6 @@ python -m outreach.manage_blocklist list
 
 ## Known limitations (by design, not oversights)
 
-- "Reply STOP to be removed" in the email is a manual process: nothing reads the client's inbox automatically, so someone needs to mark that lead `Suppressed` (or run `manage_blocklist`) by hand.
+- Reply handling reads the inbox only when enabled and only for threads with known leads; a "not interested" still has to be turned into a `Suppressed` / blocklist entry by hand (the drafted acknowledgement is a convenience, not an unsubscribe system).
 - Since data stays in a local Excel file, the scheduled reminder only runs while this PC is on. If that becomes a problem, migrating `excel_store.py`'s storage to Google Sheets and the scheduler to a cloud cron job is the natural upgrade path.
 - No open/click tracking (the "which leads are actually engaging" view some cold-email tools have) - that requires a hosted server to serve a tracking pixel and receive webhooks, which is a different class of infrastructure than a local script. Worth adding later if this grows into something bigger.

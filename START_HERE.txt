@@ -21,6 +21,19 @@ Just double-click  FreightOutreach.exe  - it opens the dashboard where you
 manage leads, review what's queued, and send. Close the small black window to
 stop it.
 
+The "Replies" page is where drafted follow-ups wait for you: when a lead
+replies, the app reads it and prepares a calendar invite + email (or a "here
+are some times that work" email). Nothing is sent or booked until you click
+Approve there.
+
+OPTIONAL: REPLY HANDLING
+------------------------
+To have the app read replies and draft meetings, do these once in Settings:
+  - Click "Connect Gmail" again (it needs new permissions for reading mail and
+    your calendar).
+  - Paste an Anthropic API key in the "Reply handling" section, then click
+    Enable. Ask whoever set this up for the key.
+
 WHAT THE FILES ARE
 ------------------
   Setup.exe            first-time setup wizard (run once)
@@ -28,6 +41,7 @@ WHAT THE FILES ARE
   config.json          your settings (created by Setup.exe; safe to back up)
   client_secret.json   Google sign-in file (needed for "Connect Gmail")
   clients.xlsx         your leads (created on first run if it doesn't exist)
+  reply_queue.jsonl    drafted follow-ups waiting for your approval (auto-managed)
   _internal\           the app's engine - don't touch or delete
   Source code\         the full source, if you or a developer want to read it
 

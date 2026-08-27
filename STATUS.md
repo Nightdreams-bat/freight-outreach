@@ -4,9 +4,12 @@ _Last updated: 2026-08-27. Read this first before picking the project back up._
 
 ## What this is
 
-A local tool for cold-emailing freight brokerage leads and automatically reminding them
-~24h before a scheduled call. No database, no hosting - everything lives in this folder:
-an Excel file for leads, a local web dashboard, and Gmail (via real Google sign-in) to send.
+A local tool for cold-emailing freight brokerage leads, automatically reminding them
+~24h before a scheduled call, and (optionally) reading their replies to auto-draft the
+follow-up: Claude classifies each reply, and a "yes" produces a drafted Google Calendar
+invite + confirmation email that the client approves on the **Replies** page. No database,
+no hosting - everything lives in this folder: an Excel file for leads, a local web
+dashboard, and Gmail + Google Calendar (via real Google sign-in).
 
 Run it with:
 ```
@@ -23,17 +26,23 @@ Leads, Send, History, Blocklist are all there. The CLI (`send_cold.py`, `send_re
 |---|---|
 | `excel_store.py` | Reads/writes `clients.xlsx` - the entire lead database. |
 | `core.py` | The shared logic: who's a candidate to email, the daily-cap trim, the actual send loop. Both the CLI and the dashboard call into this, so they can never behave differently. |
-| `templates.py` | The two email templates (Cold Intro, Reminder), written in Jinja2 so a field like Phone can be skipped cleanly when empty. |
+| `templates.py` | The email templates (Cold Intro, Reminder, plus Meeting-Confirm / Propose-Times / Decline-Ack for reply handling), Jinja2 so a field like Phone can be skipped cleanly when empty. |
 | `mailer.py` | Actually sends via the Gmail API - builds the MIME message, sets the From display name and proper headers (Date/Message-ID/Reply-To). |
 | `gmail_oauth.py` | The "Connect Gmail" OAuth flow (real Google sign-in) and token refresh. |
 | `credentials.py` | Thin wrapper around `keyring` - stores the OAuth token in the Windows Credential Manager, never in a file. |
 | `blocklist.py` / `manage_blocklist.py` | Permanent block-by-domain-or-address, separate from per-lead suppression. |
 | `send_tracker.py` | Daily send counter (for the cap) + a JSON log of every email actually sent (powers the History page). |
-| `schedule_task.py` | Creates/removes/queries the Windows Task Scheduler job that runs the reminder scan automatically. |
+| `schedule_task.py` | Creates/removes/queries the Windows Task Scheduler jobs - the reminder scan (`FreightOutreach_ReminderCheck`) and the reply scan (`FreightOutreach_ReplyCheck`). |
+| `llm.py` | `classify_reply()` - one Claude Haiku call (forced tool-use) returning `{intent, proposed_start, proposed_end, summary}`. API key from keyring; a missing key is a normal "feature off" state, not an error. |
+| `gmail_read.py` | Fetches the latest inbound message per lead thread (`gmail.readonly`), strips quoted history, and tracks processed message ids in `processed_replies.json`. |
+| `calendar_api.py` | Google Calendar - `busy_intervals` (freebusy), `find_open_slots` / `slot_is_free` (business-hours-aware), `create_event`. |
+| `scheduling.py` | `plan_action()` - turns a classification into a drafted action: `book` / `propose` / `decline_ack` / `manual`. Renders the emails from templates; degrades to `manual` on any Calendar error. |
+| `reply_queue.py` | The approval queue (`reply_queue.jsonl`). `approve()` is the only code here that sends/books - creates the event, sends the email, writes `MeetingDateTime`/`MeetingEventId`/`ReplyStatus`, respects the daily cap, and is idempotent on the calendar event if a retry happens. |
+| `process_replies.py` | The headless reply scan (`--replies`): gated on `reply_scan_enabled`, scans -> classifies -> plans -> enqueues. Never sends or books. |
 | `setup.py` | First-time CLI wizard - business details, Excel path, limits. Gmail is connected separately via the dashboard. |
 | `web/` | The Flask dashboard - `app.py` (routes) + `templates/` (pages) + `static/style.css`. |
 | `paths.py` | The one place that resolves file locations, so the same code works run from source or as the frozen `.exe`. |
-| `__main__.py` | Single entry point (`python -m outreach` / `FreightOutreach.exe`): no args -> dashboard, `--setup` / `--cold` / `--reminders` / `--selfcheck`. |
+| `__main__.py` | Single entry point (`python -m outreach` / `FreightOutreach.exe`): no args -> dashboard, `--setup` / `--cold` / `--reminders` / `--replies` / `--selfcheck`. |
 
 ## The two sending modes
 
@@ -86,6 +95,32 @@ Path handling was reworked so the same code runs from source and frozen:
 when run from source, the `.exe`'s own folder when frozen) and where bundled resources
 are (project tree vs. PyInstaller's temp dir). `outreach/__main__.py` is the single
 entry point both modes share.
+
+## Reply handling & auto-scheduling (done)
+
+Reads replies to the cold emails and drafts the follow-up. **Draft-and-approve only** -
+nothing is sent or booked without the client clicking Approve on the new **Replies** page.
+
+Flow: `process_replies.py` (hourly task, or `--replies`) → `gmail_read.fetch_new_replies`
+→ `llm.classify_reply` (Claude Haiku) → `scheduling.plan_action` → `reply_queue.enqueue`.
+The client reviews on Replies; `reply_queue.approve` creates the Calendar event, sends the
+email, and writes `MeetingDateTime` back to the sheet — so the **existing 24h reminder
+picks the meeting up with no new code**.
+
+Design/contract doc: `docs/reply-handling-design.md`. Built in 4 waves, ~120 unit tests
+(fakes for Gmail/Calendar/Anthropic — no network). `anthropic` is bundled into the `.exe`.
+
+**Two manual steps to actually switch it on:**
+1. **Re-connect Gmail** — the OAuth scopes grew (`gmail.readonly`, `calendar.events`,
+   `calendar.freebusy`). The Google Cloud project also needs the **Calendar API** enabled.
+   Settings → Connect Gmail, re-consent.
+2. **Anthropic API key** — paste into Settings → *Reply handling & auto-scheduling*
+   (stored in keyring). Then click **Enable** on the reply automation toggle.
+
+New config keys (defaults in `outreach/config.DEFAULTS`): `reply_scan_enabled`,
+`llm_model`, `meeting_duration_minutes`, `business_hours`, `business_days`,
+`scheduling_window_days`, `min_notice_hours`, `calendar_id`, `reply_lookback_days`.
+New Excel columns (auto-added): `ReplyStatus`, `LastReplyAt`, `MeetingEventId`.
 
 ## Still placeholder / not started
 
