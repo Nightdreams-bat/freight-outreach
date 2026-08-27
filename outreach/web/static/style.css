@@ -79,6 +79,27 @@ body::before {
 }
 .side, .main { position: relative; z-index: 1; }
 
+/* soft green light that trails the cursor - shows through the glassy cards */
+#cursor-glow {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 520px;
+  height: 520px;
+  margin: -260px 0 0 -260px;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0;
+  transition: opacity .35s ease;
+  will-change: transform;
+  background: radial-gradient(circle,
+    rgba(61, 220, 132, 0.14) 0%,
+    rgba(61, 220, 132, 0.06) 38%,
+    transparent 70%);
+}
+@media (prefers-reduced-motion: reduce) { #cursor-glow { display: none; } }
+
 a { color: var(--accent); text-decoration: none; }
 a:hover { color: var(--accent-hover); text-decoration: underline; }
 

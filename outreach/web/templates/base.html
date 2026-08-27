@@ -8,6 +8,8 @@
 </head>
 <body>
 
+  <div id="cursor-glow"></div>
+
   <aside class="side">
     <div class="brand">
       <span class="mark">
@@ -96,6 +98,24 @@
     document.querySelectorAll(".alert .x").forEach(function (b) {
       b.addEventListener("click", function () { b.closest(".alert").remove(); });
     });
+
+    // Green light that eases toward the cursor
+    (function () {
+      var glow = document.getElementById("cursor-glow");
+      if (!glow || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+      var tx = window.innerWidth / 2, ty = window.innerHeight / 2, x = tx, y = ty, shown = false;
+      window.addEventListener("pointermove", function (e) {
+        tx = e.clientX; ty = e.clientY;
+        if (!shown) { glow.style.opacity = "1"; shown = true; }
+      }, { passive: true });
+      window.addEventListener("pointerleave", function () { glow.style.opacity = "0"; shown = false; });
+      (function tick() {
+        x += (tx - x) * 0.12;
+        y += (ty - y) * 0.12;
+        glow.style.transform = "translate3d(" + x + "px," + y + "px,0)";
+        requestAnimationFrame(tick);
+      })();
+    })();
 
     // Confirm-on-submit for any form with data-confirm
     document.querySelectorAll("form[data-confirm]").forEach(function (f) {

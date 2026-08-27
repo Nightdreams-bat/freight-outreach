@@ -32,12 +32,13 @@ and pushed**. See `docs/TEST-RESULTS.md` for the full end-to-end test log and
 
 | | |
 |---|---|
-| Dashboard redesign | ✅ black/white/green, light + dark, **fully offline** (Bootstrap CDN removed) |
+| Dashboard theme | ✅ dark "glow" — near-black + spring-green `#3ddc84`, glassy cards, glowing lamps/nav. **Dark-only** (no light mode). Space Grotesk headings, IBM Plex Sans body, Silkscreen wordmark — **all fonts vendored** under `static/fonts/`, so it renders right offline. |
 | Native desktop app | ✅ pywebview window; `--web` fallback; Desktop + Start-Menu shortcut on first frozen run; app icon |
-| Multi-touch follow-up drip | ✅ configurable cadence (default 3/7/14 days), breakup email last, auto-stops on any reply or booking |
+| Diagnostics speed | ✅ page renders instantly; the 7 checks run in parallel (`/diagnostics/run` JSON) and fill in ~3s (was ~7s serial) |
+| Multi-touch follow-up drip | ✅ cadence measured **from the cold intro** (default days 3/7/14), 1-day floor between touches, breakup email last, auto-stops on any reply or booking |
 | Lead priority score | ✅ optional `Priority` sheet column, else computed; orders the send queue under the daily cap |
-| Run-now panel | ✅ dashboard buttons trigger cold/follow-up/reminder/reply-scan jobs in a background thread + live log tail |
-| Diagnostics page | ✅ `/diagnostics` - active checks of Gmail send/read, Calendar, Anthropic, scheduled tasks, spreadsheet (also in `--selfcheck`) |
+| Run-now panel | ✅ dashboard buttons trigger cold/follow-up/reminder/reply-scan jobs in a background thread + live log tail (follow-ups honour the enable + per-run cap) |
+| Code review | ✅ full-app review applied — 7 findings fixed (commit `8ae6192`) |
 | Reply handling + auto-booking | ✅ verified live: reply → classify → draft → approve → real Calendar event + confirmation email |
 | `.exe` build | rebuilt on 2026-08-27 with all of the above (`build.ps1`) |
 | Tests | **188 passing**, network-free (`python -m pytest tests/`) |
