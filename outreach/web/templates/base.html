@@ -78,20 +78,22 @@
 
   <div class="main">
     <header class="topbar">
-      <h1>{% block page_title %}{{ self.title() }}{% endblock %}</h1>
-      <div class="spacer"></div>
-      {% block topbar_actions %}{% endblock %}
-      {% if gmail_connected %}
-        <span class="conn ok" title="Sending account connected">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
-          {{ gmail_address or "Gmail connected" }}
-        </span>
-      {% else %}
-        <a class="conn off" href="{{ url_for('settings') }}" title="No sending account connected">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
-          Gmail not connected
-        </a>
-      {% endif %}
+      <div class="topbar-inner">
+        <h1>{% block page_title %}{{ self.title() }}{% endblock %}</h1>
+        <div class="spacer"></div>
+        {% block topbar_actions %}{% endblock %}
+        {% if gmail_connected %}
+          <span class="conn ok" title="Sending account connected">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+            {{ gmail_address or "Gmail connected" }}
+          </span>
+        {% else %}
+          <a class="conn off" href="{{ url_for('settings') }}" title="No sending account connected">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+            Gmail not connected
+          </a>
+        {% endif %}
+      </div>
     </header>
 
     <main id="main" class="content {% block content_class %}{% endblock %}" tabindex="-1">

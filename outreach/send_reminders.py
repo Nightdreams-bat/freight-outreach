@@ -11,7 +11,9 @@ from outreach.core import (
 )
 from outreach.excel_store import ExcelFileLocked, ExcelStore
 from outreach.logging_setup import get_logger
+from outreach.bounce_scan import scan_bounces
 from outreach.optout_scan import scan_optouts
+from outreach.send_tracker import effective_daily_cap
 
 log = get_logger("send_reminders")
 
@@ -42,6 +44,15 @@ def main():
     except Exception as e:  # noqa: BLE001
         log.warning(f"Opt-out scan failed (continuing with reminders): {e}")
 
+    # Always-on deliverability: retire hard-bounced leads. No API cost, so this
+    # runs even with the LLM reply scan off. A Gmail error must not block reminders.
+    try:
+        bounced = scan_bounces(cfg, store)
+        if bounced:
+            log.info(f"Bounce scan: retired {len(bounced)} hard-bounced lead(s): {', '.join(bounced)}")
+    except Exception as e:  # noqa: BLE001
+        log.warning(f"Bounce scan failed (continuing with reminders): {e}")
+
     window_hours = cfg_get(cfg, "reminder_window_hours")
     candidates = reminder_candidates(store, window_hours)
 
@@ -68,7 +79,7 @@ def main():
         )
 
     if not args.dry_run:
-        daily_cap = cfg_get(cfg, "daily_send_cap")
+        daily_cap = effective_daily_cap(cfg)
         candidates, _, deferred = apply_daily_cap(
             candidates, daily_cap, sort_key=lambda c: c[2]  # soonest meeting first if capped
         )

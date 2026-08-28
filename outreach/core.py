@@ -13,7 +13,7 @@ from outreach.mailer import Mailer
 from outreach.send_tracker import record_send_history, record_sent, remaining_today
 from outreach.config import get as cfg_get
 from outreach.scoring import score_lead
-from outreach import templates
+from outreach import dns_check, segment, suppression, templates
 from outreach.templates import render
 
 log = get_logger("core")
@@ -44,7 +44,22 @@ _DUMMY_CONTEXT = {
     "meeting_time": "Monday, Jan 1 at 10:00 AM",
     "stage": 1, "is_last": False,
     "slots": ["Mon 10:00 AM", "Tue 2:00 PM"],
+    "hook": "",
 }
+
+
+def _hook_for(cfg, row, row_idx):
+    """Pick the carrier/shipper opening-line snippet for a lead, or "" when the
+    feature is off or no snippets are configured."""
+    if not cfg_get(cfg, "hook_snippets_enabled"):
+        return ""
+    seg = segment.lead_segment(row, cfg)
+    lang = cfg_get(cfg, "template_language")
+    snippets = cfg.get(f"hook_snippets_{seg}") or templates.hook_snippets(lang)
+    snippets = [str(s).strip() for s in snippets if str(s).strip()]
+    if not snippets:
+        return ""
+    return snippets[row_idx % len(snippets)]
 
 
 def parse_meeting_time(value):
@@ -288,10 +303,20 @@ def send_cold_batch(cfg, store, mailer, candidates, dry_run=False):
         result["errors"].append(template_error)
         return result
 
+    dns_check.clear_cache()
+
     for row_idx, row in candidates:
         email = str(row["Email"]).strip()
         if not valid_email(email):
             log.warning(f"Skipping row {row_idx}: '{email}' doesn't look like a valid email address")
+            result["skipped"].append(email)
+            continue
+
+        if not dry_run and not dns_check.domain_resolves(email.split("@", 1)[1]):
+            suppression.retire_lead(
+                store, row_idx, row, reason="undeliverable: domain does not resolve"
+            )
+            log.warning(f"Retired row {row_idx}: domain for '{email}' does not resolve")
             result["skipped"].append(email)
             continue
 
@@ -305,6 +330,7 @@ def send_cold_batch(cfg, store, mailer, candidates, dry_run=False):
             "unsubscribe_line": templates.unsubscribe_line(cfg_get(cfg, "template_language")),
             "sender_phone": cfg.get("sender_phone") or "",
             "sender_pitch": cfg.get("sender_pitch") or "",
+            "hook": _hook_for(cfg, row, row_idx),
         }
         subject = render(subject_tmpl, **context)
         body = render(body_tmpl, **context)

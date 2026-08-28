@@ -190,6 +190,7 @@ def _quiet(monkeypatch):
     monkeypatch.setattr(core, "record_sent", lambda *a, **k: None)
     monkeypatch.setattr(core, "record_send_history", lambda *a, **k: None)
     monkeypatch.setattr(core.time, "sleep", lambda *_: None)
+    monkeypatch.setattr(core.dns_check, "domain_resolves", lambda *a, **k: True)
 
 
 def test_followup_threads_when_cold_ids_present():

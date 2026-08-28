@@ -30,8 +30,13 @@ USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) FreightOutreach/1.0"
 # stream unbounded bytes into memory.
 MAX_HTML_BYTES = 2_000_000
 
-CONTACT_PATHS = ("/contact", "/contact-us", "/contacts", "/contacte", "/despre",
-                 "/despre-noi", "/kontakt", "/contact.html")
+CONTACT_PATHS = ("/contact", "/contacte", "/contact-us", "/despre-noi")
+
+# Whole-run wall-clock budget for enrich()'s site scraping. The search itself is
+# quick; scraping N sites x M pages with per-request timeouts is what used to make
+# a search hang for minutes with no result. Past this many seconds we stop
+# scraping and return whatever emails we already have.
+SCRAPE_BUDGET_SECONDS = 40
 
 # Result hosts that are directories / social / marketplaces - never a company's
 # own site, so they're no use as a lead even though they rank well.
@@ -66,7 +71,7 @@ _RO_HINTS = ("romania", "românia", "bucharest", "bucuresti", "bucurești", "ilf
              "chisinau", "chișinău")
 
 
-def _http_get(url, timeout=15):
+def _http_get(url, timeout=8):
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310
         if resp.headers.get_content_type() not in ("text/html", "application/xhtml+xml", ""):
@@ -168,8 +173,12 @@ def _clean_emails(text, site_host=None):
     return found[:3]
 
 
-def scrape_site_emails(url, *, fetch=_http_get):
-    """Best-effort contact emails from a company website. Never raises - [] on any error."""
+def scrape_site_emails(url, *, fetch=_http_get, deadline=None):
+    """Best-effort contact emails from a company website. Never raises - [] on any error.
+
+    `deadline` is an optional time.monotonic() value; we stop trying more pages
+    once it passes so one slow site can't stall the whole search.
+    """
     if not url:
         return []
     if not url.startswith(("http://", "https://")):
@@ -183,8 +192,10 @@ def scrape_site_emails(url, *, fetch=_http_get):
     candidates = [url] + [base + p for p in CONTACT_PATHS]
 
     for i, page in enumerate(candidates):
+        if deadline is not None and time.monotonic() > deadline:
+            break
         if i:
-            time.sleep(1)
+            time.sleep(0.4)
         try:
             html = fetch(page)
         except Exception:  # noqa: BLE001 - fragile by nature; caller must never see it
@@ -199,10 +210,14 @@ def enrich(businesses, *, do_scrape, fetch=_http_get):
     """Fill a missing Email by scraping the Website, when do_scrape is on."""
     if not do_scrape:
         return businesses
+    deadline = time.monotonic() + SCRAPE_BUDGET_SECONDS
     for biz in businesses:
         if biz.get("Email") or not biz.get("Website"):
             continue
-        hits = scrape_site_emails(biz["Website"], fetch=fetch)
+        if time.monotonic() > deadline:
+            log.info("enrich: scrape budget reached, leaving remaining sites unenriched")
+            break
+        hits = scrape_site_emails(biz["Website"], fetch=fetch, deadline=deadline)
         if hits:
             biz["Email"] = hits[0]
     return businesses

@@ -10,21 +10,41 @@
 </p>
 
 <div class="card">
-  <form method="post" action="{{ url_for('find_leads_search') }}" class="setrow">
+  <form method="post" action="{{ url_for('find_leads_search') }}" class="setrow" id="leadForm">
     <div>
-      <label class="lab">Business type</label>
-      <input class="field" name="what" value="{{ what or '' }}" placeholder="distribuitor ambalaje, producător mobilă, import fructe…" required>
-      <label class="lab" style="margin-top:10px">City / region</label>
-      <input class="field" name="where" value="{{ where or '' }}" placeholder="București" required>
-      <label class="check" style="margin-top:10px">
+      <label class="lab" for="lf-what">Business type</label>
+      <input class="field" id="lf-what" name="what" value="{{ what or '' }}" placeholder="distribuitor ambalaje, producător mobilă, import fructe…" required>
+      <label class="lab" for="lf-where" style="margin-top:10px">City / region</label>
+      <input class="field" id="lf-where" name="where" value="{{ where or '' }}" placeholder="București" required>
+      <label class="check" style="margin-top:12px">
         <input type="checkbox" name="scrape" {{ 'checked' if scrape is not defined or scrape }}>
-        Try to find email addresses on company websites
+        <span>Try to find email addresses on company websites</span>
       </label>
-      <div style="margin-top:12px"><button class="btn primary" type="submit">Search</button></div>
+      <div style="margin-top:14px">
+        <button class="btn primary" type="submit" id="leadBtn">
+          <span class="spinner" aria-hidden="true"></span>
+          <span class="btn-label">Search</span>
+        </button>
+      </div>
     </div>
-    <div class="help">Searches can take up to a minute — we pause between requests and visit each company site to look for an email.</div>
+    <div class="help">Searches can take up to a minute — we pause between requests and visit
+      each company site to look for an email. Keep this window open while it runs.</div>
   </form>
 </div>
+
+<script>
+  (function () {
+    var form = document.getElementById("leadForm");
+    var btn = document.getElementById("leadBtn");
+    if (!form || !btn) return;
+    form.addEventListener("submit", function () {
+      btn.classList.add("is-loading");
+      btn.querySelector(".btn-label").textContent = "Searching… this can take a minute";
+      // disable after the submit has been dispatched, so it still goes through
+      setTimeout(function () { btn.disabled = true; }, 0);
+    });
+  })();
+</script>
 
 {% if results is not none %}
 <div class="card pad-tight">

@@ -51,6 +51,22 @@ def test_footer_fields_skip_cleanly_when_blank():
     assert out.rstrip().endswith(_DUMMY_CONTEXT["sender_company"]) or "555-0100" in out
 
 
+@pytest.mark.parametrize("lang", ["en", "ro"])
+def test_cold_body_hook_variable(lang):
+    body = templates.defaults(lang)["cold_body_template"]
+    without = templates.render(body, **{**_DUMMY_CONTEXT, "hook": ""})
+    withhook = templates.render(body, **{**_DUMMY_CONTEXT, "hook": "Your reefer lanes caught my eye."})
+    assert "Your reefer lanes caught my eye." in withhook
+    assert "Your reefer lanes caught my eye." not in without
+    # the empty-hook body has no stray blank block at the top
+    assert "\n\n\n" not in without
+
+
+def test_hook_snippets_defaults_per_language():
+    assert templates.hook_snippets("en") != templates.hook_snippets("ro")
+    assert all(s.strip() for s in templates.hook_snippets("en"))
+
+
 def test_sandbox_blocks_ssti_payload():
     from outreach import templates as t
     payload = "{{ cycler.__init__.__globals__ }}"

@@ -3,6 +3,7 @@ import sys
 from pathlib import Path
 
 # The two headless scans that can run on a Windows Task Scheduler timer.
+# keeps the historical string so an existing install's registered Task Scheduler entries survive the Kairos rename
 REMINDER_TASK_NAME = "FreightOutreach_ReminderCheck"
 REPLY_TASK_NAME = "FreightOutreach_ReplyCheck"
 

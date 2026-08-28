@@ -24,6 +24,7 @@
     <div class="num">{{ stats.sent_today }} <small>/ {{ stats.daily_cap }}</small></div>
     <div class="lbl">Sent today</div>
     <div class="sub">{{ stats.remaining_today }} left under the daily cap</div>
+    {% if warmup_note %}<div class="sub">{{ warmup_note }}</div>{% endif %}
   </div>
   <div class="tile">
     <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/></svg></div>
@@ -77,16 +78,6 @@
   </div>
   <div class="activity" id="activityList">
     <div class="activity-empty">Loading…</div>
-  </div>
-</div>
-
-<div class="card">
-  <h2>Quick links</h2>
-  <div class="btn-row">
-    <a href="{{ url_for('send_page') }}" class="btn">Go to Send</a>
-    <a href="{{ url_for('leads') }}" class="btn">View leads</a>
-    <a href="{{ url_for('blocklist_page') }}" class="btn">Blocklist ({{ stats.blocklist_count }})</a>
-    <a href="{{ url_for('diagnostics_page') }}" class="btn">Run diagnostics</a>
   </div>
 </div>
 

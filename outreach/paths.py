@@ -6,7 +6,7 @@ trackers) sits in the project root next to the `outreach/` package - unchanged f
 When running as a PyInstaller onedir/onefile build, `__file__` points inside a temporary
 extraction dir, so that logic would put user data somewhere useless. Instead we anchor it
 to the folder the .exe itself lives in, so the client can see and back up config.json and
-client_secret.json right next to FreightOutreach.exe.
+client_secret.json right next to Kairos.exe.
 """
 
 import sys
@@ -34,9 +34,10 @@ def resource_path(relative: str) -> Path:
 
 CONFIG_PATH = data_dir() / "config.json"
 CLIENT_SECRET_PATH = data_dir() / "client_secret.json"
-LOG_PATH = data_dir() / "outreach.log"
+LOG_PATH = data_dir() / "kairos.log"
 SEND_LOG_PATH = data_dir() / "send_log.json"
 SEND_HISTORY_PATH = data_dir() / "send_history.jsonl"
+LLM_CALLS_PATH = data_dir() / "llm_calls.json"
 DEFAULT_EXCEL_PATH = data_dir() / "clients.xlsx"
 
 # Reply-handling feature: which inbound messages have already been classified,
@@ -47,3 +48,7 @@ PROCESSED_REPLIES_PATH = data_dir() / "processed_replies.json"
 # of costing an API call every scan forever.
 REPLY_FAILURES_PATH = data_dir() / "reply_failures.json"
 REPLY_QUEUE_PATH = data_dir() / "reply_queue.jsonl"
+# Lockfile so two overlapping reply scans can't double-bill the LLM. Written at
+# the top of process_replies.main(), removed in a finally; considered stale after
+# 30 minutes.
+REPLY_SCAN_LOCK_PATH = data_dir() / "reply_scan.lock"

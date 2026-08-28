@@ -26,7 +26,12 @@ from outreach.excel_store import ExcelStore
 from outreach.logging_setup import get_logger
 from outreach.locking import data_lock
 from outreach.paths import REPLY_QUEUE_PATH
-from outreach.send_tracker import record_send_history, record_sent, remaining_today
+from outreach.send_tracker import (
+    effective_daily_cap,
+    record_send_history,
+    record_sent,
+    remaining_today,
+)
 from outreach.templates import MEETING_TIME_DISPLAY_FMT
 
 log = get_logger("reply_queue")
@@ -184,7 +189,7 @@ def approve(qid, *, overrides=None, cfg=None, store=None, mailer=None):
         return {"status": "error", "message": f"Unknown action kind '{kind}'."}
 
     cfg = cfg or load_config()
-    daily_cap = cfg_get(cfg, "daily_send_cap")
+    daily_cap = effective_daily_cap(cfg)
     if remaining_today(daily_cap) <= 0:
         return {
             "status": "deferred",

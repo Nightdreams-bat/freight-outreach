@@ -26,7 +26,9 @@ COLD_INTRO_SUBJECT = "{{ company }} freight - quick question"
 
 COLD_INTRO_BODY = """Hi {{ name }},
 
-{{ sender_name }} here, with {{ sender_company }}. {{ sender_pitch }}
+{% if hook %}{{ hook }}
+
+{% endif %}{{ sender_name }} here, with {{ sender_company }}. {{ sender_pitch }}
 
 I thought {{ company }} might be worth connecting with - happy to share more if you're open to a short call sometime this week.
 
@@ -146,7 +148,9 @@ COLD_INTRO_SUBJECT_RO = "Transport {{ company }} - o întrebare scurtă"
 
 COLD_INTRO_BODY_RO = """Bună ziua {{ name }},
 
-Sunt {{ sender_name }}, de la {{ sender_company }}. {{ sender_pitch }}
+{% if hook %}{{ hook }}
+
+{% endif %}Sunt {{ sender_name }}, de la {{ sender_company }}. {{ sender_pitch }}
 
 M-am gândit că ar putea fi util să discutăm despre transportul {{ company }} - vă pot oferi mai multe detalii dacă sunteți deschis unui apel scurt săptămâna aceasta.
 
@@ -286,6 +290,30 @@ _UNSUBSCRIBE_LINE = {
 
 def unsubscribe_line(lang="en"):
     return _UNSUBSCRIBE_LINE["ro" if lang == "ro" else "en"]
+
+
+# Short freight-broker opening lines - the default seed for the carrier/shipper
+# hook-snippet library. Plain text (not Jinja); the user edits these on Settings.
+# Carrier- and shipper-oriented lines mixed; they're only defaults.
+HOOK_SNIPPETS = {
+    "en": [
+        "Noticed you run lanes in and out of the region and figured our capacity might line up.",
+        "We move a steady volume of reefer and dry van freight and are short on trucks this quarter.",
+        "Helping a few shippers your size cover overflow loads without leaning on the load boards.",
+        "If you're carrying your own freight right now, we can take the lanes that don't fit your fleet.",
+    ],
+    "ro": [
+        "Am văzut că aveți curse regulate în zonă și m-am gândit că am putea colabora pe capacitate.",
+        "Mișcăm constant marfă în regim frigorific și prelată și ne lipsesc camioane în acest trimestru.",
+        "Ajutăm câțiva expeditori de mărimea dumneavoastră să acopere curse suplimentare fără burse de transport.",
+        "Dacă vă transportați singuri marfa acum, putem prelua cursele care nu se potrivesc flotei dumneavoastră.",
+    ],
+}
+
+
+def hook_snippets(lang="en"):
+    """The default opening-line snippets for the given language (a fresh list)."""
+    return list(HOOK_SNIPPETS["ro" if lang == "ro" else "en"])
 
 
 def defaults(lang="en"):

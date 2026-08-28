@@ -1,5 +1,6 @@
 """Wave 3: process_replies end-to-end with every collaborator faked (no network)."""
 
+import contextlib
 from datetime import datetime
 
 import pytest
@@ -37,6 +38,11 @@ class FakeStore:
 @pytest.fixture
 def wired(monkeypatch, tmp_path):
     monkeypatch.setattr(process_replies, "REPLY_FAILURES_PATH", tmp_path / "reply_failures.json")
+    monkeypatch.setattr(process_replies, "REPLY_SCAN_LOCK_PATH", tmp_path / "reply_scan.lock")
+    monkeypatch.setattr(process_replies.llm_tracker, "LLM_CALLS_PATH", tmp_path / "llm_calls.json")
+    monkeypatch.setattr(process_replies.llm_tracker, "data_lock",
+                        lambda *a, **k: contextlib.nullcontext())
+    monkeypatch.setattr(process_replies, "save_config", lambda cfg: None)
     """Patch process_replies' collaborators; return a dict the test tweaks."""
     state = {
         "cfg": dict(BASE_CFG),
@@ -47,7 +53,7 @@ def wired(monkeypatch, tmp_path):
         ],
         "replies": [
             {"email": "jane@acme.test", "thread_id": "t1", "message_id": "m1", "received_at": "2026-08-27 10:00:00", "text": "Yes let's talk"},
-            {"email": "bob@bolt.test", "thread_id": "t2", "message_id": "m2", "received_at": "2026-08-27 10:05:00", "text": "Not interested, remove me"},
+            {"email": "bob@bolt.test", "thread_id": "t2", "message_id": "m2", "received_at": "2026-08-27 10:05:00", "text": "Not interested at this time, thanks"},
             {"email": "sue@cog.test", "thread_id": "t3", "message_id": "m3", "received_at": "2026-08-27 10:10:00", "text": "What do you charge?"},
         ],
         "classify": {
@@ -143,3 +149,94 @@ def test_empty_reply_text_is_skipped(wired):
     emails = {meta["lead_email"] for _, meta in wired["enqueued"]}
     assert "jane@acme.test" not in emails
     assert "m1" not in wired["processed"]
+
+
+# --- Wave B: hardening + spend guardrail ----------------------------------
+
+def _count_classifies(wired, monkeypatch):
+    seen = []
+    real = process_replies.llm.classify_reply
+
+    def spy(text, **kw):
+        seen.append(text)
+        return real(text, **kw)
+
+    monkeypatch.setattr(process_replies.llm, "classify_reply", spy)
+    return seen
+
+
+def test_optout_prefilter_skips_classify(wired, monkeypatch):
+    seen = _count_classifies(wired, monkeypatch)
+    wired["replies"][0]["text"] = "Please remove me from your list"
+    process_replies.main([])
+    assert "Please remove me from your list" not in seen  # no Claude call
+    assert "m1" in wired["processed"]
+    statuses = {(r, c): v for r, c, v in wired["store"].writes}
+    assert statuses[(2, "ReplyStatus")] == "optout"
+    assert "jane@acme.test" in wired["cfg"]["disallowed_emails"]
+
+
+def test_ooo_prefilter_skips_classify(wired, monkeypatch):
+    seen = _count_classifies(wired, monkeypatch)
+    wired["replies"][0]["text"] = "I am out of office until Monday, back then."
+    process_replies.main([])
+    assert wired["replies"][0]["text"] not in seen
+    assert "m1" in wired["processed"]
+    assert "jane@acme.test" not in {meta["lead_email"] for _, meta in wired["enqueued"]}
+
+
+def test_per_run_cap_trims_to_oldest(wired, monkeypatch):
+    wired["cfg"]["max_classify_per_run"] = 2
+    seen = _count_classifies(wired, monkeypatch)
+    process_replies.main([])
+    assert len(seen) == 2
+    # sue's reply is the newest (10:10) - left for next run
+    assert "m3" not in wired["processed"]
+    assert "sue@cog.test" not in {meta["lead_email"] for _, meta in wired["enqueued"]}
+
+
+def test_monthly_cap_breaks_loop(wired, monkeypatch):
+    wired["cfg"]["max_llm_calls_per_month"] = 0
+    seen = _count_classifies(wired, monkeypatch)
+    process_replies.main([])
+    assert seen == []
+    assert wired["processed"] == []
+    assert wired["enqueued"] == []
+
+
+def test_record_llm_call_after_each_success(wired):
+    process_replies.main([])
+    assert process_replies.llm_tracker.calls_this_month() == 3
+
+
+def test_mark_processed_happens_before_enqueue(wired, monkeypatch):
+    def boom(*a, **k):
+        raise RuntimeError("enqueue crashed")
+
+    monkeypatch.setattr(process_replies.reply_queue, "enqueue", boom)
+    with pytest.raises(RuntimeError):
+        process_replies.main([])
+    # the classified message was marked processed before the crash - never re-billed
+    assert "m1" in wired["processed"]
+
+
+def test_lock_file_short_circuits(wired, monkeypatch):
+    process_replies.REPLY_SCAN_LOCK_PATH.write_text("999 now", encoding="utf-8")
+    called = []
+    monkeypatch.setattr(process_replies.gmail_read, "fetch_new_replies",
+                        lambda *a, **k: called.append(1) or [])
+    process_replies.main([])
+    assert called == []
+
+
+def test_stale_lock_is_broken(wired, monkeypatch):
+    import os
+    import time
+
+    lock = process_replies.REPLY_SCAN_LOCK_PATH
+    lock.write_text("999 old", encoding="utf-8")
+    old = time.time() - 40 * 60
+    os.utime(lock, (old, old))
+    process_replies.main([])
+    assert set(wired["processed"]) == {"m1", "m2", "m3"}
+    assert not lock.exists()  # released in finally

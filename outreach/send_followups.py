@@ -20,6 +20,7 @@ from outreach.core import (
 )
 from outreach.excel_store import ExcelFileLocked, ExcelStore
 from outreach.logging_setup import get_logger
+from outreach.send_tracker import effective_daily_cap
 
 log = get_logger("send_followups")
 
@@ -60,7 +61,7 @@ def main():
         return
 
     if not args.dry_run:
-        daily_cap = cfg_get(cfg, "daily_send_cap")
+        daily_cap = effective_daily_cap(cfg)
         candidates, _, deferred = apply_daily_cap(
             candidates, daily_cap, sort_key=priority_sort_key(cfg)
         )

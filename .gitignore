@@ -5,6 +5,10 @@ outreach.log*
 build_out.log
 send_log.json
 send_history.jsonl
+llm_calls.json
+reply_scan.lock
+reply_failures.json
+processed_replies.json
 .lock
 __pycache__/
 *.pyc
@@ -26,3 +30,6 @@ design-mockup/freight-outreach-dashboard.html
 # scratch / demo
 clients_demo.xlsx
 *.bak
+injected.xlsx
+kairos.log
+assets/_render.html

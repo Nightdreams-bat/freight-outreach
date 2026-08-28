@@ -105,6 +105,15 @@ def _collect(payload, mime):
         data = payload.get("body", {}).get("data")
         if data:
             return _decode_body(data)
+        # message/delivery-status (and similar) carry their text in child parts
+        # that have no mimeType of their own - gather all of them.
+        chunks = [
+            _decode_body(p["body"]["data"])
+            for p in payload.get("parts", []) or []
+            if p.get("body", {}).get("data")
+        ]
+        if chunks:
+            return "\n".join(chunks)
     for part in payload.get("parts", []) or []:
         got = _collect(part, mime)
         if got:
@@ -224,6 +233,74 @@ def fetch_new_replies(gmail_address, lookback_days, lead_emails, service=None):
                 "message_id": str(mid),
                 "received_at": _received_at(msg),
                 "text": text,
+            }
+        )
+
+    return out
+
+
+_FINAL_RECIPIENT_RE = re.compile(r"Final-Recipient:.*?;\s*(?:rfc822;\s*)?(\S+@\S+)", re.I)
+_ANY_EMAIL_RE = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")
+_DSN_PERMANENT_RE = re.compile(r"Status:\s*5\.\d+\.\d+", re.I)
+_BODY_PERMANENT_RE = re.compile(r"\b5\.\d\.\d\b|\b55\d\b")
+
+
+def fetch_bounces(gmail_address, lookback_days, service=None):
+    """Scan Gmail for delivery-failure notices (NDRs) newer than lookback_days
+    and not already marked processed.
+
+    Returns a list of dicts:
+        {"message_id", "failed_email", "permanent": bool, "received_at"}
+    """
+    svc = service or _service(gmail_address)
+    processed = set(_load_processed())
+    out = []
+
+    q = (
+        'from:mailer-daemon OR from:postmaster OR '
+        'subject:"delivery status notification" '
+        f"newer_than:{lookback_days}d"
+    )
+    try:
+        listing = svc.users().messages().list(userId="me", q=q, maxResults=50).execute()
+    except Exception as e:  # noqa: BLE001
+        log.warning(f"bounce list failed: {e}")
+        return []
+
+    for ref in listing.get("messages", []) or []:
+        mid = str(ref.get("id") or "")
+        if not mid or mid in processed:
+            continue
+        try:
+            msg = svc.users().messages().get(userId="me", id=mid, format="full").execute()
+        except Exception as e:  # noqa: BLE001
+            log.warning(f"bounce get failed for {mid}: {e}")
+            continue
+
+        payload = msg.get("payload", {})
+        dsn = _collect(payload, "message/delivery-status")
+        body = _find_text(payload)
+
+        failed = _header(msg, "X-Failed-Recipients").strip()
+        if not failed:
+            m = _FINAL_RECIPIENT_RE.search(dsn) or _FINAL_RECIPIENT_RE.search(body)
+            if m:
+                failed = m.group(1).strip()
+        if not failed:
+            m = _ANY_EMAIL_RE.search(dsn) or _ANY_EMAIL_RE.search(body)
+            if m:
+                failed = m.group(0).strip()
+        if not failed:
+            continue
+        failed = failed.strip("<>").strip().lower()
+
+        permanent = bool(_DSN_PERMANENT_RE.search(dsn) or _BODY_PERMANENT_RE.search(body))
+        out.append(
+            {
+                "message_id": mid,
+                "failed_email": failed,
+                "permanent": permanent,
+                "received_at": _received_at(msg),
             }
         )
 

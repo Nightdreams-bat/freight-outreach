@@ -158,3 +158,98 @@ def test_processed_list_capped():
     stored = gmail_read._load_processed()
     assert len(stored) == gmail_read.MAX_PROCESSED
     assert stored[-1] == str(gmail_read.MAX_PROCESSED + 499)  # newest kept
+
+
+# --- fetch_bounces (NDR parsing) ----------------------------------------
+
+def _ndr(msg_id, *, subject="Delivery Status Notification (Failure)",
+         failed_header=None, dsn_text=None, body_text="", from_addr="mailer-daemon@googlemail.com",
+         internal_date="1700000000000"):
+    headers = [{"name": "From", "value": from_addr}, {"name": "Subject", "value": subject}]
+    if failed_header:
+        headers.append({"name": "X-Failed-Recipients", "value": failed_header})
+    parts = [{"mimeType": "text/plain", "body": {"data": _b64(body_text)}, "headers": []}]
+    if dsn_text is not None:
+        parts.append({
+            "mimeType": "message/delivery-status",
+            "headers": [],
+            "body": {},
+            "parts": [{"mimeType": "text/plain", "body": {"data": _b64(dsn_text)}, "headers": []}],
+        })
+    payload = {"mimeType": "multipart/report", "headers": headers, "parts": parts}
+    return {"id": msg_id, "internalDate": internal_date, "payload": payload}
+
+
+class _FakeMessages:
+    def __init__(self, listing, bodies):
+        self._listing = listing
+        self._bodies = bodies
+
+    def list(self, userId, q, maxResults):
+        return _FakeExec(self._listing)
+
+    def get(self, userId, id, format):
+        return _FakeExec(self._bodies[id])
+
+
+class FakeGmailMessages:
+    def __init__(self, messages):
+        self._m = _FakeMessages(
+            {"messages": [{"id": m["id"]} for m in messages]},
+            {m["id"]: m for m in messages},
+        )
+
+    def users(self):
+        outer = self
+
+        class _U:
+            def messages(self_inner):
+                return outer._m
+
+        return _U()
+
+
+def test_fetch_bounces_uses_failed_recipients_header():
+    svc = FakeGmailMessages([
+        _ndr("b1", failed_header="deadbox@gone.test",
+             dsn_text="Action: failed\nStatus: 5.1.1\n", body_text="550 no such user"),
+    ])
+    out = gmail_read.fetch_bounces("me@gmail.com", 7, service=svc)
+    assert out == [{"message_id": "b1", "failed_email": "deadbox@gone.test",
+                    "permanent": True, "received_at": out[0]["received_at"]}]
+    assert out[0]["received_at"].startswith("20")
+
+
+def test_fetch_bounces_falls_back_to_final_recipient():
+    svc = FakeGmailMessages([
+        _ndr("b2", dsn_text="Final-Recipient: rfc822; nope@dead.test\nStatus: 5.0.0\n"),
+    ])
+    out = gmail_read.fetch_bounces("me@gmail.com", 7, service=svc)
+    assert out[0]["failed_email"] == "nope@dead.test"
+    assert out[0]["permanent"] is True
+
+
+def test_fetch_bounces_transient_is_not_permanent():
+    svc = FakeGmailMessages([
+        _ndr("b3", failed_header="slow@busy.test",
+             dsn_text="Status: 4.2.2\n", body_text="452 mailbox full"),
+    ])
+    out = gmail_read.fetch_bounces("me@gmail.com", 7, service=svc)
+    assert out[0]["failed_email"] == "slow@busy.test"
+    assert out[0]["permanent"] is False
+
+
+def test_fetch_bounces_body_regex_fallback():
+    svc = FakeGmailMessages([
+        _ndr("b4", dsn_text=None,
+             body_text="Your message to victim@lost.test was not delivered. 5.4.1 permanent error"),
+    ])
+    out = gmail_read.fetch_bounces("me@gmail.com", 7, service=svc)
+    assert out[0]["failed_email"] == "victim@lost.test"
+    assert out[0]["permanent"] is True
+
+
+def test_fetch_bounces_skips_processed():
+    svc = FakeGmailMessages([_ndr("b5", failed_header="x@y.test", dsn_text="Status: 5.1.1\n")])
+    gmail_read.mark_processed(["b5"])
+    assert gmail_read.fetch_bounces("me@gmail.com", 7, service=svc) == []

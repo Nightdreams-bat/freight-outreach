@@ -69,7 +69,7 @@ def data_lock(timeout=60):
                     _handle = None
                     raise TimeoutError(
                         f"Timed out after {timeout}s waiting for the data lock "
-                        f"({_LOCK_PATH}) - another Freight Outreach process may be busy."
+                        f"({_LOCK_PATH}) - another Kairos process may be busy."
                     )
                 time.sleep(0.2)
 

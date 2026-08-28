@@ -5,6 +5,7 @@ from outreach.config import load_config
 from outreach.core import apply_daily_cap, build_mailer, cold_candidates, send_cold_batch
 from outreach.excel_store import ExcelFileLocked, ExcelStore
 from outreach.logging_setup import get_logger
+from outreach.send_tracker import effective_daily_cap, ensure_warmup_started
 
 log = get_logger("send_cold")
 
@@ -33,11 +34,13 @@ def main():
         return
 
     if not args.dry_run:
-        candidates, _, deferred = apply_daily_cap(candidates, cfg_get(cfg, "daily_send_cap"))
+        ensure_warmup_started(cfg)
+        cap = effective_daily_cap(cfg)
+        candidates, _, deferred = apply_daily_cap(candidates, cap)
         if deferred:
             log.warning(
                 f"{deferred} lead(s) deferred to the next run - today's send cap "
-                f"({cfg_get(cfg, 'daily_send_cap')}) doesn't leave room for them."
+                f"({cap}) doesn't leave room for them."
             )
         if not candidates:
             log.warning("Daily send cap already reached for today. Try again tomorrow.")

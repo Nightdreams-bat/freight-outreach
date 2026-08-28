@@ -1,3 +1,4 @@
+# keeps the historical string so an existing install's stored credentials survive the Kairos rename
 SERVICE_NAME = "freight-outreach-oauth"
 ANTHROPIC_SERVICE = "freight-outreach-anthropic"
 

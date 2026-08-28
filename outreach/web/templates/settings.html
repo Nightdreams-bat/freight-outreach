@@ -215,6 +215,7 @@
 
 <div class="card">
   <h2>Email templates</h2>
+  <input type="hidden" name="hook_snippets" value="1">
   <p class="help" style="margin:0 0 6px">
     Written by you, in full. Variables: <code>{{ '{{ name }}' }}</code>, <code>{{ '{{ company }}' }}</code>,
     <code>{{ '{{ phone }}' }}</code>, <code>{{ '{{ sender_name }}' }}</code>, <code>{{ '{{ sender_company }}' }}</code>,
@@ -223,6 +224,8 @@
     (reminders also get <code>{{ '{{ meeting_time }}' }}</code>; follow-ups also get <code>{{ '{{ stage }}' }}</code>).
     Every template's footer already carries <code>{{ '{{ sender_address }}' }}</code> and <code>{{ '{{ unsubscribe_line }}' }}</code> — keep them if you edit the templates.
     Wrap a line in <code>{% raw %}{% if phone %}…{% endif %}{% endraw %}</code> to skip it when a field is empty.
+    The cold intro also gets <code>{{ '{{ hook }}' }}</code> — an opening line picked from the carrier/shipper
+    snippet lists below (empty unless snippets are enabled).
   </p>
 
   <div class="setrow">
@@ -244,7 +247,24 @@
   </div>
   <div class="setrow">
     <div><textarea class="field mono" name="cold_body_template" rows="9">{{ cfg.cold_body_template or '' }}</textarea></div>
-    <div class="help">The full first-contact message body.</div>
+    <div class="help">The full first-contact message body. Include <code>{{ '{{ hook }}' }}</code> to splice in a segment opening line.</div>
+  </div>
+
+  <h3 class="section">Carrier / shipper hooks <span class="newpill">new</span></h3>
+  <div class="setrow">
+    <div><label class="lab"><input type="checkbox" name="hook_snippets_enabled" {{ 'checked' if cfg.hook_snippets_enabled }}> Use a segment opening line in the cold intro</label></div>
+    <div class="help">The lead is tagged carrier or shipper from keywords in its Company/Notes; one line
+      from the matching list below is rotated into <code>{{ '{{ hook }}' }}</code>. Off by default. Static text — no AI.</div>
+  </div>
+  <div class="setrow">
+    <div><label class="lab">Carrier snippets (one per line)</label>
+      <textarea class="field mono" name="hook_snippets_carrier" rows="4">{{ (cfg.hook_snippets_carrier or [])|join('\n') }}</textarea></div>
+    <div class="help">Used when the lead looks like a trucking company / owner-operator.</div>
+  </div>
+  <div class="setrow">
+    <div><label class="lab">Shipper snippets (one per line)</label>
+      <textarea class="field mono" name="hook_snippets_shipper" rows="4">{{ (cfg.hook_snippets_shipper or [])|join('\n') }}</textarea></div>
+    <div class="help">Used for manufacturers / distributors / warehouses (the default when nothing matches).</div>
   </div>
 
   <h3 class="section">Follow-up <span class="newpill">new</span></h3>
@@ -308,6 +328,7 @@
 
 <div class="card">
   <h2>Sending limits</h2>
+  <input type="hidden" name="sending_limits" value="1">
   <div class="setrow">
     <div><label class="lab">Time zone</label>
       <input class="field" name="timezone" value="{{ cfg.timezone or '' }}" placeholder="Europe/Chisinau"></div>
@@ -328,6 +349,38 @@
     <div class="help">{{ f[2] }}</div>
   </div>
   {% endfor %}
+
+  <h3 class="section">Warm-up ramp <span class="newpill">new</span></h3>
+  <div class="setrow">
+    <div><label class="lab"><input type="checkbox" name="warmup_enabled" {{ 'checked' if cfg.warmup_enabled }}> Ramp the daily cap automatically</label></div>
+    <div class="help">On a new sending account, start low and climb. The daily cap begins at the
+      start value and rises by the step each day until it reaches the "Daily send cap" above.
+      The ramp clock starts on the first cold send after you enable this.</div>
+  </div>
+  <div class="setrow">
+    <div><label class="lab">Warm-up start</label>
+      <input class="field" type="number" min="1" name="warmup_start" value="{{ cfg.warmup_start if cfg.warmup_start is not none else '' }}"></div>
+    <div class="help">Emails per day on day one.</div>
+  </div>
+  <div class="setrow">
+    <div><label class="lab">Warm-up step per day</label>
+      <input class="field" type="number" min="1" name="warmup_step_per_day" value="{{ cfg.warmup_step_per_day if cfg.warmup_step_per_day is not none else '' }}"></div>
+    <div class="help">How much the daily cap grows each day.</div>
+  </div>
+
+  <h3 class="section">Claude spend cap <span class="newpill">new</span></h3>
+  <div class="setrow">
+    <div><label class="lab">Max Claude calls per month</label>
+      <input class="field" type="number" min="1" name="max_llm_calls_per_month" value="{{ cfg.max_llm_calls_per_month if cfg.max_llm_calls_per_month is not none else '' }}"></div>
+    <div class="help">Hard ceiling on reply-classification calls. When it's hit, reply scanning stops
+      cleanly until next month (or you raise this).</div>
+  </div>
+  <div class="setrow">
+    <div><label class="lab">Max replies classified per run</label>
+      <input class="field" type="number" min="1" name="max_classify_per_run" value="{{ cfg.max_classify_per_run if cfg.max_classify_per_run is not none else '' }}"></div>
+    <div class="help">One reply scan won't classify more than this — the rest wait for the next run.</div>
+  </div>
+
   <button type="submit" class="btn primary">Save settings</button>
 </div>
 </form>

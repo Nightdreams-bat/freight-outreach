@@ -25,7 +25,7 @@ from outreach.paths import data_dir
 
 log = get_logger("desktop")
 
-WINDOW_TITLE = "Freight Outreach"
+WINDOW_TITLE = "Kairos"
 WIN_W, WIN_H = 1280, 860
 MIN_W, MIN_H = 960, 640
 FROZEN = getattr(sys, "frozen", False)
@@ -135,7 +135,7 @@ def run_desktop():
     _show_console()
     if not _open_app_mode(url):
         webbrowser.open(url)
-    print(f"Freight Outreach is running at {url}  -  close this window to stop it.")
+    print(f"Kairos is running at {url}  -  close this window to stop it.")
     try:
         thread.join()
     except KeyboardInterrupt:

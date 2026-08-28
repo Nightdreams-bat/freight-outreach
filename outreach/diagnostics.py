@@ -11,6 +11,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 
+from outreach.config import get as cfg_get
 from outreach.logging_setup import get_logger
 
 log = get_logger("diagnostics")
@@ -206,6 +207,12 @@ def _check_anthropic(cfg, _gmail):
         return _warn("Anthropic API", f"Couldn't read the credential store: {e}")
     if not key:
         return _warn("Anthropic API", "No key set - reply classification stays off (Settings).")
+
+    from outreach import llm_tracker
+
+    cap = int(cfg_get(cfg, "max_llm_calls_per_month"))
+    if llm_tracker.remaining_this_month(cap) <= 0:
+        return _warn("Anthropic API", "monthly call cap reached")
     try:
         import anthropic
 
@@ -215,7 +222,11 @@ def _check_anthropic(cfg, _gmail):
             max_tokens=1,
             messages=[{"role": "user", "content": "ping"}],
         )
-        return _ok("Anthropic API", "key valid, model reachable")
+        llm_tracker.record_llm_call(1)
+        return _ok(
+            "Anthropic API",
+            f"key valid, model reachable ({llm_tracker.calls_this_month()}/{cap} calls this month)",
+        )
     except Exception as e:  # noqa: BLE001
         return _fail("Anthropic API", f"{e}")
 

@@ -11,7 +11,7 @@ from outreach.logging_setup import get_logger
 
 log = get_logger("shortcut")
 
-LINK_NAME = "Freight Outreach.lnk"
+LINK_NAME = "Kairos.lnk"
 
 
 def _shell():
@@ -27,7 +27,7 @@ def _write_link(shell, folder, target_exe):
     link.TargetPath = target_exe
     link.WorkingDirectory = os.path.dirname(target_exe)
     link.IconLocation = f"{target_exe}, 0"
-    link.Description = "Freight Outreach - cold outreach + reminders dashboard"
+    link.Description = "Kairos - cold outreach, follow-ups & reply handling"
     link.Save()
     return path
 

@@ -92,6 +92,29 @@ DEFAULTS = {
     "reminder_window_hours": 2,
     "max_reminders_per_run": 60,
     "daily_send_cap": 20,
+    # LLM spend guardrail (outreach/llm_tracker.py). Nothing caps Claude calls
+    # otherwise; a reply backlog or a blanked ReplyStatus column could fire
+    # hundreds unchecked.
+    "max_llm_calls_per_month": 1000,
+    "max_classify_per_run": 50,
+    # Carrier/shipper opening-line snippet library (static, no AI). The per-
+    # language lists are seeded into default_config(); these are the English
+    # fallback for _migrate on an existing install.
+    "hook_snippets_enabled": False,
+    "segment_keywords_carrier": [
+        "carrier", "trucking", "transport", "fleet", "owner operator",
+        "mc number", "dispatch", "reefer", "flatbed", "dry van",
+    ],
+    "segment_keywords_shipper": [
+        "shipper", "manufacturer", "manufacturing", "distribution",
+        "distributor", "warehouse", "supplier", "producer", "foods",
+        "imports", "exports",
+    ],
+    # Adaptive warm-up ramp - auto-raise the daily cap on a schedule.
+    "warmup_enabled": False,
+    "warmup_start": 10,
+    "warmup_step_per_day": 5,
+    "warmup_started_on": "",
 }
 
 # New installs are seeded in Romanian (the tool's primary use); the DEFAULTS
@@ -118,6 +141,8 @@ def default_config(lang=None):
         "disallowed_emails": [],
         **templates.defaults(lang),
         **DEFAULTS,
+        "hook_snippets_carrier": templates.hook_snippets(lang),
+        "hook_snippets_shipper": templates.hook_snippets(lang),
         "timezone": detect_timezone(),
         "template_language": lang,
     }

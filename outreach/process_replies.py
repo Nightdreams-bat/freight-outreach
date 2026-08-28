@@ -12,18 +12,32 @@ queueing or touching the sheet).
 
 import argparse
 import json
+import os
+import re
+import time
 from datetime import datetime
 
-from outreach import gmail_read, llm, reply_queue, scheduling
+from outreach import gmail_read, llm, llm_tracker, optout_scan, reply_queue, scheduling
 from outreach.config import get as cfg_get
-from outreach.config import load_config
+from outreach.config import load_config, save_config
 from outreach.excel_store import ExcelFileLocked, ExcelStore
 from outreach.lead_fields import lead_company, lead_name
 from outreach.llm import LLMNotConfigured
 from outreach.logging_setup import get_logger
-from outreach.paths import REPLY_FAILURES_PATH
+from outreach.paths import REPLY_FAILURES_PATH, REPLY_SCAN_LOCK_PATH
 
 log = get_logger("process_replies")
+
+# Auto-replies / out-of-office bounces - a later genuine reply is a new message
+# id, so skipping these costs us nothing and saves a Claude call.
+_OOO_RE = re.compile(
+    r"out of office|on leave|away until|autoreply|auto-reply|vacation"
+    r"|absen[țt][ăa]|concediu",
+    re.IGNORECASE,
+)
+
+# A reply-scan lock older than this is assumed stale (crashed run) and broken.
+_LOCK_STALE_SECONDS = 30 * 60
 
 # A lead in one of these reply states is done - don't keep scanning their thread.
 TERMINAL_REPLY_STATES = {"booked", "no"}
@@ -87,6 +101,40 @@ def main(argv=None):
         log.info("Reply scan is off (reply_scan_enabled=false in config). Nothing to do.")
         return
 
+    if not _acquire_lock():
+        return
+    try:
+        return _scan(args, cfg)
+    finally:
+        _release_lock()
+
+
+def _acquire_lock():
+    """True if we got the reply-scan lock; False if another scan holds a fresh one."""
+    try:
+        if REPLY_SCAN_LOCK_PATH.exists():
+            age = time.time() - REPLY_SCAN_LOCK_PATH.stat().st_mtime
+            if age < _LOCK_STALE_SECONDS:
+                log.warning("reply scan already running, skipping")
+                return False
+            log.warning("breaking a stale reply-scan lock (%d min old)", int(age / 60))
+        REPLY_SCAN_LOCK_PATH.write_text(
+            f"{os.getpid()} {datetime.now().isoformat(timespec='seconds')}",
+            encoding="utf-8",
+        )
+    except OSError as e:  # noqa: BLE001 - a lock problem must not stop the scan
+        log.warning("couldn't manage the reply-scan lock (%s) - proceeding anyway", e)
+    return True
+
+
+def _release_lock():
+    try:
+        REPLY_SCAN_LOCK_PATH.unlink()
+    except OSError:
+        pass
+
+
+def _scan(args, cfg):
     gmail_address = cfg.get("gmail_address")
     if not gmail_address:
         log.error("No Gmail account connected - connect one in the dashboard first.")
@@ -124,6 +172,18 @@ def main(argv=None):
         log.info("No new replies.")
         return
 
+    max_per_run = int(cfg_get(cfg, "max_classify_per_run"))
+    if len(replies) > max_per_run:
+        log.critical(
+            "%d replies matched this run, over the per-run classify cap of %d. "
+            "Classifying the %d oldest; the rest are left for the next run. Raise "
+            "max_classify_per_run if this is unexpected.",
+            len(replies), max_per_run, max_per_run,
+        )
+        replies = sorted(replies, key=lambda r: r.get("received_at") or "")[:max_per_run]
+
+    monthly_cap = int(cfg_get(cfg, "max_llm_calls_per_month"))
+
     model = cfg_get(cfg, "llm_model")
     now_iso = datetime.now().isoformat(timespec="minutes")
     sender_company = cfg.get("sender_company") or ""
@@ -144,6 +204,34 @@ def main(argv=None):
             log.info("Reply from %s had no readable text - skipping.", email)
             skipped += 1
             continue
+
+        # Opt-out / OOO regex pre-filter - handled without a Claude call.
+        if optout_scan.OPTOUT_RE.search(text):
+            try:
+                store.set_value(row_idx, "ReplyStatus", "optout")
+            except ExcelFileLocked as e:
+                log.warning("Couldn't stamp ReplyStatus for %s: %s", email, e)
+            disallowed = cfg.setdefault("disallowed_emails", [])
+            if email not in {str(x).strip().lower() for x in disallowed}:
+                disallowed.append(email)
+                save_config(cfg)
+            gmail_read.mark_processed([message_id])
+            log.info("Opt-out detected from %s - added to the blocklist (no Claude call).", email)
+            skipped += 1
+            continue
+
+        if _OOO_RE.search(text):
+            log.info("Auto-reply / out-of-office from %s - skipping (no Claude call).", email)
+            gmail_read.mark_processed([message_id])
+            skipped += 1
+            continue
+
+        if llm_tracker.remaining_this_month(monthly_cap) <= 0:
+            log.critical(
+                "monthly LLM call cap reached; raise max_llm_calls_per_month or "
+                "wait for next month"
+            )
+            break
 
         try:
             classification = llm.classify_reply(
@@ -171,6 +259,7 @@ def main(argv=None):
             continue
 
         classified += 1
+        llm_tracker.record_llm_call(1)
         failures.pop(message_id, None)
         intent = classification.get("intent") or ""
         summary = classification.get("summary") or ""
@@ -181,6 +270,10 @@ def main(argv=None):
             print(f"[DRY RUN] {email}: intent={intent}, action={kind}")
             print(f"          {summary}")
             continue
+
+        # Mark processed immediately - a crash after this loses at most an
+        # enqueue (logged, recoverable), never re-bills the classify.
+        gmail_read.mark_processed([message_id])
 
         if action is not None:
             reply_queue.enqueue(
@@ -208,8 +301,6 @@ def main(argv=None):
                 store.set_value(row_idx, "Notes", _append_note(values.get("Notes"), summary))
         except ExcelFileLocked as e:
             log.warning("Couldn't update the sheet for %s: %s", email, e)
-
-        gmail_read.mark_processed([message_id])
 
     _save_failures(failures)
     log.info(

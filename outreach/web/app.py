@@ -37,7 +37,14 @@ from outreach.schedule_task import (
 )
 from outreach.scoring import is_manual as priority_is_manual
 from outreach.scoring import score_lead
-from outreach.send_tracker import recent_history, remaining_today, sent_today
+from outreach.send_tracker import (
+    effective_daily_cap,
+    ensure_warmup_started,
+    recent_history,
+    remaining_today,
+    sent_today,
+    warmup_note,
+)
 
 log = get_logger("web")
 
@@ -103,8 +110,9 @@ def _run_job(action):
         ) if action != "replies" else None
 
         if action == "cold":
+            ensure_warmup_started(cfg)
             cands, _, deferred = apply_daily_cap(
-                cold_candidates(store), cfg_get(cfg, "daily_send_cap"),
+                cold_candidates(store), effective_daily_cap(cfg),
                 sort_key=priority_sort_key(cfg),
             )
             r = send_cold_batch(cfg, store, build_mailer(cfg), cands) if cands else {"sent": 0, "errors": []}
@@ -127,7 +135,7 @@ def _run_job(action):
                     severity = "danger"
                 else:
                     cands, _, deferred = apply_daily_cap(
-                        raw, cfg_get(cfg, "daily_send_cap"), sort_key=priority_sort_key(cfg),
+                        raw, effective_daily_cap(cfg), sort_key=priority_sort_key(cfg),
                     )
                     r = send_followup_batch(cfg, store, build_mailer(cfg), cands) if cands else {"sent": 0, "errors": []}
                     summary = f"{r['sent']} follow-up(s) sent"
@@ -151,7 +159,7 @@ def _run_job(action):
                            f"Check clients.xlsx.")
             else:
                 cands, _, deferred = apply_daily_cap(
-                    cands, cfg_get(cfg, "daily_send_cap"), sort_key=lambda c: c[2]
+                    cands, effective_daily_cap(cfg), sort_key=lambda c: c[2]
                 )
                 r = send_reminder_batch(cfg, store, build_mailer(cfg), cands) if cands else {"sent": 0, "errors": []}
                 summary = f"{r['sent']} reminder(s) sent"
@@ -306,7 +314,7 @@ def create_app():
     @app.route("/")
     def dashboard():
         cfg, store = get_config_and_store()
-        daily_cap = cfg_get(cfg, "daily_send_cap")
+        daily_cap = effective_daily_cap(cfg)
         setup_todo = []
         if not (cfg.get("sender_name") or "").strip() or not (cfg.get("sender_company") or "").strip():
             setup_todo.append("Add your name and company under Settings → Business details.")
@@ -331,6 +339,7 @@ def create_app():
         return render_template(
             "dashboard.html", stats=stats, cfg=cfg, setup_todo=setup_todo,
             followup_enabled=cfg_get(cfg, "followup_enabled"),
+            warmup_note=warmup_note(cfg),
         )
 
     @app.route("/leads")
@@ -565,6 +574,10 @@ def create_app():
                 "meeting_duration_minutes",
                 "scheduling_window_days",
                 "min_notice_hours",
+                "warmup_start",
+                "warmup_step_per_day",
+                "max_llm_calls_per_month",
+                "max_classify_per_run",
             ):
                 raw = request.form.get(key)
                 if raw:
@@ -610,6 +623,18 @@ def create_app():
             if "scoring_keywords" in request.form:
                 kws = [k.strip() for k in request.form["scoring_keywords"].split(",") if k.strip()]
                 cfg["scoring_keywords"] = kws
+
+            if "sending_limits" in request.form:
+                cfg["warmup_enabled"] = request.form.get("warmup_enabled") == "on"
+
+            if "hook_snippets" in request.form:
+                cfg["hook_snippets_enabled"] = request.form.get("hook_snippets_enabled") == "on"
+                for seg in ("carrier", "shipper"):
+                    raw = request.form.get(f"hook_snippets_{seg}")
+                    if raw is not None:
+                        cfg[f"hook_snippets_{seg}"] = [
+                            line.strip() for line in raw.splitlines() if line.strip()
+                        ]
 
             if any(f"col_{f}" in request.form for f in ("Name", "Company", "Email", "Phone", "Priority")):
                 column_map = {}
@@ -765,7 +790,7 @@ def create_app():
             return redirect(url_for("find_leads"))
 
         try:
-            leads = lead_sourcing.search_businesses(what, where)
+            leads = lead_sourcing.search_businesses(what, where, limit=15)
             lead_sourcing.enrich(leads, do_scrape=scrape)
         except Exception as e:  # noqa: BLE001 - sourcing is best-effort
             flash(f"Search failed: {e}", "danger")
@@ -821,7 +846,7 @@ def main():
     app = create_app()
     port = _pick_port()
     url = f"http://127.0.0.1:{port}"
-    print(f"Freight Outreach dashboard running at {url}  (close this window to stop)")
+    print(f"Kairos dashboard running at {url}  (close this window to stop)")
     webbrowser.open(url)
     app.run(host="127.0.0.1", port=port, debug=False, threaded=True)
 
