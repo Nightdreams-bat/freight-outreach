@@ -8,13 +8,41 @@
 Leads live in one Excel file. Nothing is hosted, and nothing sends or books
 without your approval.**
 
-![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=for-the-badge&logo=python&logoColor=white)
-![Windows](https://img.shields.io/badge/Windows-10%2F11-0078D6?style=for-the-badge&logo=windows&logoColor=white)
-![No database](https://img.shields.io/badge/database-none-2E7D32?style=for-the-badge)
-![Offline dashboard](https://img.shields.io/badge/dashboard-offline%20%2F%20no%20CDN-2E7D32?style=for-the-badge)
-![Tests](https://img.shields.io/badge/tests-361%20passing-2E7D32?style=for-the-badge)
+[![tests](https://github.com/Nightdreams-bat/kairo/actions/workflows/tests.yml/badge.svg)](https://github.com/Nightdreams-bat/kairo/actions/workflows/tests.yml)
+![Tests](https://img.shields.io/badge/tests-361%20passing-2E7D32?style=flat-square)
+![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=flat-square&logo=python&logoColor=white)
+![Windows](https://img.shields.io/badge/Windows-10%2F11-0078D6?style=flat-square&logo=windows&logoColor=white)
+![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)
 
 </div>
+
+---
+
+## Engineering highlights
+
+- **Real Google integration, no shortcuts.** Sending is the Gmail API under a full
+  OAuth sign-in (not SMTP or app passwords); scheduling reads Google Calendar
+  free/busy and books real events. Tokens live in the Windows Credential Manager
+  and auto-refresh.
+- **LLM as a typed component.** Reply classification is a single forced-tool-use
+  Claude Haiku call with a strict schema, a monthly spend counter, and a
+  no-API-key keyword fallback — the model never has authority to send or book.
+- **361 tests, fully network-free.** Gmail, Calendar and Anthropic are all faked
+  in the suite; CI runs it on every push. `python -m pytest` finishes in ~8s.
+- **One core, many front-ends.** The dashboard, the CLI, and the Windows
+  scheduled tasks all call the same `kairo/core.py` functions, so they can never
+  drift apart.
+- **Ships as a desktop app.** PyInstaller build (`build.ps1` + `Kairo.spec`) with
+  a self-check step produces a single folder a non-technical client runs with no
+  Python installed; the UI is a native pywebview window on Windows' built-in
+  WebView2.
+- **Deliverability treated as a real problem.** Per-send postal address and
+  `List-Unsubscribe` headers, always-on EN/RO opt-out scanning, per-lead
+  suppression, a permanent blocklist, jittered timing, and a daily cap with a
+  warm-up ramp.
+- **Deliberately no database and no CDN.** The `.xlsx` *is* the store and the
+  dashboard assets are all local — one portable folder, no server to run, and no
+  lead data ever leaves the operator's machine except the email itself.
 
 ---
 
@@ -198,5 +226,4 @@ python -m pytest        # 361 tests, fully network-free (Gmail / Calendar / Anth
 
 ## License
 
-No license file yet — check the
-[repository](https://github.com/Nightdreams-bat/kairo) for a `LICENSE` before reuse.
+[MIT](LICENSE).
