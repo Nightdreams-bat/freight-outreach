@@ -26,6 +26,10 @@ log = get_logger("lead_sourcing")
 
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) FreightOutreach/1.0"
 
+# Cap on a single page fetch - a hostile / misconfigured server can otherwise
+# stream unbounded bytes into memory.
+MAX_HTML_BYTES = 2_000_000
+
 CONTACT_PATHS = ("/contact", "/contact-us", "/contacts", "/contacte", "/despre",
                  "/despre-noi", "/kontakt", "/contact.html")
 
@@ -65,8 +69,10 @@ _RO_HINTS = ("romania", "românia", "bucharest", "bucuresti", "bucurești", "ilf
 def _http_get(url, timeout=15):
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310
+        if resp.headers.get_content_type() not in ("text/html", "application/xhtml+xml", ""):
+            return ""
         charset = resp.headers.get_content_charset() or "utf-8"
-        return resp.read().decode(charset, errors="replace")
+        return resp.read(MAX_HTML_BYTES).decode(charset, errors="replace")
 
 
 def _ddgs_search(query, *, max_results, region):

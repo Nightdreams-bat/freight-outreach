@@ -60,7 +60,7 @@ def main():
         return
 
     if not args.dry_run:
-        daily_cap = cfg.get("daily_send_cap", 150)
+        daily_cap = cfg_get(cfg, "daily_send_cap")
         candidates, _, deferred = apply_daily_cap(
             candidates, daily_cap, sort_key=priority_sort_key(cfg)
         )

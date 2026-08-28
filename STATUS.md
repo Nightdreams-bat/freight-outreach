@@ -82,7 +82,7 @@ and pushed**. See `docs/TEST-RESULTS.md` for the full end-to-end test log and
 
 - **Daily send cap** (cold + follow-up + reminder combined) - default 20. Raise it gradually as the sending account warms up.
 - **Jittered pacing** - cold/follow-up sends wait a random 45-150s between messages (`send_delay_min_seconds` / `send_delay_max_seconds`); reminders use a short fixed 5s (`reminder_send_delay_seconds`).
-- **Per-run brakes** - reminders (`max_reminders_per_run`, 60) send the soonest N and defer the rest with a loud warning; follow-ups (`max_followups_per_run`, 25) send nothing and warn.
+- **Per-run brakes** - reminders (`max_reminders_per_run`, 60): on a busy day it sends the soonest N and defers the rest with a loud warning - BUT if the match count blows past ~3x the per-run cap it sends **none** and logs loudly (guards against one `MeetingDateTime` pasted into many rows). Follow-ups (`max_followups_per_run`, 25): if a scan matches more than the brake it sends nothing and warns.
 - **Follow-up drip stops on the first reply or a booked meeting** - no risk of nudging someone mid-conversation.
 - **Permanent blocklist** by domain/address + **per-lead Suppress**.
 - Every send is written to `clients.xlsx` immediately - a crash mid-batch can't duplicate.

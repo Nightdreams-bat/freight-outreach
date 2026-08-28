@@ -83,6 +83,17 @@ def test_process_replies_returns_summary_dict(wired, monkeypatch):
     assert set(summary) >= {"classified", "enqueued", "flagged", "failed", "skipped"}
 
 
+def _wait_for_job(web_app, timeout=5.0):
+    """The dashboard runs the job on a daemon thread; block until it finishes."""
+    import time
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if web_app._JOB["status"] != "running":
+            return
+        time.sleep(0.01)
+    raise AssertionError("background job did not finish")
+
+
 # --- web reminder brake sends soonest-N, never "sent none" (item 9) -----
 
 def test_web_send_reminders_now_sends_soonest_n(monkeypatch):
@@ -108,4 +119,5 @@ def test_web_send_reminders_now_sends_soonest_n(monkeypatch):
     client = application.test_client()
     r = client.post("/send/reminders")
     assert r.status_code == 302  # redirect back to /send
+    _wait_for_job(web_app)
     assert seen["ids"] == [0, 1, 2]  # soonest three, not "sent none"

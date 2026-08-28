@@ -1,5 +1,6 @@
 import os
 import shutil
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -70,10 +71,13 @@ class ExcelStore:
         if not self.path.exists():
             self._create_blank_workbook()
         else:
-            # Best-effort snapshot: one copy per store construction, so a crash or
-            # corruption mid-save leaves the client a recoverable .bak.
+            # Best-effort snapshot so a crash or corruption mid-save leaves the
+            # client a recoverable .bak. web/app.py builds a store per request, so
+            # only refresh the copy when it's missing or over 24h stale.
             try:
-                shutil.copy2(self.path, self.path.with_suffix(self.path.suffix + ".bak"))
+                bak = self.path.with_suffix(self.path.suffix + ".bak")
+                if not bak.exists() or time.time() - os.path.getmtime(bak) > 86400:
+                    shutil.copy2(self.path, bak)
             except OSError:
                 pass
         self.wb = openpyxl.load_workbook(self.path)

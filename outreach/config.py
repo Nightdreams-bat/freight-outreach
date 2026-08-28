@@ -85,6 +85,13 @@ DEFAULTS = {
     # Language a fresh install's templates are seeded in ("en" or "ro"). An
     # existing config keeps whatever it already has; migration back-fills "en".
     "template_language": "en",
+    # Reminder cadence + send volume. Historically these lived only in
+    # default_config(); callers now read them through get()/cfg_get so a bare
+    # cfg dict is legacy-safe instead of KeyError-ing.
+    "reminder_interval_hours": 2,
+    "reminder_window_hours": 2,
+    "max_reminders_per_run": 60,
+    "daily_send_cap": 20,
 }
 
 # New installs are seeded in Romanian (the tool's primary use); the DEFAULTS
@@ -107,10 +114,6 @@ def default_config(lang=None):
         # "auto-detect from the sheet's own headers" (outreach/column_map.py).
         "column_map": {},
         "gmail_address": "",
-        "reminder_interval_hours": 2,
-        "reminder_window_hours": 2,
-        "max_reminders_per_run": 60,
-        "daily_send_cap": 20,
         "disallowed_domains": [],
         "disallowed_emails": [],
         **templates.defaults(lang),

@@ -54,9 +54,9 @@
             {% elif r.reason == "blocked" %}
               <span class="badge danger">Blocklisted</span>
             {% else %}
-              {% if r.v.ReplyStatus %}<span class="badge done">Replied: {{ r.v.ReplyStatus }}</span>
+              {% if r.v.ReplyStatus %}<span class="badge done" title="Replied: {{ r.v.ReplyStatus }}">Replied</span>
               {% elif r.v.ReminderSentAt %}<span class="badge done">Reminded</span>
-              {% elif r.v.FollowupStage %}<span class="badge stage">Follow-up {{ r.v.FollowupStage }}</span>
+              {% elif r.v.FollowupStage %}<span class="badge stage" title="Follow-up stage {{ r.v.FollowupStage }}">FU {{ r.v.FollowupStage }}</span>
               {% elif r.v.ColdEmailSentAt %}<span class="badge cold">Cold sent</span>
               {% else %}<span class="badge new">New</span>{% endif %}
             {% endif %}

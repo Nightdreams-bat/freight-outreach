@@ -27,11 +27,12 @@ from outreach.logging_setup import get_logger
 from outreach.locking import data_lock
 from outreach.paths import REPLY_QUEUE_PATH
 from outreach.send_tracker import record_send_history, record_sent, remaining_today
+from outreach.templates import MEETING_TIME_DISPLAY_FMT
 
 log = get_logger("reply_queue")
 
 _TS = "%Y-%m-%d %H:%M:%S"
-_HUMAN = "%A, %b %d at %I:%M %p"
+_HUMAN = MEETING_TIME_DISPLAY_FMT
 
 
 # --- persistence -----------------------------------------------------------
@@ -110,10 +111,6 @@ def enqueue(action, *, lead_row_idx=None, lead_email="", lead_name="",
     return qid
 
 
-def all_items():
-    return list(reversed(_read_all()))
-
-
 def pending():
     """Pending items, newest first."""
     return [r for r in reversed(_read_all()) if r.get("status") == "pending"]
@@ -187,7 +184,7 @@ def approve(qid, *, overrides=None, cfg=None, store=None, mailer=None):
         return {"status": "error", "message": f"Unknown action kind '{kind}'."}
 
     cfg = cfg or load_config()
-    daily_cap = cfg.get("daily_send_cap", 150)
+    daily_cap = cfg_get(cfg, "daily_send_cap")
     if remaining_today(daily_cap) <= 0:
         return {
             "status": "deferred",
@@ -260,7 +257,7 @@ def approve(qid, *, overrides=None, cfg=None, store=None, mailer=None):
                 # If the meeting is already inside the 24h reminder horizon, stamp
                 # ReminderSentAt now so the lead isn't pinged "call tomorrow" an
                 # hour after this confirmation (min_notice_hours vs reminder window).
-                window_h = float(cfg.get("reminder_window_hours", 2))
+                window_h = float(cfg_get(cfg, "reminder_window_hours"))
                 if start - datetime.now() <= timedelta(hours=24 + window_h):
                     store.set_value(row_idx, "ReminderSentAt", datetime.now().strftime(_TS))
             message = f"Booked {start.strftime('%b %d, %H:%M')} and emailed {to_addr}."

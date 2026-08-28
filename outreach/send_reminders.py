@@ -1,5 +1,6 @@
 import argparse
 
+from outreach.config import get as cfg_get
 from outreach.config import load_config
 from outreach.core import (
     apply_daily_cap,
@@ -41,15 +42,23 @@ def main():
     except Exception as e:  # noqa: BLE001
         log.warning(f"Opt-out scan failed (continuing with reminders): {e}")
 
-    window_hours = cfg.get("reminder_window_hours", 2)
+    window_hours = cfg_get(cfg, "reminder_window_hours")
     candidates = reminder_candidates(store, window_hours)
 
     if not candidates:
         log.info("No reminders due this run.")
         return
 
-    max_per_run = cfg.get("max_reminders_per_run", 60)
-    candidates, overflow = cap_reminders_per_run(candidates, max_per_run)
+    max_per_run = cfg_get(cfg, "max_reminders_per_run")
+    n = len(candidates)
+    candidates, overflow, aborted = cap_reminders_per_run(candidates, max_per_run)
+    if aborted:
+        log.critical(
+            f"{n} reminders matched this run - far over the per-run cap of {max_per_run}. "
+            f"Sending NONE; check clients.xlsx for a data problem (e.g. many rows sharing "
+            f"one MeetingDateTime)."
+        )
+        return
     if overflow:
         log.critical(
             f"{max_per_run + overflow} reminders matched this run, over the per-run cap of "
@@ -59,7 +68,7 @@ def main():
         )
 
     if not args.dry_run:
-        daily_cap = cfg.get("daily_send_cap", 150)
+        daily_cap = cfg_get(cfg, "daily_send_cap")
         candidates, _, deferred = apply_daily_cap(
             candidates, daily_cap, sort_key=lambda c: c[2]  # soonest meeting first if capped
         )

@@ -141,10 +141,10 @@ def test_unknown_address_returns_nothing():
 
 # --- processed-id tracking --------------------------------------------
 
-def test_mark_and_is_processed():
-    assert not gmail_read.is_processed("abc")
+def test_mark_processed_persists_ids():
+    assert gmail_read._load_processed() == []
     gmail_read.mark_processed(["abc", "def"])
-    assert gmail_read.is_processed("abc") and gmail_read.is_processed("def")
+    assert set(gmail_read._load_processed()) == {"abc", "def"}
 
 
 def test_mark_processed_dedupes():

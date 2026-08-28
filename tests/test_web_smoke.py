@@ -58,7 +58,7 @@ def client(monkeypatch, tmp_path):
     monkeypatch.setattr(web_app.lead_sourcing, "search_businesses",
                         lambda what, where, **k: [{"Name": "", "Company": "Found SRL",
                                                    "Email": "hi@found.test", "Phone": "",
-                                                   "Website": "", "Address": "", "Source": "OSM"}])
+                                                   "Website": "", "Address": "", "Source": "web"}])
     monkeypatch.setattr(web_app.lead_sourcing, "enrich", lambda b, **k: b)
 
     application = web_app.create_app()

@@ -3,6 +3,7 @@
 from datetime import datetime, timedelta
 
 import pytest
+from googleapiclient.errors import HttpError
 
 from outreach import calendar_api
 
@@ -239,6 +240,77 @@ def test_create_event_uses_configured_zone_for_conversion():
     assert calendar_api.slot_is_free(
         "me@x.com", "primary", datetime(2026, 1, 15, 10, 0), 30, service=svc2, tz="America/New_York"
     ) is True
+
+
+class _Resp:
+    def __init__(self, status):
+        self.status = status
+        self.reason = "Conflict"
+
+    def get(self, _key, _default=None):
+        return "application/json"
+
+
+class _409ThenListEvents:
+    """insert() raises 409 the first time; list() by iCalUID finds the event."""
+
+    def __init__(self):
+        self.insert_calls = 0
+        self.list_calls = 0
+        self._pending = None
+
+    def insert(self, calendarId=None, body=None, sendUpdates=None):
+        self.insert_calls += 1
+        self._pending = "insert"
+        return self
+
+    def list(self, calendarId=None, iCalUID=None, showDeleted=None):
+        self.list_calls += 1
+        self._pending = "list"
+        return self
+
+    def execute(self):
+        if self._pending == "insert":
+            raise HttpError(_Resp(409), b'{"error": {"message": "duplicate"}}')
+        return {"items": [{"id": "recovered_evt"}]}
+
+
+class _RecoveryService:
+    def __init__(self):
+        self._ev = _409ThenListEvents()
+
+    def events(self):
+        return self._ev
+
+
+def test_create_event_recovers_from_409_on_own_ical_uid():
+    svc = _RecoveryService()
+    eid = calendar_api.create_event(
+        "me@x.com", "primary", summary="s", description="d",
+        start=datetime(2026, 9, 1, 15, 0), duration_minutes=30,
+        attendee_email="a@b.com", timezone="UTC", service=svc,
+        ical_uid="freight-abc123@freightoutreach",
+    )
+    assert eid == "recovered_evt"
+    assert svc.events().insert_calls == 1
+    assert svc.events().list_calls == 1
+
+
+def test_create_event_409_without_ical_uid_still_raises():
+    class _Always409:
+        def insert(self, **k):
+            return self
+
+        def execute(self):
+            raise HttpError(_Resp(409), b"{}")
+
+    svc = type("S", (), {"events": lambda self: _Always409()})()
+    with pytest.raises(HttpError):
+        calendar_api.create_event(
+            "me@x.com", "primary", summary="s", description="d",
+            start=datetime(2026, 9, 1, 15, 0), duration_minutes=30,
+            attendee_email="a@b.com", timezone="UTC", service=svc,
+        )
 
 
 def test_create_event_sets_deterministic_ical_uid():

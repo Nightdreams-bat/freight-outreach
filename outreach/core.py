@@ -80,6 +80,12 @@ def reminder_candidates(store, window_hours):
     for row_idx, row in store.rows():
         if row.get("ReminderSentAt"):
             continue
+        # A lead who just opted out or declined this same run is already a
+        # candidate row - skip those so the opt-out scan that ran moments ago
+        # actually suppresses the reminder. "booked" is NOT skipped: an approved
+        # booking is exactly what a 24h reminder is for.
+        if str(row.get("ReplyStatus") or "").strip().lower() in {"no", "optout"}:
+            continue
         raw_meeting_time = row.get("MeetingDateTime")
         meeting_time = parse_meeting_time(raw_meeting_time)
         if meeting_time is None:
@@ -92,14 +98,22 @@ def reminder_candidates(store, window_hours):
     return candidates
 
 
-def cap_reminders_per_run(candidates, max_per_run):
-    """Apply the per-run reminder brake: never go silent on a busy day - sort by
-    soonest meeting, send the first `max_per_run`, and let the caller log the
-    overflow. Returns (trimmed_candidates, overflow_count)."""
+def cap_reminders_per_run(candidates, max_per_run, abort_multiple=3):
+    """Apply the per-run reminder brake. Returns (trimmed, overflow, aborted).
+
+    Normally: never go silent on a busy day - sort by soonest meeting, send the
+    first `max_per_run`, let the caller log the overflow.
+
+    But if the match count is way over the cap (> max_per_run * abort_multiple),
+    that's almost certainly a data problem (one datetime pasted into hundreds of
+    rows), not a busy day - send ZERO and let the caller log loudly.
+    """
+    if len(candidates) > max_per_run * abort_multiple:
+        return [], len(candidates), True
     if len(candidates) <= max_per_run:
-        return candidates, 0
+        return candidates, 0, False
     ordered = sorted(candidates, key=lambda c: c[2])  # soonest meeting first
-    return ordered[:max_per_run], len(candidates) - max_per_run
+    return ordered[:max_per_run], len(candidates) - max_per_run, False
 
 
 def followup_candidates(store, cfg, now=None):
@@ -363,7 +377,7 @@ def send_reminder_batch(cfg, store, mailer, candidates, dry_run=False):
             "name": lead_name(row),
             "company": lead_company(row),
             "phone": row.get("Phone") or "",
-            "meeting_time": meeting_time.strftime("%A, %b %d at %I:%M %p"),
+            "meeting_time": meeting_time.strftime(templates.MEETING_TIME_DISPLAY_FMT),
             "sender_name": cfg["sender_name"],
             "sender_company": cfg["sender_company"],
             "sender_address": cfg.get("sender_address") or "",

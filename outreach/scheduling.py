@@ -27,6 +27,7 @@ from outreach.templates import (
     DECLINE_ACK_SUBJECT,
     MEETING_CONFIRM_BODY,
     MEETING_CONFIRM_SUBJECT,
+    MEETING_TIME_DISPLAY_FMT,
     PROPOSE_TIMES_BODY,
     PROPOSE_TIMES_SUBJECT,
     render,
@@ -36,7 +37,7 @@ from outreach.templates import (
 log = get_logger("scheduling")
 
 # Same human format the reminder emails use (see core.send_reminder_batch).
-MEETING_TIME_FMT = "%A, %b %d at %I:%M %p"
+MEETING_TIME_FMT = MEETING_TIME_DISPLAY_FMT
 SLOTS_TO_OFFER = 3
 
 

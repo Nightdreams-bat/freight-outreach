@@ -92,6 +92,31 @@ def test_reminder_not_sent_for_past_meeting():
     assert core.reminder_candidates(store, window_hours=2) == []
 
 
+def test_reminder_skipped_for_optout_or_declined_reply_status():
+    meeting = datetime.now() + timedelta(hours=20)
+    rows = [{"Email": f"{s}@x.test", "MeetingDateTime": _ts(meeting),
+             "ReminderSentAt": "", "ReplyStatus": s}
+            for s in ("optout", "no", "booked", "scheduling", "")]
+    store = _Store(rows)
+    got = [r["ReplyStatus"] for _, r, _ in core.reminder_candidates(store, window_hours=2)]
+    # opt-out / declined are suppressed; "booked" is exactly what a reminder is for
+    assert got == ["booked", "scheduling", ""]
+
+
+def test_cap_reminders_per_run_aborts_when_far_over_cap():
+    now = datetime.now()
+    cands = [(i, {"Email": f"l{i}@x.test"}, now + timedelta(hours=1 + i)) for i in range(20)]
+    trimmed, overflow, aborted = core.cap_reminders_per_run(cands, 5)  # 20 > 5*3
+    assert aborted is True
+    assert trimmed == []
+    assert overflow == 20
+    # just over the plain cap but under the abort ceiling: send the soonest N
+    trimmed, overflow, aborted = core.cap_reminders_per_run(cands[:8], 5)
+    assert aborted is False
+    assert [i for i, _, _ in trimmed] == [0, 1, 2, 3, 4]
+    assert overflow == 3
+
+
 def test_reminder_not_sent_far_in_future():
     store = _Store([{"Email": "a@x.test",
                      "MeetingDateTime": _ts(datetime.now() + timedelta(days=3)),

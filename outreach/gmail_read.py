@@ -44,10 +44,6 @@ def _save_processed(ids):
     )
 
 
-def is_processed(message_id):
-    return str(message_id) in set(_load_processed())
-
-
 def mark_processed(message_ids):
     if not message_ids:
         return

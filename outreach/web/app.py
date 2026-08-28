@@ -10,6 +10,8 @@ from outreach import lead_sourcing, reply_queue, templates
 from outreach.config import get as cfg_get
 from outreach.config import load_config, save_config
 from outreach.credentials import get_anthropic_key, set_anthropic_key
+from outreach.logging_setup import get_logger
+from outreach.optout_scan import scan_optouts
 from outreach.paths import LOG_PATH, resource_path
 from outreach.core import (
     apply_daily_cap,
@@ -36,6 +38,8 @@ from outreach.schedule_task import (
 from outreach.scoring import is_manual as priority_is_manual
 from outreach.scoring import score_lead
 from outreach.send_tracker import recent_history, remaining_today, sent_today
+
+log = get_logger("web")
 
 SUPPRESSED_TRUE_VALUES = ("1", "true", "yes", "y")
 
@@ -77,7 +81,8 @@ def _same_origin_ok():
 # ---- manual "Run now" jobs (Dashboard) ------------------------------------
 # One background job at a time, in-process (no subprocess - avoids a PyInstaller
 # re-exec). The scheduled tasks are entirely separate from this.
-_JOB = {"status": "idle", "action": None, "started": None, "finished": None, "summary": None}
+_JOB = {"status": "idle", "severity": "idle", "action": None, "started": None,
+        "finished": None, "summary": None}
 _JOB_LOCK = threading.Lock()
 _RUN_ACTIONS = ("cold", "followups", "reminders", "replies")
 
@@ -88,6 +93,7 @@ _LEADS_LAST = {"what": "", "where": "", "scrape": True, "leads": []}
 
 def _run_job(action):
     cfg = load_config()
+    severity = "success"
     try:
         store = ExcelStore(
             cfg["excel_path"],
@@ -98,17 +104,19 @@ def _run_job(action):
 
         if action == "cold":
             cands, _, deferred = apply_daily_cap(
-                cold_candidates(store), cfg.get("daily_send_cap", 150),
+                cold_candidates(store), cfg_get(cfg, "daily_send_cap"),
                 sort_key=priority_sort_key(cfg),
             )
             r = send_cold_batch(cfg, store, build_mailer(cfg), cands) if cands else {"sent": 0, "errors": []}
             summary = f"{r['sent']} cold intro(s) sent"
             if deferred:
                 summary += f", {deferred} deferred (daily cap)"
+                severity = "warning"
         elif action == "followups":
             if not cfg_get(cfg, "followup_enabled"):
                 r = {"sent": 0, "errors": []}
                 summary = "Follow-up drip is off - turn it on in Settings first"
+                severity = "warning"
             else:
                 raw = followup_candidates(store, cfg)
                 max_per_run = cfg_get(cfg, "max_followups_per_run")
@@ -116,26 +124,43 @@ def _run_job(action):
                     r = {"sent": 0, "errors": []}
                     summary = (f"{len(raw)} follow-ups matched, over the safety cap of "
                                f"{max_per_run} - sent none, check clients.xlsx")
+                    severity = "danger"
                 else:
                     cands, _, deferred = apply_daily_cap(
-                        raw, cfg.get("daily_send_cap", 150), sort_key=priority_sort_key(cfg),
+                        raw, cfg_get(cfg, "daily_send_cap"), sort_key=priority_sort_key(cfg),
                     )
                     r = send_followup_batch(cfg, store, build_mailer(cfg), cands) if cands else {"sent": 0, "errors": []}
                     summary = f"{r['sent']} follow-up(s) sent"
+                    if deferred:
+                        summary += f", {deferred} deferred (daily cap)"
+                        severity = "warning"
         elif action == "reminders":
-            cands = reminder_candidates(store, cfg.get("reminder_window_hours", 2))
-            cands, overflow = cap_reminders_per_run(
+            try:
+                scan_optouts(cfg, store)
+            except Exception as e:  # noqa: BLE001
+                log.warning(f"Opt-out scan failed (continuing with reminders): {e}")
+            cands = reminder_candidates(store, cfg_get(cfg, "reminder_window_hours"))
+            n = len(cands)
+            cands, overflow, aborted = cap_reminders_per_run(
                 cands, cfg_get(cfg, "max_reminders_per_run")
             )
-            cands, _, deferred = apply_daily_cap(
-                cands, cfg.get("daily_send_cap", 150), sort_key=lambda c: c[2]
-            )
-            r = send_reminder_batch(cfg, store, build_mailer(cfg), cands) if cands else {"sent": 0, "errors": []}
-            summary = f"{r['sent']} reminder(s) sent"
-            if overflow:
-                summary += f", {overflow} held for the next run (per-run cap)"
-            if deferred:
-                summary += f", {deferred} deferred (daily cap)"
+            if aborted:
+                r = {"sent": 0, "errors": []}
+                severity = "danger"
+                summary = (f"{n} reminders matched - far over the safety cap, sent none. "
+                           f"Check clients.xlsx.")
+            else:
+                cands, _, deferred = apply_daily_cap(
+                    cands, cfg_get(cfg, "daily_send_cap"), sort_key=lambda c: c[2]
+                )
+                r = send_reminder_batch(cfg, store, build_mailer(cfg), cands) if cands else {"sent": 0, "errors": []}
+                summary = f"{r['sent']} reminder(s) sent"
+                if overflow:
+                    summary += f", {overflow} held for the next run (per-run cap)"
+                    severity = "warning"
+                if deferred:
+                    summary += f", {deferred} deferred (daily cap)"
+                    severity = "warning"
         else:  # replies
             from outreach.process_replies import main as scan_replies
 
@@ -149,11 +174,13 @@ def _run_job(action):
         errs = r.get("errors") or []
         with _JOB_LOCK:
             _JOB["status"] = "failed" if errs else "success"
+            _JOB["severity"] = "failed" if errs else severity
             _JOB["summary"] = summary + (f" ({len(errs)} error(s) - see the log)" if errs else "")
             _JOB["finished"] = datetime.now().strftime("%H:%M:%S")
     except Exception as e:  # noqa: BLE001
         with _JOB_LOCK:
             _JOB["status"] = "failed"
+            _JOB["severity"] = "danger"
             _JOB["summary"] = f"{action}: {e}"
             _JOB["finished"] = datetime.now().strftime("%H:%M:%S")
 
@@ -279,7 +306,7 @@ def create_app():
     @app.route("/")
     def dashboard():
         cfg, store = get_config_and_store()
-        daily_cap = cfg.get("daily_send_cap", 150)
+        daily_cap = cfg_get(cfg, "daily_send_cap")
         setup_todo = []
         if not (cfg.get("sender_name") or "").strip() or not (cfg.get("sender_company") or "").strip():
             setup_todo.append("Add your name and company under Settings → Business details.")
@@ -296,7 +323,7 @@ def create_app():
             "daily_cap": daily_cap,
             "remaining_today": remaining_today(daily_cap),
             "cold_pending": len(cold_candidates(store)),
-            "reminders_due": len(reminder_candidates(store, cfg.get("reminder_window_hours", 2))),
+            "reminders_due": len(reminder_candidates(store, cfg_get(cfg, "reminder_window_hours"))),
             "followups_due": len(followup_candidates(store, cfg)) if cfg_get(cfg, "followup_enabled") else 0,
             "blocklist_count": len(cfg.get("disallowed_domains", [])) + len(cfg.get("disallowed_emails", [])),
             "pending_replies": len(reply_queue.pending()),
@@ -343,7 +370,7 @@ def create_app():
         return render_template(
             "send.html",
             cold=sorted(cold_candidates(store), key=by_priority),
-            reminders=reminder_candidates(store, cfg.get("reminder_window_hours", 2)),
+            reminders=reminder_candidates(store, cfg_get(cfg, "reminder_window_hours")),
             followups=sorted(followup_candidates(store, cfg), key=by_priority),
             followup_enabled=cfg_get(cfg, "followup_enabled"),
             score_lead=lambda row: score_lead(row, cfg),
@@ -355,7 +382,7 @@ def create_app():
         with _JOB_LOCK:
             if _JOB["status"] == "running":
                 return False, dict(_JOB)
-            _JOB.update(status="running", action=action,
+            _JOB.update(status="running", severity="running", action=action,
                         started=datetime.now().strftime("%H:%M:%S"),
                         finished=None, summary=None)
             job = dict(_JOB)
@@ -393,18 +420,6 @@ def create_app():
         if not started:
             return jsonify({"error": "a job is already running", "job": job}), 409
         return jsonify({"job": job})
-
-    @app.route("/open-thread/<thread_id>")
-    def open_thread(thread_id):
-        """Hand a Gmail thread to the system browser (WebView2-safe: a _blank
-        link can dead-end inside the frameless window)."""
-        safe = "".join(c for c in thread_id if c.isalnum())
-        if safe:
-            try:
-                webbrowser.open(f"https://mail.google.com/mail/u/0/#all/{safe}")
-            except Exception:  # noqa: BLE001
-                pass
-        return render_template("opened_thread.html"), 200
 
     @app.route("/run/status")
     def run_status():
@@ -684,7 +699,7 @@ def create_app():
     @app.route("/settings/automation/enable", methods=["POST"])
     def automation_enable():
         cfg = load_config()
-        ok, message = register_task(cfg.get("reminder_interval_hours", 2))
+        ok, message = register_task(cfg_get(cfg, "reminder_interval_hours"))
         flash(message if message else ("Automatic reminders enabled." if ok else "Failed to enable."), "success" if ok else "danger")
         return redirect(url_for("settings"))
 
@@ -700,7 +715,7 @@ def create_app():
         if not get_anthropic_key():
             flash("Add an Anthropic API key first - reply reading needs it.", "warning")
             return redirect(url_for("settings"))
-        interval = cfg.get("reminder_interval_hours", 2)
+        interval = cfg_get(cfg, "reminder_interval_hours")
         ok, message = register_task(interval, REPLY_TASK_NAME, "--replies")
         if ok:
             cfg["reply_scan_enabled"] = True

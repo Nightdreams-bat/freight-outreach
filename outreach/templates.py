@@ -18,6 +18,10 @@ import jinja2.sandbox
 #   Propose times:   name, company, sender_name, sender_company, sender_phone, sender_address, unsubscribe_line, slots (list of strings)
 #   Decline ack:     name, company, sender_name, sender_company, sender_address, unsubscribe_line
 
+# Human-readable meeting time shown in reminder emails, the scheduling module,
+# and the reply-queue display helpers. One source of truth.
+MEETING_TIME_DISPLAY_FMT = "%A, %b %d at %I:%M %p"
+
 COLD_INTRO_SUBJECT = "{{ company }} freight - quick question"
 
 COLD_INTRO_BODY = """Hi {{ name }},

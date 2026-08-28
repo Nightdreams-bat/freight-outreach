@@ -1,5 +1,6 @@
 import argparse
 
+from outreach.config import get as cfg_get
 from outreach.config import load_config
 from outreach.core import apply_daily_cap, build_mailer, cold_candidates, send_cold_batch
 from outreach.excel_store import ExcelFileLocked, ExcelStore
@@ -32,11 +33,11 @@ def main():
         return
 
     if not args.dry_run:
-        candidates, _, deferred = apply_daily_cap(candidates, cfg.get("daily_send_cap", 150))
+        candidates, _, deferred = apply_daily_cap(candidates, cfg_get(cfg, "daily_send_cap"))
         if deferred:
             log.warning(
                 f"{deferred} lead(s) deferred to the next run - today's send cap "
-                f"({cfg.get('daily_send_cap', 150)}) doesn't leave room for them."
+                f"({cfg_get(cfg, 'daily_send_cap')}) doesn't leave room for them."
             )
         if not candidates:
             log.warning("Daily send cap already reached for today. Try again tomorrow.")

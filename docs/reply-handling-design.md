@@ -192,7 +192,6 @@ def fetch_new_replies(gmail_address: str, lookback_days: int,
     """
 
 def mark_processed(message_ids: list[str]) -> None: ...
-def is_processed(message_id: str) -> bool: ...
 ```
 
 - Scope `gmail.readonly`. `service = build("gmail","v1",...)` via

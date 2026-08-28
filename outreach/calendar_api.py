@@ -21,6 +21,24 @@ from googleapiclient.errors import HttpError
 from outreach.gmail_oauth import get_credentials
 from outreach.logging_setup import get_logger
 
+# Transport-layer failures (DNS, TLS, dropped connection, read timeout) that can
+# strand an events.insert *after* the event was created on Google's side. Retried
+# like a 5xx; the deterministic iCalUID stops the retry from double-booking.
+_TRANSPORT_ERRORS = [TimeoutError, ConnectionError, OSError]
+try:
+    from google.auth.exceptions import TransportError as _GoogleTransportError
+
+    _TRANSPORT_ERRORS.append(_GoogleTransportError)
+except ImportError:  # pragma: no cover
+    pass
+try:
+    from httplib2 import HttpLib2Error as _HttpLib2Error
+
+    _TRANSPORT_ERRORS.append(_HttpLib2Error)
+except ImportError:  # pragma: no cover
+    pass
+_TRANSPORT_ERRORS = tuple(_TRANSPORT_ERRORS)
+
 try:  # Python 3.9+; always present on the 3.12 target
     from zoneinfo import ZoneInfo
 except ImportError:  # pragma: no cover
@@ -130,6 +148,8 @@ def _retry_google(call, *, attempts=4):
             if status not in _RETRY_STATUSES:
                 raise
             last = e
+        except _TRANSPORT_ERRORS as e:
+            last = e
         if attempt < attempts - 1:
             delay = min(2 ** attempt + random.uniform(0, 1), _MAX_BACKOFF)
             log.warning("Calendar API %s, retrying in %.1fs (attempt %d/%d)",
@@ -230,9 +250,34 @@ def create_event(gmail_address, calendar_id, *, summary, description, start, dur
     }
     if ical_uid:
         body["iCalUID"] = ical_uid
-    created = _retry_google(lambda: svc.events().insert(
-        calendarId=calendar_id,
-        body=body,
-        sendUpdates="all" if send_updates else "none",
-    ).execute())
+    try:
+        created = _retry_google(lambda: svc.events().insert(
+            calendarId=calendar_id,
+            body=body,
+            sendUpdates="all" if send_updates else "none",
+        ).execute())
+    except HttpError as e:
+        status = e.resp.status if e.resp is not None else None
+        if status == 409 and ical_uid:
+            # The event with our own iCalUID already exists - a previous insert
+            # created it but its response was lost. Recover the id instead of
+            # surfacing a permanent "already booked" error.
+            recovered = _recover_by_ical_uid(svc, calendar_id, ical_uid)
+            if recovered:
+                log.warning("events.insert returned 409 for iCalUID %s - recovered existing event %s",
+                            ical_uid, recovered)
+                return recovered
+        raise
     return created["id"]
+
+
+def _recover_by_ical_uid(svc, calendar_id, ical_uid):
+    """Look up an event by iCalUID; return its id or None."""
+    try:
+        resp = _retry_google(lambda: svc.events().list(
+            calendarId=calendar_id, iCalUID=ical_uid, showDeleted=False,
+        ).execute())
+    except HttpError:
+        return None
+    items = resp.get("items", []) if isinstance(resp, dict) else []
+    return items[0]["id"] if items else None

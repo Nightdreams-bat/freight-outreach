@@ -73,7 +73,7 @@
       return;
     }
     statusBox.style.display = "flex";
-    statusBox.className = "runstatus " + job.status;
+    statusBox.className = "runstatus " + (job.severity || job.status);
     if (job.status === "running") {
       var known = startedThisSession
         ? (job.action || "job") + " — running… started " + (job.started || "")
@@ -82,8 +82,9 @@
       setButtons(true);
       ensurePolling();
     } else {
-      // terminal: success / failed
-      if (!startedThisSession && job.status === "success") {
+      // terminal: success / failed / warning / danger
+      if (!startedThisSession && job.status === "success" &&
+          (!job.severity || job.severity === "success" || job.severity === "idle")) {
         // a finished job from an earlier visit — don't nag
         statusBox.style.display = "none";
         setButtons(false);
