@@ -148,10 +148,18 @@ def test_find_leads_sidebar_link_and_beta_badge(client):
 
 
 def test_find_leads_search_then_import(client):
+    import time
+
     r = client.post("/find-leads/search",
                     data={"what": "transport", "where": "Chisinau", "scrape": "on"})
-    assert r.status_code == 200
-    body = r.get_data(as_text=True)
+    assert r.status_code == 302  # search runs in the background now
+
+    for _ in range(100):
+        if client.get("/find-leads/status").get_json()["status"] == "done":
+            break
+        time.sleep(0.05)
+
+    body = client.get("/find-leads").get_data(as_text=True)
     assert "Found SRL" in body
     imp = client.post("/find-leads/import", data={"pick": "0"}, follow_redirects=True)
     assert imp.status_code == 200

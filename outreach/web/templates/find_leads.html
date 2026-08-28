@@ -21,26 +21,49 @@
         <span>Try to find email addresses on company websites</span>
       </label>
       <div style="margin-top:14px">
-        <button class="btn primary" type="submit" id="leadBtn">
+        <button class="btn primary" type="submit" id="leadBtn"
+                {{ 'disabled' if job and job.status == 'running' }}>
           <span class="spinner" aria-hidden="true"></span>
-          <span class="btn-label">Search</span>
+          <span class="btn-label">{{ 'Searching…' if job and job.status == 'running' else 'Search' }}</span>
         </button>
       </div>
     </div>
     <div class="help">Searches can take up to a minute — we pause between requests and visit
-      each company site to look for an email. Keep this window open while it runs.</div>
+      each company site to look for an email. The search runs in the background, so you
+      can move around the app or close this tab while it works.</div>
   </form>
 </div>
+
+{% if job and job.status == 'running' %}
+<div class="runstatus running" id="searchStatus" role="status" aria-live="polite">
+  <span class="pulse" aria-hidden="true"></span>
+  <span>Searching for “{{ job.what }}” in “{{ job.where }}”… started {{ job.started }}.
+    You can leave this page — it keeps running.</span>
+</div>
+<script>
+  (function () {
+    function tick() {
+      fetch("{{ url_for('find_leads_status') }}")
+        .then(function (r) { return r.json(); })
+        .then(function (j) {
+          if (j.status !== "running") { location.reload(); return; }
+          setTimeout(tick, 2000);
+        })
+        .catch(function () { setTimeout(tick, 3000); });
+    }
+    setTimeout(tick, 2000);
+  })();
+</script>
+{% endif %}
 
 <script>
   (function () {
     var form = document.getElementById("leadForm");
     var btn = document.getElementById("leadBtn");
-    if (!form || !btn) return;
+    if (!form || !btn || btn.disabled) return;
     form.addEventListener("submit", function () {
       btn.classList.add("is-loading");
-      btn.querySelector(".btn-label").textContent = "Searching… this can take a minute";
-      // disable after the submit has been dispatched, so it still goes through
+      btn.querySelector(".btn-label").textContent = "Starting…";
       setTimeout(function () { btn.disabled = true; }, 0);
     });
   })();

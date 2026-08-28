@@ -280,24 +280,6 @@ code {
 .navitem.active svg { filter: none; }
 .navitem:active { transform: translateY(0.5px); }
 
-/* Active dot on the collapsed rail (mirrors the expanded green pill) */
-.navitem.active::after {
-  content: "";
-  position: absolute;
-  right: 6px;
-  top: 50%;
-  width: 5px;
-  height: 5px;
-  margin-top: -2.5px;
-  border-radius: 50%;
-  background: #eafff1;
-  box-shadow: 0 0 8px rgba(255, 255, 255, 0.9);
-  opacity: 1;
-  transition: opacity .18s ease;
-}
-.side:hover .navitem.active::after,
-.side:focus-within .navitem.active::after { opacity: 0; }
-
 .navitem .count {
   margin-left: auto;
   background: var(--accent);
@@ -327,6 +309,12 @@ code {
   border-radius: 6px;
   vertical-align: middle;
 }
+/* On the active (solid-green) nav item, green-on-green is invisible — go black */
+.navitem.active .beta {
+  color: #000;
+  border-color: rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, 0.12);
+}
 
 .side-foot {
   padding: 14px var(--pad-x) 18px;
@@ -340,6 +328,11 @@ code {
   transition: padding .24s cubic-bezier(.22, 1, .36, 1);
 }
 .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex-shrink: 0; box-shadow: 0 0 8px var(--accent); }
+.side-foot .dot {
+  box-shadow: 0 0 0 3px rgba(61, 220, 132, 0.16), 0 0 10px var(--accent);
+  animation: pulse 2.4s ease-in-out infinite;
+}
+.side-foot .label { color: var(--side-ink-bright); font-weight: 500; letter-spacing: 0.02em; }
 
 /* ---------- Main column ---------- */
 .main { flex: 1; min-width: 0; margin-left: var(--side-w-rail); display: flex; flex-direction: column; transition: margin-left .24s cubic-bezier(.22, 1, .36, 1); }

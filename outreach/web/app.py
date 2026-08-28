@@ -97,6 +97,32 @@ _RUN_ACTIONS = ("cold", "followups", "reminders", "replies")
 # user, one search at a time - a module-level slot is enough.
 _LEADS_LAST = {"what": "", "where": "", "scrape": True, "leads": []}
 
+# Find-leads search runs in a background thread so navigating away from the page
+# (or closing the tab) doesn't abort it - same pattern as the "Run now" jobs.
+_LEADS_JOB = {"status": "idle", "what": "", "where": "", "scrape": True,
+              "started": None, "finished": None, "summary": None}
+_LEADS_JOB_LOCK = threading.Lock()
+
+
+def _run_lead_search(what, where, scrape):
+    try:
+        leads = lead_sourcing.search_businesses(what, where, limit=15)
+        lead_sourcing.enrich(leads, do_scrape=scrape)
+    except Exception as e:  # noqa: BLE001 - sourcing is best-effort
+        with _LEADS_JOB_LOCK:
+            _LEADS_JOB.update(status="failed",
+                              finished=datetime.now().strftime("%H:%M:%S"),
+                              summary=f"Search failed: {e}")
+        return
+    _LEADS_LAST.update(what=what, where=where, scrape=scrape, leads=leads)
+    with _LEADS_JOB_LOCK:
+        _LEADS_JOB.update(
+            status="done",
+            finished=datetime.now().strftime("%H:%M:%S"),
+            summary=(f"Found {len(leads)} business(es)." if leads
+                     else "No businesses found. Try a broader type or a larger region."),
+        )
+
 
 def _run_job(action):
     cfg = load_config()
@@ -775,13 +801,31 @@ def create_app():
     # ---- Find leads (BETA) ---------------------------------------------
     @app.route("/find-leads")
     def find_leads():
-        return render_template("find_leads.html", results=None,
-                               what=_LEADS_LAST["what"], where=_LEADS_LAST["where"],
-                               scrape=_LEADS_LAST["scrape"])
+        with _LEADS_JOB_LOCK:
+            job = dict(_LEADS_JOB)
+        results = None
+        if job["status"] == "failed":
+            flash(job["summary"] or "Search failed.", "danger")
+        elif job["status"] == "done":
+            _, store = get_config_and_store()
+            existing = store.existing_emails()
+            leads = _LEADS_LAST["leads"]
+            results = [
+                {"lead": lead,
+                 "duplicate": bool(lead.get("Email")) and lead["Email"].lower() in existing}
+                for lead in leads
+            ]
+            if not leads:
+                flash(job["summary"], "warning")
+        return render_template(
+            "find_leads.html", results=results, job=job,
+            what=_LEADS_LAST["what"] or job["what"],
+            where=_LEADS_LAST["where"] or job["where"],
+            scrape=_LEADS_LAST["scrape"],
+        )
 
     @app.route("/find-leads/search", methods=["POST"])
     def find_leads_search():
-        cfg, store = get_config_and_store()
         what = (request.form.get("what") or "").strip()
         where = (request.form.get("where") or "").strip()
         scrape = request.form.get("scrape") == "on"
@@ -789,24 +833,25 @@ def create_app():
             flash("Enter both a business type and a city / region.", "warning")
             return redirect(url_for("find_leads"))
 
-        try:
-            leads = lead_sourcing.search_businesses(what, where, limit=15)
-            lead_sourcing.enrich(leads, do_scrape=scrape)
-        except Exception as e:  # noqa: BLE001 - sourcing is best-effort
-            flash(f"Search failed: {e}", "danger")
-            return redirect(url_for("find_leads"))
+        with _LEADS_JOB_LOCK:
+            if _LEADS_JOB["status"] == "running":
+                flash("A search is already running - wait for it to finish.", "warning")
+                return redirect(url_for("find_leads"))
+            _LEADS_JOB.update(status="running", what=what, where=where, scrape=scrape,
+                              started=datetime.now().strftime("%H:%M:%S"),
+                              finished=None, summary=None)
 
-        _LEADS_LAST.update(what=what, where=where, scrape=scrape, leads=leads)
-        existing = store.existing_emails()
-        results = [
-            {"lead": lead,
-             "duplicate": bool(lead.get("Email")) and lead["Email"].lower() in existing}
-            for lead in leads
-        ]
-        if not leads:
-            flash("No businesses found. Try a broader type or a larger region.", "warning")
-        return render_template("find_leads.html", results=results,
-                               what=what, where=where, scrape=scrape)
+        threading.Thread(target=_run_lead_search, args=(what, where, scrape),
+                         daemon=True).start()
+        return redirect(url_for("find_leads"))
+
+    @app.route("/find-leads/status")
+    def find_leads_status():
+        with _LEADS_JOB_LOCK:
+            j = dict(_LEADS_JOB)
+        return jsonify({"status": j["status"], "summary": j["summary"],
+                        "started": j["started"],
+                        "what": j["what"], "where": j["where"]})
 
     @app.route("/find-leads/import", methods=["POST"])
     def find_leads_import():
