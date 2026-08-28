@@ -1,10 +1,10 @@
-"""Multi-touch follow-up drip: outreach.core.followup_candidates + send_followup_batch."""
+"""Multi-touch follow-up drip: kairo.core.followup_candidates + send_followup_batch."""
 
 from datetime import datetime, timedelta
 
 import pytest
 
-from outreach import core
+from kairo import core
 
 NOW = datetime(2026, 8, 27, 12, 0, 0)
 

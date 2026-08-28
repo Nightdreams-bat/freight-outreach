@@ -1,6 +1,6 @@
 import pytest
 
-from outreach.lead_fields import (
+from kairo.lead_fields import (
     derive_company,
     derive_name,
     lead_company,

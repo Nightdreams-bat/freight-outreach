@@ -2,8 +2,8 @@
 
     python assets/make_icon.py
 
-Writes assets/freight.ico (multi-size), assets/freight-256.png, and the dashboard
-favicons under outreach/web/static/. Pillow only — no ImageMagick / cairosvg needed.
+Writes assets/kairo.ico (multi-size), assets/kairo-256.png, and the dashboard
+favicons under kairo/web/static/. Pillow only — no ImageMagick / cairosvg needed.
 """
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from PIL import Image, ImageChops, ImageDraw, ImageFilter
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
-STATIC = ROOT / "outreach" / "web" / "static"
+STATIC = ROOT / "kairo" / "web" / "static"
 
 # App palette (style.css)
 NEAR_BLACK = (5, 8, 10, 255)          # #05080a
@@ -171,10 +171,10 @@ def render() -> Image.Image:
 def main() -> None:
     icon = render()
 
-    png = HERE / "freight-256.png"
+    png = HERE / "kairo-256.png"
     icon.save(png)
 
-    ico = HERE / "freight.ico"
+    ico = HERE / "kairo.ico"
     icon.save(ico, sizes=[(s, s) for s in (16, 24, 32, 48, 64, 128, 256)])
 
     STATIC.mkdir(parents=True, exist_ok=True)

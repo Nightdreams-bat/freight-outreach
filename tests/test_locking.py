@@ -5,10 +5,10 @@ import pytest
 
 @pytest.fixture
 def locking(tmp_path, monkeypatch):
-    import outreach.paths as paths
+    import kairo.paths as paths
 
     monkeypatch.setattr(paths, "data_dir", lambda: tmp_path)
-    import outreach.locking as locking_mod
+    import kairo.locking as locking_mod
     importlib.reload(locking_mod)
     yield locking_mod
     importlib.reload(locking_mod)

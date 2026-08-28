@@ -1,8 +1,8 @@
-"""Wave 2: reply classification (outreach/llm.py). No network - fake Anthropic client."""
+"""Wave 2: reply classification (kairo/llm.py). No network - fake Anthropic client."""
 
 import pytest
 
-from outreach import llm
+from kairo import llm
 
 
 class _Block:

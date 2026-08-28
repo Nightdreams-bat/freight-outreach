@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from outreach import schedule_task
+from kairo import schedule_task
 
 
 @pytest.fixture
@@ -81,13 +81,13 @@ def test_backcompat_alias():
 def test_task_command_source_checkout_uses_pythonw(monkeypatch):
     monkeypatch.setattr(schedule_task.sys, "frozen", False, raising=False)
     cmd = schedule_task._task_command("--reminders")
-    assert cmd.endswith("-m outreach --reminders")
+    assert cmd.endswith("-m kairo --reminders")
 
 
 def test_task_command_frozen_uses_hidden_wrapper(monkeypatch, tmp_path):
     monkeypatch.setattr(schedule_task.sys, "frozen", True, raising=False)
-    monkeypatch.setattr(schedule_task.sys, "executable", str(tmp_path / "FreightOutreach.exe"))
-    monkeypatch.setattr("outreach.paths.data_dir", lambda: tmp_path)
+    monkeypatch.setattr(schedule_task.sys, "executable", str(tmp_path / "Kairo.exe"))
+    monkeypatch.setattr("kairo.paths.data_dir", lambda: tmp_path)
 
     cmd = schedule_task._task_command("--replies")
 

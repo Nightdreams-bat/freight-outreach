@@ -1,7 +1,7 @@
-"""outreach/scoring.py - rules-based lead priority."""
+"""kairo/scoring.py - rules-based lead priority."""
 
-from outreach.core import apply_daily_cap, priority_sort_key
-from outreach.scoring import is_manual, score_lead
+from kairo.core import apply_daily_cap, priority_sort_key
+from kairo.scoring import is_manual, score_lead
 
 CFG = {
     "scoring_rules": {"has_company": 2, "has_phone": 1, "keyword_hit": 3},
@@ -38,7 +38,7 @@ def test_defaults_used_when_config_lacks_scoring_keys():
 
 
 def test_priority_sort_key_orders_high_first_through_cap(monkeypatch):
-    monkeypatch.setattr("outreach.core.remaining_today", lambda cap: cap)
+    monkeypatch.setattr("kairo.core.remaining_today", lambda cap: cap)
     cands = [
         (2, {"Company": "", "Phone": ""}),          # score 0
         (3, {"Priority": "10"}),                    # score 10

@@ -1,6 +1,6 @@
 """Lead sourcing (BETA) - all network calls are injected, nothing hits the wire."""
 
-from outreach import lead_sourcing
+from kairo import lead_sourcing
 
 
 # A fake DuckDuckGo: real company sites mixed with directories and a dupe.

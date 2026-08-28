@@ -1,35 +1,32 @@
+# User data & credentials (never committed)
 config.json
 client_secret.json
-clients.xlsx
-outreach.log*
-build_out.log
+*.xlsx
+
+# Runtime state & logs
+kairo.log*
+*.log
 send_log.json
 send_history.jsonl
 llm_calls.json
-reply_scan.lock
-reply_failures.json
 processed_replies.json
+reply_failures.json
+reply_scan.lock
 .lock
+
+# Python
 __pycache__/
 *.pyc
+.pytest_cache/
+.venv/
 
 # PyInstaller build output
 build/
 dist/
 release/
 
-# Added by ggshield
-.cache_ggshield
-
-# seeded design-canvas payload (regenerated from Main.dc.html)
-design-mockup/freight-outreach-dashboard.html
-
-# local-only dev docs / design lab (never committed)
+# Local-only dev notes / design lab
 .dev/
 
-# scratch / demo
-clients_demo.xlsx
-*.bak
-injected.xlsx
-kairos.log
-assets/_render.html
+# Tooling
+.cache_ggshield

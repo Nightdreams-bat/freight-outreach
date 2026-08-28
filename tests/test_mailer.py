@@ -4,8 +4,8 @@ import base64
 
 import pytest
 
-from outreach import mailer as mailer_mod
-from outreach.mailer import Mailer
+from kairo import mailer as mailer_mod
+from kairo.mailer import Mailer
 
 
 class _FakeSend:
@@ -114,7 +114,7 @@ def _http_error(status, reason=""):
 
 
 def test_retry_backs_off_on_429_then_succeeds(monkeypatch):
-    from outreach import mailer as mailer_mod
+    from kairo import mailer as mailer_mod
 
     slept = []
     monkeypatch.setattr(mailer_mod.time, "sleep", lambda s: slept.append(s))
@@ -141,7 +141,7 @@ def test_retry_backs_off_on_429_then_succeeds(monkeypatch):
 
 
 def test_permanent_400_is_not_retried(monkeypatch):
-    from outreach import mailer as mailer_mod
+    from kairo import mailer as mailer_mod
 
     monkeypatch.setattr(mailer_mod.time, "sleep", lambda s: None)
     monkeypatch.setattr(mailer_mod, "get_credentials", lambda addr: object())
@@ -164,8 +164,8 @@ def test_permanent_400_is_not_retried(monkeypatch):
 def test_refresh_error_raises_needs_reconnect(monkeypatch):
     from google.auth.exceptions import RefreshError
 
-    from outreach import mailer as mailer_mod
-    from outreach.errors import GmailNeedsReconnect
+    from kairo import mailer as mailer_mod
+    from kairo.errors import GmailNeedsReconnect
 
     monkeypatch.setattr(mailer_mod.time, "sleep", lambda s: None)
     monkeypatch.setattr(mailer_mod, "get_credentials", lambda addr: object())

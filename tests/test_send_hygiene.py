@@ -1,8 +1,8 @@
-"""Batch circuit breaker in outreach.core - a run aborts after N consecutive failures."""
+"""Batch circuit breaker in kairo.core - a run aborts after N consecutive failures."""
 
 import pytest
 
-from outreach import core
+from kairo import core
 
 CFG = {"sender_name": "Al", "sender_company": "Co", "sender_phone": "", "sender_pitch": "",
        "send_failure_abort_threshold": 5}

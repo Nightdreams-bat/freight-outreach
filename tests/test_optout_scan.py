@@ -2,7 +2,7 @@
 
 import pytest
 
-from outreach import optout_scan
+from kairo import optout_scan
 
 
 class FakeStore:

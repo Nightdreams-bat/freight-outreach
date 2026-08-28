@@ -2,7 +2,7 @@
 
 import pytest
 
-from outreach.web import app as web_app
+from kairo.web import app as web_app
 from tests.test_web_replies import BASE_CFG, FakeQueue
 
 

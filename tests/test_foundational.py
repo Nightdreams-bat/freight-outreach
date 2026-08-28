@@ -3,8 +3,8 @@
 import openpyxl
 import pytest
 
-from outreach import config, credentials, templates
-from outreach.excel_store import LOGICAL_COLUMNS, ExcelStore
+from kairo import config, credentials, templates
+from kairo.excel_store import LOGICAL_COLUMNS, ExcelStore
 
 NEW_COLUMNS = ["ReplyStatus", "LastReplyAt", "MeetingEventId"]
 

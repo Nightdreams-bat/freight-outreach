@@ -1,4 +1,4 @@
-from outreach.column_map import detect
+from kairo.column_map import detect
 
 
 def test_exact_standard_headers():

@@ -1,11 +1,11 @@
-"""Wave A: shared retire-a-lead helper (outreach/suppression.py)."""
+"""Wave A: shared retire-a-lead helper (kairo/suppression.py)."""
 
 from datetime import datetime
 
 import pytest
 
-from outreach import suppression
-from outreach.excel_store import ExcelFileLocked
+from kairo import suppression
+from kairo.excel_store import ExcelFileLocked
 
 
 class FakeStore:

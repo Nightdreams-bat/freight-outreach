@@ -1,7 +1,7 @@
 import openpyxl
 import pytest
 
-from outreach.excel_store import DATA_COLUMNS, STATE_COLUMNS, ExcelStore, sheet_headers
+from kairo.excel_store import DATA_COLUMNS, STATE_COLUMNS, ExcelStore, sheet_headers
 
 
 def _make(path, headers, *rows):
@@ -149,6 +149,6 @@ def test_add_lead_writes_website_address_only_when_mapped(tmp_path):
 
 
 def test_data_and_state_column_split_is_exhaustive():
-    from outreach.excel_store import LOGICAL_COLUMNS
+    from kairo.excel_store import LOGICAL_COLUMNS
     assert set(DATA_COLUMNS) | set(STATE_COLUMNS) == set(LOGICAL_COLUMNS)
     assert not (set(DATA_COLUMNS) & set(STATE_COLUMNS))

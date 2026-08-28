@@ -2,8 +2,8 @@
 
 import pytest
 
-from outreach import templates
-from outreach.core import _DUMMY_CONTEXT
+from kairo import templates
+from kairo.core import _DUMMY_CONTEXT
 
 
 @pytest.mark.parametrize("lang", ["en", "ro"])
@@ -68,14 +68,14 @@ def test_hook_snippets_defaults_per_language():
 
 
 def test_sandbox_blocks_ssti_payload():
-    from outreach import templates as t
+    from kairo import templates as t
     payload = "{{ cycler.__init__.__globals__ }}"
     with pytest.raises(Exception):
         t.render(payload, **_DUMMY_CONTEXT)
 
 
 def test_check_template_catches_non_template_errors():
-    from outreach.core import _check_template
+    from kairo.core import _check_template
     # {{1/0}} raises ZeroDivisionError, not a jinja2.TemplateError - must still be
     # caught pre-flight rather than aborting a batch mid-run.
     assert _check_template("ok", "{{ 1/0 }}") is not None

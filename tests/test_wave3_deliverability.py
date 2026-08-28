@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 
 import pytest
 
-from outreach import config, core, send_reminders
+from kairo import config, core, send_reminders
 
 NOW_FMT = "%Y-%m-%d %H:%M:%S"
 

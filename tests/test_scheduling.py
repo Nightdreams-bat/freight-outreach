@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 
 import pytest
 
-from outreach import scheduling
+from kairo import scheduling
 
 CFG = {
     "sender_name": "Al",

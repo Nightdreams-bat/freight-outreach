@@ -1,8 +1,8 @@
-"""outreach.send_tracker warm-up ramp - effective_daily_cap / ensure_warmup_started."""
+"""kairo.send_tracker warm-up ramp - effective_daily_cap / ensure_warmup_started."""
 
 from datetime import date, timedelta
 
-from outreach import send_tracker
+from kairo import send_tracker
 
 
 def _cfg(**over):

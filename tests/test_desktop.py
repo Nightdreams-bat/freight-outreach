@@ -5,7 +5,7 @@ import types
 
 import pytest
 
-from outreach import desktop
+from kairo import desktop
 
 
 @pytest.fixture(autouse=True)
@@ -109,16 +109,16 @@ def test_open_app_mode_returns_false_with_no_browser(monkeypatch):
 
 
 def test_create_shortcuts_swallows_a_broken_host(monkeypatch):
-    from outreach import shortcut
+    from kairo import shortcut
 
     monkeypatch.setattr(shortcut, "_shell", lambda: (_ for _ in ()).throw(RuntimeError("no COM")))
-    assert shortcut.create_shortcuts(r"C:\x\FreightOutreach.exe") == []
+    assert shortcut.create_shortcuts(r"C:\x\Kairo.exe") == []
 
 
 def test_web_flag_routes_to_browser_app(monkeypatch):
-    from outreach import __main__ as entry
+    from kairo import __main__ as entry
 
     called = {}
-    monkeypatch.setattr("outreach.web.app.main", lambda: called.setdefault("web", True))
+    monkeypatch.setattr("kairo.web.app.main", lambda: called.setdefault("web", True))
     entry.main(["--web"])
     assert called.get("web") is True

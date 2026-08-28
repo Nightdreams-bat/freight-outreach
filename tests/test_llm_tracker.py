@@ -1,11 +1,11 @@
-"""Wave A: monthly Claude-call counter (outreach/llm_tracker.py)."""
+"""Wave A: monthly Claude-call counter (kairo/llm_tracker.py)."""
 
 import contextlib
 import datetime
 
 import pytest
 
-from outreach import llm_tracker
+from kairo import llm_tracker
 
 
 class FakeDate(datetime.date):

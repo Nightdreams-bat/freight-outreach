@@ -2,7 +2,7 @@
 
 import pytest
 
-from outreach import bounce_scan
+from kairo import bounce_scan
 
 
 class FakeStore:

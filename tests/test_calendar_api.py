@@ -1,11 +1,11 @@
-"""Tests for outreach.calendar_api - no network, fake Calendar service injected."""
+"""Tests for kairo.calendar_api - no network, fake Calendar service injected."""
 
 from datetime import datetime, timedelta
 
 import pytest
 from googleapiclient.errors import HttpError
 
-from outreach import calendar_api
+from kairo import calendar_api
 
 
 def _local_offset():
@@ -289,7 +289,7 @@ def test_create_event_recovers_from_409_on_own_ical_uid():
         "me@x.com", "primary", summary="s", description="d",
         start=datetime(2026, 9, 1, 15, 0), duration_minutes=30,
         attendee_email="a@b.com", timezone="UTC", service=svc,
-        ical_uid="freight-abc123@freightoutreach",
+        ical_uid="kairo-abc123@kairo",
     )
     assert eid == "recovered_evt"
     assert svc.events().insert_calls == 1
@@ -318,6 +318,6 @@ def test_create_event_sets_deterministic_ical_uid():
     calendar_api.create_event(
         "me@x.com", "primary", summary="s", description="d",
         start=datetime(2026, 9, 1, 15, 0), duration_minutes=30,
-        attendee_email="a@b.com", timezone="UTC", service=svc, ical_uid="freight-abc123@freightoutreach",
+        attendee_email="a@b.com", timezone="UTC", service=svc, ical_uid="kairo-abc123@kairo",
     )
-    assert svc.events().captured["body"]["iCalUID"] == "freight-abc123@freightoutreach"
+    assert svc.events().captured["body"]["iCalUID"] == "kairo-abc123@kairo"

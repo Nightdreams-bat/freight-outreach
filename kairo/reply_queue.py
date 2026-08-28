@@ -1,0 +1,304 @@
+"""The approval queue: drafted actions waiting for the client to click Approve.
+
+Stored as JSONL at `paths.REPLY_QUEUE_PATH`, one record per line:
+
+    {id, created_at, status, lead_row_idx, lead_email, lead_name, lead_company,
+     thread_id, reply_summary, action: {...}}
+
+status is "pending", "done", or "rejected".
+
+`approve()` is the only place in the whole reply-handling feature that actually
+reaches out - it creates the calendar event, sends the email, and writes the
+lead's Excel row back. It respects the same daily send cap as the cold/reminder
+batches: if the cap is spent, the item stays pending and approve() returns
+`{"status": "deferred", ...}`.
+"""
+
+import json
+import uuid
+from datetime import datetime, timedelta
+
+from kairo import calendar_api
+from kairo.config import get as cfg_get
+from kairo.config import load_config
+from kairo.core import build_mailer
+from kairo.excel_store import ExcelStore
+from kairo.logging_setup import get_logger
+from kairo.locking import data_lock
+from kairo.paths import REPLY_QUEUE_PATH
+from kairo.send_tracker import (
+    effective_daily_cap,
+    record_send_history,
+    record_sent,
+    remaining_today,
+)
+from kairo.templates import MEETING_TIME_DISPLAY_FMT
+
+log = get_logger("reply_queue")
+
+_TS = "%Y-%m-%d %H:%M:%S"
+_HUMAN = MEETING_TIME_DISPLAY_FMT
+
+
+# --- persistence -----------------------------------------------------------
+
+def _read_all():
+    if not REPLY_QUEUE_PATH.exists():
+        return []
+    records = []
+    for line in REPLY_QUEUE_PATH.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            records.append(json.loads(line))
+        except ValueError:
+            log.warning("Skipping an unreadable line in reply_queue.jsonl")
+    return records
+
+
+def _write_all(records):
+    with data_lock():
+        body = "\n".join(json.dumps(r) for r in records)
+        REPLY_QUEUE_PATH.write_text(body + ("\n" if body else ""), encoding="utf-8")
+
+
+def _jsonable_action(action):
+    """Serialise an action dict: datetimes -> ISO strings, plus display helpers."""
+    out = {}
+    for key, value in action.items():
+        if isinstance(value, datetime):
+            out[key] = value.isoformat()
+        elif isinstance(value, list):
+            out[key] = [v.isoformat() if isinstance(v, datetime) else v for v in value]
+        else:
+            out[key] = value
+    if isinstance(action.get("start"), datetime):
+        out["start_display"] = action["start"].strftime(_HUMAN)
+    slots = action.get("slots")
+    if slots and isinstance(slots[0], datetime):
+        out["slots_display"] = [s.strftime(_HUMAN) for s in slots]
+    return out
+
+
+def _parse_dt(value):
+    if isinstance(value, datetime):
+        return value
+    return datetime.fromisoformat(str(value))
+
+
+# --- public API ----------------------------------------------------------
+
+def enqueue(action, *, lead_row_idx=None, lead_email="", lead_name="",
+            lead_company="", thread_id="", reply_summary=""):
+    """Add a drafted action to the queue. Returns the new queue id.
+
+    The action dict comes from `scheduling.plan_action`; the lead/thread metadata
+    is passed as keywords by `process_replies`.
+    """
+    qid = uuid.uuid4().hex[:12]
+    record = {
+        "id": qid,
+        "created_at": datetime.now().strftime(_TS),
+        "status": "pending",
+        "lead_row_idx": lead_row_idx,
+        "lead_email": lead_email,
+        "lead_name": lead_name,
+        "lead_company": lead_company,
+        "thread_id": thread_id,
+        "reply_summary": reply_summary,
+        "action": _jsonable_action(action),
+    }
+    with data_lock():
+        records = _read_all()
+        records.append(record)
+        _write_all(records)
+    return qid
+
+
+def pending():
+    """Pending items, newest first."""
+    return [r for r in reversed(_read_all()) if r.get("status") == "pending"]
+
+
+def get(qid):
+    for record in _read_all():
+        if record.get("id") == qid:
+            return record
+    return None
+
+
+def reject(qid):
+    with data_lock():
+        records = _read_all()
+        hit = False
+        for record in records:
+            if record.get("id") == qid and record.get("status") == "pending":
+                record["status"] = "rejected"
+                record["resolved_at"] = datetime.now().strftime(_TS)
+                hit = True
+        if hit:
+            _write_all(records)
+    return hit
+
+
+def _record_send(record):
+    action = record.get("action", {})
+    record_sent(1)
+    record_send_history(
+        "reply",
+        record.get("lead_email"),
+        record.get("lead_name"),
+        record.get("lead_company"),
+        action.get("email_subject") or action.get("kind") or "reply",
+    )
+
+
+def approve(qid, *, overrides=None, cfg=None, store=None, mailer=None):
+    """Execute a pending item: create the event (if any), send the email, write
+    the sheet. Returns a result dict with a "status" of:
+        "done"     - executed; item marked done
+        "deferred" - daily send cap reached; item left pending
+        "error"    - nothing happened; "message" explains why
+
+    `cfg` / `store` / `mailer` are injectable for tests; production builds them.
+    """
+    # The data lock guards the queue-file read-modify-write only. The calendar /
+    # Gmail network calls run outside it so a slow API can't block the scheduled
+    # reply/opt-out tasks (which also take this lock).
+    with data_lock():
+        records = _read_all()
+        record = next((r for r in records if r.get("id") == qid), None)
+        if record is None:
+            return {"status": "error", "message": f"Queue item {qid} not found."}
+        if record.get("status") != "pending":
+            return {"status": "error", "message": f"Item is already {record['status']}."}
+        record_snapshot = dict(record)
+
+    action = dict(record_snapshot.get("action", {}))
+    if overrides:
+        action.update(overrides)
+    kind = action.get("kind")
+
+    if kind == "manual":
+        return {
+            "status": "error",
+            "message": "This one needs manual scheduling - reply in Gmail, then reject it here.",
+        }
+    if kind not in ("book", "propose", "decline_ack"):
+        return {"status": "error", "message": f"Unknown action kind '{kind}'."}
+
+    cfg = cfg or load_config()
+    daily_cap = effective_daily_cap(cfg)
+    if remaining_today(daily_cap) <= 0:
+        return {
+            "status": "deferred",
+            "message": f"Daily send cap ({daily_cap}) reached - approve this again tomorrow.",
+        }
+
+    to_addr = record_snapshot.get("lead_email")
+    row_idx = record_snapshot.get("lead_row_idx")
+    gmail_address = cfg.get("gmail_address")
+    mailer = mailer or build_mailer(cfg)
+    # Thread the confirm/propose/decline reply onto the lead's own Gmail thread.
+    thread_kwargs = {}
+    if str(record_snapshot.get("thread_id") or "").strip():
+        thread_kwargs["thread_id"] = record_snapshot["thread_id"]
+
+    if store is None and row_idx is not None:
+        try:
+            store = ExcelStore(
+                cfg["excel_path"],
+                column_map=cfg.get("column_map"),
+                disallowed_emails=cfg.get("disallowed_emails"),
+                disallowed_domains=cfg.get("disallowed_domains"),
+            )
+        except Exception as e:  # noqa: BLE001 - a locked sheet shouldn't block the send
+            log.warning("Could not open the sheet to record the outcome: %s", e)
+            store = None
+
+    # If a prior approve() created the event but then failed before finishing,
+    # the id is on the record - reuse it instead of booking a second slot.
+    event_id = record_snapshot.get("event_id")
+    try:
+        if kind == "book":
+            start = _parse_dt(action["start"])
+            duration = int(cfg_get(cfg, "meeting_duration_minutes"))
+            tz = calendar_api.resolve_timezone(cfg)
+            if not event_id:
+                # Days can pass between drafting and Approve - re-check the slot is
+                # still open (Calendar has no "insert if free"). If it filled up,
+                # do nothing and leave the item pending.
+                if not calendar_api.slot_is_free(
+                    gmail_address, cfg_get(cfg, "calendar_id"), start, duration, tz=tz
+                ):
+                    return {
+                        "status": "error",
+                        "message": (
+                            "That time was taken since this was drafted - reject and "
+                            "re-scan, or pick another slot."
+                        ),
+                    }
+                event_id = calendar_api.create_event(
+                    gmail_address,
+                    cfg_get(cfg, "calendar_id"),
+                    summary=action.get("event_summary") or "Intro call",
+                    description=action.get("event_description") or "",
+                    start=start,
+                    duration_minutes=duration,
+                    attendee_email=to_addr,
+                    timezone=tz,
+                    send_updates=True,
+                    ical_uid=f"kairo-{qid}@kairo",
+                )
+                # Persist immediately so a send failure below can't cause a rebook.
+                _patch_record(qid, {"event_id": event_id})
+            mailer.send(to_addr, action["email_subject"], action["email_body"], **thread_kwargs)
+            _record_send(record_snapshot)
+            if store is not None:
+                store.set_value(row_idx, "MeetingDateTime", start.strftime(_TS))
+                store.set_value(row_idx, "MeetingEventId", event_id)
+                store.set_value(row_idx, "ReplyStatus", "booked")
+                # If the meeting is already inside the 24h reminder horizon, stamp
+                # ReminderSentAt now so the lead isn't pinged "call tomorrow" an
+                # hour after this confirmation (min_notice_hours vs reminder window).
+                window_h = float(cfg_get(cfg, "reminder_window_hours"))
+                if start - datetime.now() <= timedelta(hours=24 + window_h):
+                    store.set_value(row_idx, "ReminderSentAt", datetime.now().strftime(_TS))
+            message = f"Booked {start.strftime('%b %d, %H:%M')} and emailed {to_addr}."
+
+        elif kind == "propose":
+            mailer.send(to_addr, action["email_subject"], action["email_body"], **thread_kwargs)
+            _record_send(record_snapshot)
+            if store is not None:
+                store.set_value(row_idx, "ReplyStatus", "scheduling")
+            message = f"Sent proposed times to {to_addr}."
+
+        else:  # decline_ack
+            mailer.send(to_addr, action["email_subject"], action["email_body"], **thread_kwargs)
+            _record_send(record_snapshot)
+            if store is not None:
+                store.set_value(row_idx, "ReplyStatus", "no")
+            message = f"Sent an acknowledgement to {to_addr}."
+
+    except Exception as e:  # noqa: BLE001 - report the failure, leave the item pending
+        log.error("approve(%s) failed: %s", qid, e)
+        return {"status": "error", "message": f"Failed: {e}"}
+
+    _patch_record(qid, {
+        "status": "done",
+        "resolved_at": datetime.now().strftime(_TS),
+        **({"event_id": event_id} if event_id else {}),
+    })
+    return {"status": "done", "message": message, "event_id": event_id}
+
+
+def _patch_record(qid, updates):
+    """Apply `updates` to one queue record under the data lock."""
+    with data_lock():
+        records = _read_all()
+        for record in records:
+            if record.get("id") == qid:
+                record.update(updates)
+                _write_all(records)
+                return

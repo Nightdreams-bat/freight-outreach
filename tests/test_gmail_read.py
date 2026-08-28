@@ -5,7 +5,7 @@ import base64
 
 import pytest
 
-from outreach import gmail_read
+from kairo import gmail_read
 
 
 # --- fake Gmail service ------------------------------------------------------

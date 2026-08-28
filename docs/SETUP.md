@@ -1,4 +1,4 @@
-# Freight Outreach — full setup guide
+# Kairo — full setup guide
 
 This is the complete walkthrough, written so someone who has never seen the tool
 can get it running from nothing. It has two parts:
@@ -18,7 +18,7 @@ Diagnostics page can show.
 
 ```
 pip install -r requirements.txt
-python -m outreach          # starts the dashboard
+python -m kairo          # starts the dashboard
 ```
 
 For the packaged build, see `BUILD.md`.
@@ -29,7 +29,7 @@ Everything the tool does with email and calendars goes through Google's APIs, so
 Google needs to know about the app. This is a free, one-time setup.
 
 1. Go to <https://console.cloud.google.com/> and **create a project** (any name,
-   e.g. "Freight Outreach").
+   e.g. "Kairo").
 
 2. **Enable both APIs** the tool uses — they are separate and *both* are
    required:
@@ -72,8 +72,8 @@ Google needs to know about the app. This is a free, one-time setup.
 5. **Credentials → Create credentials → OAuth client ID:**
    - Application type: **Desktop app**.
    - Download the JSON, rename it to **`client_secret.json`**, and put it:
-     - source checkout: in the project root (next to `outreach/`)
-     - packaged build: next to `FreightOutreach.exe`
+     - source checkout: in the project root (next to `kairo/`)
+     - packaged build: next to `Kairo.exe`
 
 ### A3. Anthropic API key (only needed for reply handling)
 
@@ -104,7 +104,7 @@ to Anthropic.
 
 ## Part B — client setup (Settings page)
 
-Start the tool (`python -m outreach`, or double-click `FreightOutreach.exe`). The
+Start the tool (`python -m kairo`, or double-click `Kairo.exe`). The
 browser opens `http://127.0.0.1:5000` — localhost only, nothing is exposed to the
 network. The dashboard shows a short checklist until the essentials are filled in.
 
@@ -244,7 +244,7 @@ bottom → re-run Diagnostics.
 
 The key is valid but the org has no credits. **Billing** → buy credits (min $5).
 
-### "Access blocked: Freight Outreach has not completed the Google verification process" during Connect Gmail
+### "Access blocked: Kairo has not completed the Google verification process" during Connect Gmail
 
 The account you're signing in with isn't on the test-user list. Add it: Google
 Cloud Console → APIs & Services → OAuth consent screen → **Test users → Add
@@ -253,7 +253,7 @@ users**. Then retry.
 ### "client_secret.json not found"
 
 The one-time Google OAuth file (Part A2, step 5) isn't in place. Source checkout:
-project root. Packaged build: next to `FreightOutreach.exe`.
+project root. Packaged build: next to `Kairo.exe`.
 
 ### The dashboard looks unstyled / plain text
 

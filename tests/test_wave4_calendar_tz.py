@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 
 import pytest
 
-from outreach import config, process_replies
+from kairo import config, process_replies
 from tests.test_process_replies import BASE_CFG, FakeStore  # noqa: F401
 
 
@@ -39,7 +39,7 @@ def test_is_valid_tz():
 
 @pytest.fixture
 def wired(monkeypatch, tmp_path):
-    from outreach import gmail_read, llm, reply_queue, scheduling  # noqa: F401
+    from kairo import gmail_read, llm, reply_queue, scheduling  # noqa: F401
 
     state = {
         "cfg": dict(BASE_CFG),
@@ -97,7 +97,7 @@ def _wait_for_job(web_app, timeout=5.0):
 # --- web reminder brake sends soonest-N, never "sent none" (item 9) -----
 
 def test_web_send_reminders_now_sends_soonest_n(monkeypatch):
-    from outreach.web import app as web_app
+    from kairo.web import app as web_app
     from tests.test_web_replies import BASE_CFG as WEB_CFG
 
     now = datetime.now()

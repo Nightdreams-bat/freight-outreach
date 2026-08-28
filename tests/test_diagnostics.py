@@ -1,6 +1,6 @@
-"""outreach/diagnostics.py - every check is guarded and returns a verdict, never raises."""
+"""kairo/diagnostics.py - every check is guarded and returns a verdict, never raises."""
 
-from outreach import diagnostics
+from kairo import diagnostics
 
 CFG = {
     "sender_name": "", "sender_company": "",
@@ -41,7 +41,7 @@ def test_gmail_check_fails_without_account():
 
 
 def test_anthropic_warns_without_key(monkeypatch):
-    monkeypatch.setattr("outreach.credentials.get_anthropic_key", lambda: None)
+    monkeypatch.setattr("kairo.credentials.get_anthropic_key", lambda: None)
     assert diagnostics._check_anthropic(dict(CFG), _G)["status"] == "warn"
 
 

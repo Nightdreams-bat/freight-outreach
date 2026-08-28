@@ -1,10 +1,10 @@
-"""outreach.dns_check - fail-safe domain resolution check with a per-domain cache."""
+"""kairo.dns_check - fail-safe domain resolution check with a per-domain cache."""
 
 import socket
 
 import pytest
 
-from outreach import dns_check
+from kairo import dns_check
 
 
 @pytest.fixture(autouse=True)

@@ -5,7 +5,7 @@ from datetime import datetime
 
 import pytest
 
-from outreach import process_replies
+from kairo import process_replies
 
 BASE_CFG = {
     "reply_scan_enabled": True,
@@ -133,7 +133,7 @@ def test_terminal_reply_state_is_skipped(wired):
 
 
 def test_llm_not_configured_aborts(wired, monkeypatch):
-    from outreach.llm import LLMNotConfigured
+    from kairo.llm import LLMNotConfigured
 
     def boom(*a, **k):
         raise LLMNotConfigured("no key")

@@ -4,7 +4,7 @@ from datetime import datetime
 
 import pytest
 
-from outreach import reply_queue
+from kairo import reply_queue
 
 CFG = {
     "daily_send_cap": 150,
@@ -124,7 +124,7 @@ def test_approve_book_passes_deterministic_ical_uid(monkeypatch):
                         lambda *a, **k: seen.update(k) or "evt_ical")
     qid = _enqueue_book()
     reply_queue.approve(qid, cfg=CFG, store=FakeStore(), mailer=FakeMailer())
-    assert seen["ical_uid"] == f"freight-{qid}@freightoutreach"
+    assert seen["ical_uid"] == f"kairo-{qid}@kairo"
 
 
 def test_approve_book_soon_meeting_suppresses_reminder():

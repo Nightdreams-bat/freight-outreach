@@ -1,6 +1,6 @@
-"""outreach.segment - static carrier/shipper classification of a lead row."""
+"""kairo.segment - static carrier/shipper classification of a lead row."""
 
-from outreach import segment
+from kairo import segment
 
 CFG = {
     "segment_keywords_carrier": ["trucking", "owner operator", "reefer"],
