@@ -1,47 +1,65 @@
 """Free lead sourcing (BETA).
 
-We have no way to *find* leads - they're hand-typed into clients.xlsx. This pulls
-businesses from OpenStreetMap via the Overpass API (no key, no billing) and,
-optionally, scrapes a contact email off the company homepage. Lower yield than a
-paid Places + Hunter.io path, but $0.
+We can't *find* leads - they're hand-typed into clients.xlsx. This searches the web
+(DuckDuckGo, via the `ddgs` library - no key, no billing) for "<category> <city>",
+keeps the results that look like a company's own website, and scrapes a contact
+email off each one.
 
-Pure functions, stdlib only. Every network call goes through an injectable
-`fetch=` so tests never touch the real network.
+Yield is modest and depends on a business ranking on the first page or two: expect
+a handful of usable leads per search, best with a specific category ("distribuitor
+ambalaje", not "trading"). But it costs nothing and nothing gets rate-limited hard.
+
+Network calls go through injectable callables (`searcher=` / `fetch=`) so tests
+never touch the real network.
 """
 
-import json
 import re
 import time
 import urllib.parse
 import urllib.request
+from urllib.parse import urlparse
 
 from outreach.lead_fields import valid_email
 from outreach.logging_setup import get_logger
 
 log = get_logger("lead_sourcing")
 
-OVERPASS_URL = "https://overpass-api.de/api/interpreter"
-NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
-USER_AGENT = "FreightOutreach/1.0 (lead sourcing; contact via app)"
+USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) FreightOutreach/1.0"
 
-CONTACT_PATHS = ("/contact", "/contact-us", "/contacts", "/despre", "/contact.html")
+CONTACT_PATHS = ("/contact", "/contact-us", "/contacts", "/contacte", "/despre",
+                 "/despre-noi", "/kontakt", "/contact.html")
+
+# Result hosts that are directories / social / marketplaces - never a company's
+# own site, so they're no use as a lead even though they rank well.
+_SKIP_HOSTS = (
+    "facebook.", "instagram.", "linkedin.", "twitter.", "x.com", "youtube.",
+    "tiktok.", "pinterest.", "wikipedia.", "google.", "goo.gl", "maps.",
+    "yelp.", "tripadvisor.", "yellowpages.", "paginiaurii.ro", "cylex",
+    "listafirme.", "firme.info", "firmania.ro", "topfirme.com", "mfinante.ro",
+    "anaf.ro", "termene.ro", "targetare.ro", "cautarefirme.ro", "clubafaceri.ro",
+    "doingbusiness.ro", "kompass.com", "ghidul.ro", "einformatii.ro", "ccib.ro",
+    "europages.", "clutch.co", "glassdoor.", "indeed.", "jooble.", "olx.",
+    "ebay.", "amazon.", "trustpilot.", "crunchbase.", "bloomberg.", "reddit.",
+    "medium.com", "wordpress.com", "blogspot.", "github.", "t.me", "zf.ro",
+    "bizz.club", "agendaconstructiilor.ro", "bizoo.ro", "wixsite.com",
+    "afacerist.ro", "anunturi", "bizcaf.ro", "wlw.", "b2b-market.",
+)
 
 _EMAIL_RE = re.compile(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}")
 
-# Junk that matches the email regex but never is one.
+# Matches the email regex but is never a real address.
 _EMAIL_JUNK = ("wixpress", "sentry", "example.", "@2x", ".png", ".jpg", ".jpeg",
-               ".gif", ".webp", ".svg", "@sha", "core-js", "@babel", "@types")
+               ".gif", ".webp", ".svg", "@sha", "core-js", "@babel", "@types",
+               "your-email", "email@", "@domain", "@example", "user@", "name@")
 
-# Broad tag whitelist - the user types the category, this just keeps the query
-# from returning the whole map.
-_OSM_FILTERS = (
-    '["office"="logistics"]',
-    '["office"="company"]',
-    '["industrial"]',
-    '["landuse"="industrial"]',
-    '["shop"="trade"]',
-    '["amenity"="courier"]',
-)
+_TITLE_SEPS = (" | ", " – ", " — ", " - ", " · ", " :: ", " » ")
+
+# Which DuckDuckGo region to search. Romanian city / county hints -> ro-ro.
+_RO_HINTS = ("romania", "românia", "bucharest", "bucuresti", "bucurești", "ilfov",
+             "cluj", "timis", "timiș", "iasi", "iași", "constanta", "constanța",
+             "brasov", "brașov", "sibiu", "craiova", "oradea", "arad", "galati",
+             "galați", "ploiesti", "ploiești", "pitesti", "pitești", "moldova",
+             "chisinau", "chișinău")
 
 
 def _http_get(url, timeout=15):
@@ -51,96 +69,80 @@ def _http_get(url, timeout=15):
         return resp.read().decode(charset, errors="replace")
 
 
-def _http_post(url, data, timeout=25):
-    body = urllib.parse.urlencode(data).encode("utf-8")
-    req = urllib.request.Request(url, data=body, headers={"User-Agent": USER_AGENT})
-    with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310
-        return resp.read().decode("utf-8", errors="replace")
+def _ddgs_search(query, *, max_results, region):
+    """The real web search. Imported lazily so the module loads without `ddgs`."""
+    from ddgs import DDGS
+
+    with DDGS() as ddgs:
+        return list(ddgs.text(query, region=region, max_results=max_results))
 
 
-def _geocode(where, *, fetch):
-    q = urllib.parse.urlencode({"format": "json", "limit": 1, "q": where})
-    try:
-        rows = json.loads(fetch(f"{NOMINATIM_URL}?{q}"))
-    except Exception as e:  # noqa: BLE001
-        log.warning(f"Geocoding '{where}' failed: {e}")
-        return None
-    if not rows:
-        return None
-    try:
-        return float(rows[0]["lat"]), float(rows[0]["lon"])
-    except (KeyError, ValueError, TypeError):
-        return None
+def _region_for(where):
+    w = (where or "").lower()
+    return "ro-ro" if any(h in w for h in _RO_HINTS) else "wt-wt"
 
 
-def _build_query(lat, lon, *, radius_m=15000, limit=60):
-    around = f"(around:{radius_m},{lat},{lon})"
-    parts = [f"nwr{f}{around};" for f in _OSM_FILTERS]
-    return f"[out:json][timeout:25];({''.join(parts)});out center {int(limit)};"
+def _host_of(url):
+    host = (urlparse(url).netloc or "").lower().split(":")[0]
+    if host.startswith("www."):
+        host = host[4:]
+    return host
 
 
-def _compose_address(tags):
-    order = ("addr:street", "addr:housenumber", "addr:postcode", "addr:city")
-    bits = [str(tags[k]).strip() for k in order if tags.get(k)]
-    return ", ".join(bits)
+def _company_from_title(title, fallback):
+    for sep in _TITLE_SEPS:
+        if sep in title:
+            title = title.split(sep)[0]
+    title = title.strip(" -–—·|")
+    return title[:120] if title else fallback
 
 
-def _element_to_lead(el):
-    tags = el.get("tags") or {}
-    name = (tags.get("name") or "").strip()
-    if not name:
-        return None
-    email = (tags.get("email") or tags.get("contact:email") or "").strip()
-    return {
-        "Name": "",
-        "Company": name,
-        "Email": email if valid_email(email) else "",
-        "Phone": (tags.get("phone") or tags.get("contact:phone") or "").strip(),
-        "Website": (tags.get("website") or tags.get("contact:website") or "").strip(),
-        "Address": _compose_address(tags),
-        "Source": "OSM",
-    }
-
-
-def _matches(lead, what):
-    """Free-text filter over name/address - the user's category is the source of truth."""
-    if not what:
-        return True
-    hay = f"{lead['Company']} {lead['Address']}".lower()
-    return all(term in hay for term in what.lower().split())
-
-
-def search_businesses(what, where, *, limit=60, fetch=_http_post, geocode_fetch=_http_get):
-    """Businesses near `where` (city / region), loosely filtered by `what`.
+def search_businesses(what, where, *, limit=25, searcher=_ddgs_search):
+    """Company websites for "<what> <where>", de-duplicated by domain.
 
     Returns a list of dicts: Name, Company, Email, Phone, Website, Address, Source.
+    Email / Phone / Address start blank - enrich() fills the email from the site.
     """
-    coords = _geocode(where, fetch=geocode_fetch)
-    if not coords:
-        log.warning(f"Could not geocode '{where}' - no results")
-        return []
-    time.sleep(1)  # politeness between the two services
-
-    query = _build_query(coords[0], coords[1], limit=limit)
-    try:
-        payload = json.loads(fetch(OVERPASS_URL, {"data": query}))
-    except Exception as e:  # noqa: BLE001
-        log.warning(f"Overpass query failed: {e}")
+    what = (what or "").strip()
+    where = (where or "").strip()
+    if not what or not where:
         return []
 
-    leads = []
-    seen = set()
-    for el in payload.get("elements", []):
-        lead = _element_to_lead(el)
-        if lead is None or not _matches(lead, what):
+    region = _region_for(where)
+    queries = [f"{what} {where}", f"{what} {where} contact"]
+
+    rows = []
+    for i, query in enumerate(queries):
+        if i:
+            time.sleep(1)  # be gentle between searches
+        try:
+            rows += searcher(query, max_results=limit * 2, region=region)
+        except Exception as e:  # noqa: BLE001 - search is best-effort
+            log.warning(f"Web search for {query!r} failed: {e}")
+
+    leads, seen = [], set()
+    for row in rows:
+        href = (row.get("href") or row.get("url") or row.get("link") or "").strip()
+        if not href:
             continue
-        key = lead["Company"].lower()
-        if key in seen:
+        host = _host_of(href)
+        if not host or host in seen or any(s in host for s in _SKIP_HOSTS):
             continue
-        seen.add(key)
-        leads.append(lead)
+        seen.add(host)
+        scheme = urlparse(href).scheme or "https"
+        leads.append({
+            "Name": "",
+            "Company": _company_from_title(row.get("title") or "", host),
+            "Email": "",
+            "Phone": "",
+            "Website": f"{scheme}://{host}",
+            "Address": "",
+            "Source": "web",
+        })
         if len(leads) >= limit:
             break
+
+    log.info(f"Lead search '{what}' / '{where}': {len(rows)} results -> {len(leads)} company sites")
     return leads
 
 
@@ -167,13 +169,12 @@ def scrape_site_emails(url, *, fetch=_http_get):
     if not url.startswith(("http://", "https://")):
         url = "http://" + url
     try:
-        host = urllib.parse.urlparse(url).netloc
+        host = urlparse(url).netloc
     except ValueError:
         return []
 
-    candidates = [url]
     base = url.rstrip("/")
-    candidates += [base + p for p in CONTACT_PATHS]
+    candidates = [url] + [base + p for p in CONTACT_PATHS]
 
     for i, page in enumerate(candidates):
         if i:

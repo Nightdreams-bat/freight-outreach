@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Opening thread{% endblock %}
+{% block page_title %}Opening the email thread{% endblock %}
+{% block content %}
+
+<div class="card">
+  <h2>Opened in your browser</h2>
+  <p class="muted" style="margin:0 0 14px">
+    The Gmail thread was handed to your default web browser. If nothing opened,
+    check that a browser is set as default, or open Gmail manually.
+  </p>
+  <a href="{{ url_for('replies_page') }}" class="btn">Back to Replies</a>
+</div>
+
+{% endblock %}

@@ -24,7 +24,7 @@
   --surface-2: rgba(10, 17, 13, 0.6);
   --ink: #e8f1e9;
   --ink-soft: #9fb4a5;
-  --ink-faint: #6d8474;
+  --ink-faint: #8fa89a;
   --line: rgba(120, 190, 150, 0.12);
   --line-strong: rgba(120, 190, 150, 0.24);
   --side-bg: #04070a;
@@ -48,7 +48,8 @@
   --radius-sm: 10px;
   /* Liquid glass — Variant B */
   --glass-bg: rgba(16, 26, 20, 0.58);
-  --glass-blur: blur(22px) saturate(1.5) brightness(1.08);
+  --glass-solid: rgba(16, 26, 20, 0.82);
+  --glass-blur: blur(12px);
   --glass-border: rgba(120, 190, 150, 0.20);
   --glass-top-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.07);
   --glass-sheen: rgba(255, 255, 255, 0.10);
@@ -62,26 +63,28 @@ body {
   font-size: 14px;
   line-height: 1.55;
   color: var(--ink);
-  background:
-    radial-gradient(58% 46% at 12% -6%, rgba(61, 220, 132, 0.16), transparent 62%),
-    radial-gradient(48% 42% at 92% 8%, rgba(61, 220, 132, 0.08), transparent 60%),
-    radial-gradient(60% 60% at 88% 108%, rgba(61, 220, 132, 0.07), transparent 62%),
-    var(--bg);
-  background-attachment: fixed;
+  background: var(--bg);
   display: flex;
   min-height: 100vh;
 }
 
-/* faint scattered pixel squares in the corners */
+/* Fixed backdrop: radial glow stack + faint scattered pixel squares.
+   Lives on a position:fixed pseudo-element instead of background-attachment:fixed
+   (which repaints the whole viewport on every scroll frame in WebView2). */
 body::before {
   content: "";
   position: fixed;
   inset: 0;
   pointer-events: none;
   z-index: 0;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cg fill='%233ddc84' fill-opacity='0.05'%3E%3Crect x='8' y='16' width='14' height='14'/%3E%3Crect x='30' y='34' width='9' height='9'/%3E%3Crect x='180' y='150' width='16' height='16'/%3E%3Crect x='160' y='180' width='10' height='10'/%3E%3Crect x='120' y='24' width='8' height='8'/%3E%3C/g%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: left top, right bottom;
+  background-color: var(--bg);
+  background-image:
+    radial-gradient(58% 46% at 12% -6%, rgba(61, 220, 132, 0.16), transparent 62%),
+    radial-gradient(48% 42% at 92% 8%, rgba(61, 220, 132, 0.08), transparent 60%),
+    radial-gradient(60% 60% at 88% 108%, rgba(61, 220, 132, 0.07), transparent 62%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cg fill='%233ddc84' fill-opacity='0.05'%3E%3Crect x='8' y='16' width='14' height='14'/%3E%3Crect x='30' y='34' width='9' height='9'/%3E%3Crect x='180' y='150' width='16' height='16'/%3E%3Crect x='160' y='180' width='10' height='10'/%3E%3Crect x='120' y='24' width='8' height='8'/%3E%3C/g%3E%3C/svg%3E");
+  background-repeat: no-repeat, no-repeat, no-repeat, no-repeat;
+  background-position: 0 0, 0 0, 0 0, left top;
 }
 .side, .main { position: relative; z-index: 1; }
 
@@ -98,7 +101,6 @@ body::before {
   z-index: 0;
   opacity: 0;
   transition: opacity .35s ease;
-  will-change: transform;
   background: radial-gradient(circle,
     rgba(61, 220, 132, 0.06) 0%,
     rgba(61, 220, 132, 0.025) 40%,
@@ -108,6 +110,34 @@ body::before {
 
 a { color: var(--accent); text-decoration: none; }
 a:hover { color: var(--accent-hover); text-decoration: underline; }
+
+/* ---------- Focus visibility (WCAG 2.4.7) ---------- */
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--radius-sm); }
+.btn:focus-visible,
+.navitem:focus-visible,
+a:focus-visible,
+summary:focus-visible,
+[role="button"]:focus-visible,
+th button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.navitem:focus-visible { outline-offset: -2px; }
+.field:focus-visible { outline: none; }
+
+/* ---------- Skip link ---------- */
+.skip-link {
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  z-index: 1000;
+  padding: 9px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 600;
+  font-size: 13px;
+  transform: translateY(-160%);
+  transition: transform .15s ease;
+}
+.skip-link:focus { transform: none; color: var(--accent-ink); text-decoration: none; }
 
 code, .mono {
   font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -301,7 +331,7 @@ code {
   padding: 14px var(--pad-x) 18px;
   border-top: 1px solid var(--side-line);
   font-size: 12px;
-  color: #5f7568;
+  color: var(--side-ink);
   display: flex;
   align-items: center;
   gap: 7px;
@@ -406,7 +436,7 @@ form.inline { display: inline; margin: 0; }
   color: var(--ink);
   margin: 0 0 16px;
 }
-.card h2:only-child, .card h2:last-child { margin-bottom: 0; }
+.card h2:last-child { margin-bottom: 0; }
 .card-head { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
 .card-head h2 { margin: 0; }
 .card-head .spacer { flex: 1; }
@@ -434,9 +464,7 @@ form.inline { display: inline; margin: 0; }
   position: relative;
   isolation: isolate;
   overflow: hidden;
-  background: var(--glass-bg);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
+  background: var(--glass-solid);
   border: 1px solid var(--glass-border);
   border-radius: var(--radius);
   padding: 17px;
@@ -464,7 +492,22 @@ form.inline { display: inline; margin: 0; }
 
 /* ---------- Tables ---------- */
 .table-wrap { overflow-x: auto; }
-table.grid { width: 100%; border-collapse: collapse; font-size: 13px; }
+table.grid { width: 100%; border-collapse: collapse; font-size: 13px; line-height: 1.45; }
+table.grid caption { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+th button.th-sort {
+  font: inherit;
+  color: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+th button.th-sort svg { width: 12px; height: 12px; }
 table.grid th {
   text-align: left;
   font-size: 11px;
@@ -534,13 +577,12 @@ td.truncate, .truncate { max-width: 220px; overflow: hidden; text-overflow: elli
   padding: 12px 15px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--glass-border);
-  background: var(--glass-bg);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
+  background: var(--glass-solid);
   box-shadow: var(--glass-top-highlight);
   margin-bottom: 14px;
   font-size: 13px;
 }
+.alert svg.ai { width: 16px; height: 16px; flex-shrink: 0; margin-top: 1px; }
 .alert .x { margin-left: auto; cursor: pointer; border: none; background: none; color: inherit; font-size: 16px; line-height: 1; padding: 0 2px; }
 .alert.success { background: var(--accent-soft); color: var(--accent-soft-ink); border-color: rgba(61, 220, 132, 0.25); }
 .alert.warning { background: var(--amber-soft); color: var(--amber); border-color: rgba(227, 181, 103, 0.25); }
@@ -583,9 +625,7 @@ td.truncate, .truncate { max-width: 220px; overflow: hidden; text-overflow: elli
   position: relative;
   isolation: isolate;
   overflow: hidden;
-  background: var(--glass-bg);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
+  background: var(--glass-solid);
   border: 1px solid var(--glass-border);
   border-radius: var(--radius);
   padding: 20px 22px;
@@ -612,7 +652,7 @@ td.truncate, .truncate { max-width: 220px; overflow: hidden; text-overflow: elli
 }
 
 /* ---------- Forms / settings ---------- */
-.setrow { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; align-items: start; padding: 15px 0; border-bottom: 1px solid var(--line); }
+.setrow { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; align-items: start; padding: 15px 0; border-bottom: 1px solid var(--line); line-height: 1.45; }
 .setrow:first-of-type { padding-top: 0; }
 .setrow:last-child { border-bottom: none; padding-bottom: 0; }
 .setrow .help { font-size: 12.5px; color: var(--ink-soft); }
@@ -637,20 +677,6 @@ label.lab { display: block; font-weight: 600; font-size: 13px; margin-bottom: 6p
 .input-join .field { flex: 1; }
 h3.section { font-family: var(--display); font-size: 14px; font-weight: 600; letter-spacing: -0.005em; margin: 24px 0 6px; color: var(--ink); }
 
-.toggle {
-  width: 42px;
-  height: 23px;
-  border-radius: 999px;
-  background: var(--line-strong);
-  position: relative;
-  cursor: pointer;
-  flex-shrink: 0;
-  border: none;
-  padding: 0;
-}
-.toggle::after { content: ""; position: absolute; top: 2px; left: 2px; width: 19px; height: 19px; border-radius: 50%; background: #cfe8d7; transition: left .12s; }
-.toggle.on { background: var(--accent); box-shadow: var(--glow); }
-.toggle.on::after { left: 21px; background: var(--accent-ink); }
 .flagrow { display: flex; align-items: center; gap: 12px; }
 input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px; }
 
@@ -662,9 +688,7 @@ input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px;
   padding: 9px 11px;
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-sm);
-  background: rgba(16, 26, 20, 0.42);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  background: rgba(16, 26, 20, 0.7);
 }
 .list-item .spacer { flex: 1; }
 
@@ -750,5 +774,25 @@ input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  * { animation: none !important; transition: none !important; }
+  *:not(.pulse):not(.lamp) { animation: none !important; transition: none !important; }
+  /* The pulsing dot on .runstatus.running and .diag-row.checking is an
+     informational "in progress" cue, not decoration — keep it. */
+}
+
+/* ---------- Print ---------- */
+@media print {
+  body { display: block; background: #fff; color: #000; }
+  body::before, #cursor-glow, .side, .topbar { display: none !important; }
+  .main { margin: 0; }
+  .btn, .btn-row, form.inline, .skip-link { display: none !important; }
+  .card, .tile, .reply-card {
+    box-shadow: none;
+    border: 1px solid #ccc;
+    background: #fff;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    color: #000;
+  }
+  table.grid th, table.grid td, .muted, .empty { color: #000; }
+  a[href^="http"]::after { content: " (" attr(href) ")"; font-size: 0.85em; }
 }

@@ -10,6 +10,8 @@
 </head>
 <body>
 
+  <a href="#main" class="skip-link">Skip to content</a>
+
   <div id="cursor-glow"></div>
 
   <dialog id="confirmModal" class="modal">
@@ -24,46 +26,46 @@
   <aside class="side">
     <div class="brand">
       <span class="mark">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="m3.5 7.5 8.5 6 8.5-6"/></svg>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="m3.5 7.5 8.5 6 8.5-6"/></svg>
       </span>
       <span class="wordmark">Freight Outreach</span>
     </div>
 
     <nav class="nav">
-      <a class="navitem {{ 'active' if active == 'dashboard' }}" href="{{ url_for('dashboard') }}">
+      <a class="navitem {{ 'active' if active == 'dashboard' }}" {% if active == 'dashboard' %}aria-current="page"{% endif %} href="{{ url_for('dashboard') }}">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>
         <span class="label">Dashboard</span>
       </a>
-      <a class="navitem {{ 'active' if active == 'leads' }}" href="{{ url_for('leads') }}">
+      <a class="navitem {{ 'active' if active == 'leads' }}" {% if active == 'leads' %}aria-current="page"{% endif %} href="{{ url_for('leads') }}">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
         <span class="label">Leads / CRM</span>
       </a>
-      <a class="navitem {{ 'active' if active == 'find_leads' }}" href="{{ url_for('find_leads') }}">
+      <a class="navitem {{ 'active' if active == 'find_leads' }}" {% if active == 'find_leads' %}aria-current="page"{% endif %} href="{{ url_for('find_leads') }}">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-5.686 7-11a7 7 0 0 0-14 0c0 5.314 7 11 7 11Z"/><circle cx="12" cy="10" r="2.4"/></svg>
         <span class="label">Find leads <span class="beta">beta</span></span>
       </a>
-      <a class="navitem {{ 'active' if active == 'send' }}" href="{{ url_for('send_page') }}">
+      <a class="navitem {{ 'active' if active == 'send' }}" {% if active == 'send' %}aria-current="page"{% endif %} href="{{ url_for('send_page') }}">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
         <span class="label">Send</span>
       </a>
-      <a class="navitem {{ 'active' if active == 'replies' }}" href="{{ url_for('replies_page') }}">
+      <a class="navitem {{ 'active' if active == 'replies' }}" {% if active == 'replies' %}aria-current="page"{% endif %} href="{{ url_for('replies_page') }}">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
         <span class="label">Replies</span>
         {% if pending_replies %}<span class="count">{{ pending_replies }}</span>{% endif %}
       </a>
-      <a class="navitem {{ 'active' if active == 'history' }}" href="{{ url_for('history') }}">
+      <a class="navitem {{ 'active' if active == 'history' }}" {% if active == 'history' %}aria-current="page"{% endif %} href="{{ url_for('history') }}">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><path d="M12 7v5l4 2"/></svg>
         <span class="label">History</span>
       </a>
-      <a class="navitem {{ 'active' if active == 'blocklist' }}" href="{{ url_for('blocklist_page') }}">
+      <a class="navitem {{ 'active' if active == 'blocklist' }}" {% if active == 'blocklist' %}aria-current="page"{% endif %} href="{{ url_for('blocklist_page') }}">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m4.5 4.5 15 15"/></svg>
         <span class="label">Blocklist</span>
       </a>
-      <a class="navitem {{ 'active' if active == 'diagnostics' }}" href="{{ url_for('diagnostics_page') }}">
+      <a class="navitem {{ 'active' if active == 'diagnostics' }}" {% if active == 'diagnostics' %}aria-current="page"{% endif %} href="{{ url_for('diagnostics_page') }}">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
         <span class="label">Diagnostics</span>
       </a>
-      <a class="navitem {{ 'active' if active == 'settings' }}" href="{{ url_for('settings') }}">
+      <a class="navitem {{ 'active' if active == 'settings' }}" {% if active == 'settings' %}aria-current="page"{% endif %} href="{{ url_for('settings') }}">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>
         <span class="label">Settings</span>
       </a>
@@ -81,22 +83,29 @@
       {% block topbar_actions %}{% endblock %}
       {% if gmail_connected %}
         <span class="conn ok" title="Sending account connected">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
           {{ gmail_address or "Gmail connected" }}
         </span>
       {% else %}
         <a class="conn off" href="{{ url_for('settings') }}" title="No sending account connected">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
           Gmail not connected
         </a>
       {% endif %}
     </header>
 
-    <div class="content {% block content_class %}{% endblock %}">
+    <main id="main" class="content {% block content_class %}{% endblock %}" tabindex="-1">
       {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
           {% for category, message in messages %}
-            <div class="alert {{ category }}">
+            <div class="alert {{ category }}" role="{{ 'status' if category == 'success' else 'alert' }}">
+              {% if category == 'success' %}
+              <svg class="ai" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+              {% elif category == 'warning' %}
+              <svg class="ai" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><path d="M12 9v4M12 17h.01"/></svg>
+              {% else %}
+              <svg class="ai" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6M9 9l6 6"/></svg>
+              {% endif %}
               <span>{{ message }}</span>
               <button type="button" class="x" aria-label="Dismiss">&times;</button>
             </div>
@@ -105,44 +114,45 @@
       {% endwith %}
 
       {% block content %}{% endblock %}
-    </div>
+    </main>
   </div>
 
   <script>
-    // Flash dismiss
+    // Flash dismiss — return focus to main content so keyboard users aren't stranded
     document.querySelectorAll(".alert .x").forEach(function (b) {
-      b.addEventListener("click", function () { b.closest(".alert").remove(); });
+      b.addEventListener("click", function () {
+        b.closest(".alert").remove();
+        var m = document.getElementById("main");
+        if (m) m.focus();
+      });
     });
 
-    // Green light that eases toward the cursor
+    // Green light that eases toward the cursor. The rAF loop parks itself once the
+    // glow has settled and the pointer is gone; pointermove restarts it.
     (function () {
       var glow = document.getElementById("cursor-glow");
       if (!glow || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-      var tx = window.innerWidth / 2, ty = window.innerHeight / 2, x = tx, y = ty, shown = false;
-      window.addEventListener("pointermove", function (e) {
-        tx = e.clientX; ty = e.clientY;
-        if (!shown) { glow.style.opacity = "1"; shown = true; }
-      }, { passive: true });
-      window.addEventListener("pointerleave", function () { glow.style.opacity = "0"; shown = false; });
-      (function tick() {
+      var tx = window.innerWidth / 2, ty = window.innerHeight / 2, x = tx, y = ty;
+      var shown = false, running = false;
+      function tick() {
         x += (tx - x) * 0.12;
         y += (ty - y) * 0.12;
         glow.style.transform = "translate3d(" + x + "px," + y + "px,0)";
+        if (Math.abs(tx - x) < 0.4 && Math.abs(ty - y) < 0.4 && !shown) {
+          running = false;
+          return;
+        }
         requestAnimationFrame(tick);
-      })();
-    })();
-
-    // Specular sheen that tracks the cursor across glass surfaces
-    (function () {
-      if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-      var sel = ".card, .tile, .reply-card";
-      document.addEventListener("pointermove", function (e) {
-        var el = e.target.closest && e.target.closest(sel);
-        if (!el) return;
-        var r = el.getBoundingClientRect();
-        el.style.setProperty("--mx", ((e.clientX - r.left) / r.width * 100) + "%");
-        el.style.setProperty("--my", ((e.clientY - r.top) / r.height * 100) + "%");
+      }
+      function start() { if (!running) { running = true; requestAnimationFrame(tick); } }
+      window.addEventListener("pointermove", function (e) {
+        tx = e.clientX; ty = e.clientY;
+        if (!shown) { glow.style.opacity = "1"; shown = true; }
+        start();
       }, { passive: true });
+      window.addEventListener("pointerleave", function () {
+        glow.style.opacity = "0"; shown = false; start();
+      });
     })();
 
     // In-app confirmation modal (replaces window.confirm)

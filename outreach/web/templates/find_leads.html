@@ -4,24 +4,25 @@
 
 <p class="subtitle">
   <span class="beta">beta</span>
-  Pulls businesses from OpenStreetMap (free, no account) and tries to find a contact
-  email on their website. Lower yield than a paid data provider, but it costs nothing.
+  Searches the web for company sites matching a category + city, then tries to find a
+  contact email on each one. Works best with a specific category — expect a handful of
+  leads per search, not a bulk list. Free, no account.
 </p>
 
 <div class="card">
   <form method="post" action="{{ url_for('find_leads_search') }}" class="setrow">
     <div>
       <label class="lab">Business type</label>
-      <input class="field" name="what" value="{{ what or '' }}" placeholder="transport, logistics, warehouse…" required>
+      <input class="field" name="what" value="{{ what or '' }}" placeholder="distribuitor ambalaje, producător mobilă, import fructe…" required>
       <label class="lab" style="margin-top:10px">City / region</label>
-      <input class="field" name="where" value="{{ where or '' }}" placeholder="Chișinău" required>
+      <input class="field" name="where" value="{{ where or '' }}" placeholder="București" required>
       <label class="check" style="margin-top:10px">
         <input type="checkbox" name="scrape" {{ 'checked' if scrape is not defined or scrape }}>
         Try to find email addresses on company websites
       </label>
       <div style="margin-top:12px"><button class="btn primary" type="submit">Search</button></div>
     </div>
-    <div class="help">Searches can take up to a minute — OpenStreetMap is rate-limited and we pause between requests to stay within its fair-use policy.</div>
+    <div class="help">Searches can take up to a minute — we pause between requests and visit each company site to look for an email.</div>
   </form>
 </div>
 

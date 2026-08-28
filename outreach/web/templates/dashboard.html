@@ -15,23 +15,23 @@
 
 <div class="tiles">
   <div class="tile">
-    <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></div>
+    <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></div>
     <div class="num">{{ stats.total_leads }}</div>
     <div class="lbl">Total leads</div>
   </div>
   <div class="tile">
-    <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 5L2 7"/></svg></div>
+    <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 5L2 7"/></svg></div>
     <div class="num">{{ stats.sent_today }} <small>/ {{ stats.daily_cap }}</small></div>
     <div class="lbl">Sent today</div>
     <div class="sub">{{ stats.remaining_today }} left under the daily cap</div>
   </div>
   <div class="tile">
-    <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/></svg></div>
+    <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/></svg></div>
     <div class="num">{{ stats.cold_pending }}</div>
     <div class="lbl">Cold intros pending</div>
   </div>
   <div class="tile">
-    <div class="ic amber"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2M5 3 2 6M22 6l-3-3"/></svg></div>
+    <div class="ic amber"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2M5 3 2 6M22 6l-3-3"/></svg></div>
     <div class="num">{{ stats.reminders_due }}</div>
     <div class="lbl">Reminders due this scan</div>
   </div>
@@ -39,12 +39,12 @@
 
 <div class="tiles two">
   <div class="tile">
-    <div class="ic slate"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3 21 7l-4 4M3 11V9a4 4 0 0 1 4-4h14M7 21l-4-4 4-4M21 13v2a4 4 0 0 1-4 4H3"/></svg></div>
+    <div class="ic slate"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3 21 7l-4 4M3 11V9a4 4 0 0 1 4-4h14M7 21l-4-4 4-4M21 13v2a4 4 0 0 1-4 4H3"/></svg></div>
     <div class="num">{{ stats.followups_due }}</div>
     <div class="lbl">Follow-ups due {% if not followup_enabled %}<span class="chip">drip off</span>{% endif %}</div>
   </div>
   <div class="tile">
-    <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>
+    <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>
     <div class="num">{{ stats.pending_replies }}</div>
     <div class="lbl">Replies waiting for approval</div>
   </div>
@@ -57,18 +57,18 @@
     <span class="muted" style="font-size:12px">Also runs on the hourly scheduled task</span>
   </div>
   <div class="btn-row" id="runButtons">
-    <button class="btn primary" data-action="cold"
+    <button type="button" class="btn primary" data-action="cold"
             data-confirm="This sends the cold intro email to every lead currently queued, right now."
             data-confirm-ok="Send cold intros">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/></svg> Cold intros
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/></svg> Cold intros
     </button>
-    <button class="btn" data-action="followups"
+    <button type="button" class="btn" data-action="followups"
             data-confirm="This sends a follow-up nudge to every lead that is due one, right now."
             data-confirm-ok="Send follow-ups">Follow-ups</button>
-    <button class="btn" data-action="reminders">Reminder check</button>
-    <button class="btn" data-action="replies">Scan replies</button>
+    <button type="button" class="btn" data-action="reminders">Reminder check</button>
+    <button type="button" class="btn" data-action="replies">Scan replies</button>
   </div>
-  <div class="runstatus" id="runStatus" style="display:none"><span class="pulse"></span> <span id="runStatusText"></span></div>
+  <div class="runstatus" id="runStatus" role="status" aria-live="polite" aria-atomic="true" style="display:none"><span class="pulse"></span> <span id="runStatusText"></span></div>
 
   <div class="card-head" style="margin-top:18px">
     <h2 style="font-size:13px">Recent activity</h2>
@@ -93,100 +93,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script>
-(function () {
-  var buttons = document.querySelectorAll("#runButtons button");
-  var statusBox = document.getElementById("runStatus");
-  var statusText = document.getElementById("runStatusText");
-  var activityList = document.getElementById("activityList");
-  var polling = null;
-  var startedThisSession = false;
-
-  var ICONS = {
-    send: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/></svg>',
-    nudge: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3 21 7l-4 4M3 11V9a4 4 0 0 1 4-4h14M7 21l-4-4 4-4M21 13v2a4 4 0 0 1-4 4H3"/></svg>',
-    clock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
-    reply: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
-  };
-  var ICON_TONE = { clock: "amber", nudge: "slate" };
-
-  function setButtons(disabled) {
-    buttons.forEach(function (b) { b.disabled = disabled; });
-  }
-
-  function refreshActivity() {
-    fetch("{{ url_for('activity') }}").then(function (r) { return r.json(); })
-      .then(function (items) {
-        if (!items.length) {
-          activityList.innerHTML = '<div class="activity-empty">Nothing has been sent yet.</div>';
-          return;
-        }
-        activityList.innerHTML = items.slice(0, 6).map(function (it) {
-          var tone = ICON_TONE[it.icon] ? " " + ICON_TONE[it.icon] : "";
-          var row = document.createElement("div");
-          row.className = "activity-row";
-          var txt = document.createElement("span");
-          txt.className = "txt";
-          txt.textContent = it.text;
-          row.innerHTML = '<span class="ic' + tone + '">' + (ICONS[it.icon] || ICONS.send) + '</span>';
-          row.appendChild(txt);
-          var ago = document.createElement("span");
-          ago.className = "ago";
-          ago.textContent = it.ago;
-          row.appendChild(ago);
-          return row.outerHTML;
-        }).join("");
-      })
-      .catch(function () {});
-  }
-
-  function render(job) {
-    if (!job || job.status === "idle") { statusBox.style.display = "none"; setButtons(false); return; }
-    // Don't surface a finished job from an earlier visit - only show the banner
-    // for a run started on this page load.
-    if (job.status !== "running" && !startedThisSession) { statusBox.style.display = "none"; setButtons(false); return; }
-    statusBox.style.display = "flex";
-    statusBox.className = "runstatus " + job.status;
-    if (job.status === "running") {
-      statusText.textContent = (job.action || "job") + " — running… started " + (job.started || "");
-      setButtons(true);
-    } else {
-      statusText.textContent = (job.summary || job.status) + (job.finished ? "  ·  " + job.finished : "");
-      setButtons(false);
-      if (polling) { clearInterval(polling); polling = null; }
-      refreshActivity();
-    }
-  }
-
-  function poll() {
-    fetch("{{ url_for('run_status') }}").then(function (r) { return r.json(); }).then(render);
-  }
-
-  function startRun(btn) {
-    startedThisSession = true;
-    setButtons(true);
-    fetch("/run/" + btn.getAttribute("data-action"), { method: "POST" })
-      .then(function (r) { return r.json(); })
-      .then(function (data) {
-        render(data.job);
-        if (!polling) polling = setInterval(poll, 2000);
-      })
-      .catch(function () { setButtons(false); });
-  }
-
-  buttons.forEach(function (btn) {
-    btn.addEventListener("click", function () {
-      var msg = btn.getAttribute("data-confirm");
-      if (!msg) { startRun(btn); return; }
-      confirmDialog({
-        body: msg,
-        ok: btn.getAttribute("data-confirm-ok"),
-      }).then(function (go) { if (go) startRun(btn); });
-    });
-  });
-
-  poll();
-  refreshActivity();
-})();
-</script>
+<script src="{{ url_for('static', filename='run.js') }}"></script>
 {% endblock %}

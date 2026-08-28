@@ -349,103 +349,62 @@ def create_app():
             score_lead=lambda row: score_lead(row, cfg),
         )
 
+    def _try_start_job(action):
+        """Start the background runner unless one is already going.
+        Returns (started: bool, job: dict)."""
+        with _JOB_LOCK:
+            if _JOB["status"] == "running":
+                return False, dict(_JOB)
+            _JOB.update(status="running", action=action,
+                        started=datetime.now().strftime("%H:%M:%S"),
+                        finished=None, summary=None)
+            job = dict(_JOB)
+        threading.Thread(target=_run_job, args=(action,), daemon=True).start()
+        return True, job
+
+    def _sync_send_redirect(action):
+        """Legacy /send/<action> endpoints: every real-email action is now async.
+        Kick the same background job the dashboard uses and bounce back to Send."""
+        started, _ = _try_start_job(action)
+        if started:
+            flash("Started in the background - watch the status panel on the Send page.", "success")
+        else:
+            flash("A job is already running - wait for it to finish, then try again.", "warning")
+        return redirect(url_for("send_page"))
+
     @app.route("/send/cold", methods=["POST"])
     def send_cold_now():
-        cfg, store = get_config_and_store()
-        candidates, _, deferred = apply_daily_cap(
-            cold_candidates(store), cfg.get("daily_send_cap", 150),
-            sort_key=priority_sort_key(cfg),
-        )
-        if not candidates:
-            flash("Nothing to send - empty queue or today's send cap already reached.", "warning")
-            return redirect(url_for("send_page"))
-
-        mailer = build_mailer(cfg)
-        result = send_cold_batch(cfg, store, mailer, candidates, dry_run=False)
-
-        msg = f"Sent {result['sent']} cold intro email(s)."
-        if deferred:
-            msg += f" {deferred} deferred to the next run (daily cap)."
-        if result["errors"]:
-            msg += f" {len(result['errors'])} error(s) - check outreach.log."
-        flash(msg, "warning" if result["errors"] else "success")
-        return redirect(url_for("send_page"))
+        return _sync_send_redirect("cold")
 
     @app.route("/send/followups", methods=["POST"])
     def send_followups_now():
-        cfg, store = get_config_and_store()
-        if not cfg_get(cfg, "followup_enabled"):
-            flash("Turn on the follow-up drip in Settings first.", "warning")
-            return redirect(url_for("send_page"))
-
-        candidates = followup_candidates(store, cfg)
-        max_per_run = cfg_get(cfg, "max_followups_per_run")
-        if len(candidates) > max_per_run:
-            flash(
-                f"{len(candidates)} follow-ups matched, over the safety cap of {max_per_run}. "
-                f"Sent none - check clients.xlsx for a data problem.",
-                "danger",
-            )
-            return redirect(url_for("send_page"))
-
-        candidates, _, deferred = apply_daily_cap(
-            candidates, cfg.get("daily_send_cap", 150), sort_key=priority_sort_key(cfg)
-        )
-        if not candidates:
-            flash("Nothing to send - empty queue or today's send cap already reached.", "warning")
-            return redirect(url_for("send_page"))
-
-        mailer = build_mailer(cfg)
-        result = send_followup_batch(cfg, store, mailer, candidates, dry_run=False)
-        msg = f"Sent {result['sent']} follow-up(s)."
-        if deferred:
-            msg += f" {deferred} deferred (daily cap)."
-        if result["errors"]:
-            msg += f" {len(result['errors'])} error(s) - check outreach.log."
-        flash(msg, "warning" if (result["errors"] or deferred) else "success")
-        return redirect(url_for("send_page"))
+        return _sync_send_redirect("followups")
 
     @app.route("/send/reminders", methods=["POST"])
     def send_reminders_now():
-        cfg, store = get_config_and_store()
-        candidates = reminder_candidates(store, cfg.get("reminder_window_hours", 2))
-        # Per-run brake: send the soonest N rather than going silent on a busy day.
-        candidates, overflow = cap_reminders_per_run(
-            candidates, cfg_get(cfg, "max_reminders_per_run")
-        )
-
-        candidates, _, deferred = apply_daily_cap(
-            candidates, cfg.get("daily_send_cap", 150), sort_key=lambda c: c[2]
-        )
-        if not candidates:
-            flash("Nothing to send - empty queue or today's send cap already reached.", "warning")
-            return redirect(url_for("send_page"))
-
-        mailer = build_mailer(cfg)
-        result = send_reminder_batch(cfg, store, mailer, candidates, dry_run=False)
-
-        msg = f"Sent {result['sent']} reminder(s)."
-        if overflow:
-            msg += (f" {overflow} held for the next run (over the per-run cap of "
-                    f"{cfg_get(cfg, 'max_reminders_per_run')}) - check clients.xlsx if unexpected.")
-        if deferred:
-            msg += f" {deferred} could NOT be sent (daily cap) - raise daily_send_cap if this matters."
-        flash(msg, "warning" if (result["errors"] or deferred or overflow) else "success")
-        return redirect(url_for("send_page"))
+        return _sync_send_redirect("reminders")
 
     # ---- Run now (background jobs) ---------------------------------------
     @app.route("/run/<action>", methods=["POST"])
     def run_action(action):
         if action not in _RUN_ACTIONS:
             return jsonify({"error": "unknown action"}), 404
-        with _JOB_LOCK:
-            if _JOB["status"] == "running":
-                return jsonify({"error": "a job is already running", "job": _JOB}), 409
-            _JOB.update(status="running", action=action,
-                        started=datetime.now().strftime("%H:%M:%S"),
-                        finished=None, summary=None)
-        threading.Thread(target=_run_job, args=(action,), daemon=True).start()
-        return jsonify({"job": _JOB})
+        started, job = _try_start_job(action)
+        if not started:
+            return jsonify({"error": "a job is already running", "job": job}), 409
+        return jsonify({"job": job})
+
+    @app.route("/open-thread/<thread_id>")
+    def open_thread(thread_id):
+        """Hand a Gmail thread to the system browser (WebView2-safe: a _blank
+        link can dead-end inside the frameless window)."""
+        safe = "".join(c for c in thread_id if c.isalnum())
+        if safe:
+            try:
+                webbrowser.open(f"https://mail.google.com/mail/u/0/#all/{safe}")
+            except Exception:  # noqa: BLE001
+                pass
+        return render_template("opened_thread.html"), 200
 
     @app.route("/run/status")
     def run_status():

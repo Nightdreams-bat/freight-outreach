@@ -4,20 +4,38 @@
 
 <div class="card">
   <div class="card-head">
+    <h2 style="font-size:13px">Sending runs in the background</h2>
+    <div class="spacer"></div>
+    <span class="muted" style="font-size:12px">Same runner as the dashboard &amp; the hourly task</span>
+  </div>
+  <p class="muted" style="margin:0 0 4px">
+    The buttons below hand the job to the background runner so this window never freezes.
+    Watch progress here; the tables refresh on your next visit.
+  </p>
+  <div class="runstatus" id="runStatus" role="status" aria-live="polite" aria-atomic="true" style="display:none"><span class="pulse"></span> <span id="runStatusText"></span></div>
+</div>
+
+<div class="card">
+  <div class="card-head">
     <h2>Cold intros pending — {{ cold|length }}</h2>
     <div class="spacer"></div>
     {% if cold %}
-    <form method="post" action="{{ url_for('send_cold_now') }}" class="inline"
-          data-confirm="This sends the cold intro email to {{ cold|length }} lead(s) right now." data-confirm-ok="Send now">
-      <button type="submit" class="btn primary">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/></svg> Send now
-      </button>
-    </form>
+    <button type="button" class="btn primary" data-action="cold"
+            data-confirm="This sends the cold intro email to {{ cold|length }} lead(s) right now."
+            data-confirm-ok="Send now">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/></svg> Send now
+    </button>
+    <noscript>
+      <form method="post" action="{{ url_for('send_cold_now') }}" class="inline">
+        <button type="submit" class="btn primary">Send now</button>
+      </form>
+    </noscript>
     {% endif %}
   </div>
   <div class="table-wrap">
     <table class="grid">
-      <thead><tr><th>Priority</th><th>Name</th><th>Company</th><th>Email</th></tr></thead>
+      <caption>Cold intro emails queued to send</caption>
+      <thead><tr><th scope="col">Priority</th><th scope="col">Name</th><th scope="col">Company</th><th scope="col">Email</th></tr></thead>
       <tbody>
         {% for row_idx, row in cold %}
         <tr>
@@ -38,16 +56,21 @@
     {% if not followup_enabled %}<span class="chip">drip off</span>{% endif %}
     <div class="spacer"></div>
     {% if followups and followup_enabled %}
-    <form method="post" action="{{ url_for('send_followups_now') }}" class="inline"
-          data-confirm="This sends a follow-up nudge to {{ followups|length }} lead(s) right now." data-confirm-ok="Send now">
-      <button type="submit" class="btn primary">Send follow-ups</button>
-    </form>
+    <button type="button" class="btn primary" data-action="followups"
+            data-confirm="This sends a follow-up nudge to {{ followups|length }} lead(s) right now."
+            data-confirm-ok="Send now">Send follow-ups</button>
+    <noscript>
+      <form method="post" action="{{ url_for('send_followups_now') }}" class="inline">
+        <button type="submit" class="btn primary">Send follow-ups</button>
+      </form>
+    </noscript>
     {% endif %}
   </div>
   {% if followup_enabled %}
   <div class="table-wrap">
     <table class="grid">
-      <thead><tr><th>Next touch</th><th>Name</th><th>Company</th><th>Email</th><th>Cold sent</th></tr></thead>
+      <caption>Cold leads due a follow-up nudge</caption>
+      <thead><tr><th scope="col">Next touch</th><th scope="col">Name</th><th scope="col">Company</th><th scope="col">Email</th><th scope="col">Cold sent</th></tr></thead>
       <tbody>
         {% for row_idx, row, stage in followups %}
         <tr>
@@ -77,20 +100,25 @@
     <h2>Reminders due this scan — {{ reminders|length }}</h2>
     <div class="spacer"></div>
     {% if reminders %}
-    <form method="post" action="{{ url_for('send_reminders_now') }}" class="inline"
-          data-confirm="This sends a call reminder to {{ reminders|length }} lead(s) right now." data-confirm-ok="Send now">
-      <button type="submit" class="btn">Run reminder check</button>
-    </form>
+    <button type="button" class="btn" data-action="reminders"
+            data-confirm="This sends a call reminder to {{ reminders|length }} lead(s) right now."
+            data-confirm-ok="Send now">Run reminder check</button>
+    <noscript>
+      <form method="post" action="{{ url_for('send_reminders_now') }}" class="inline">
+        <button type="submit" class="btn">Run reminder check</button>
+      </form>
+    </noscript>
     {% endif %}
   </div>
   <div class="table-wrap">
     <table class="grid">
-      <thead><tr><th>Name</th><th>Company</th><th>Email</th><th>Meeting</th></tr></thead>
+      <caption>Booked meetings needing a reminder this scan</caption>
+      <thead><tr><th scope="col">Name</th><th scope="col">Company</th><th scope="col">Email</th><th scope="col">Meeting</th></tr></thead>
       <tbody>
         {% for row_idx, row, meeting_time in reminders %}
         <tr>
           <td>{{ row.Name or "—" }}</td><td>{{ row.Company or "—" }}</td><td class="mono">{{ row.Email }}</td>
-          <td>{{ meeting_time.strftime("%a %b %d, %I:%M %p") }}</td>
+          <td>{{ meeting_time.strftime("%a %b %d, %I:%M %p") if meeting_time else "—" }}</td>
         </tr>
         {% else %}
         <tr><td colspan="4" class="empty">Nothing due right now.</td></tr>
@@ -103,4 +131,8 @@
   </p>
 </div>
 
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='run.js') }}"></script>
 {% endblock %}

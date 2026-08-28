@@ -1,65 +1,59 @@
 """Lead sourcing (BETA) - all network calls are injected, nothing hits the wire."""
 
-import json
-
 from outreach import lead_sourcing
 
-NOMINATIM_JSON = json.dumps([{"lat": "47.01", "lon": "28.86"}])
 
-OVERPASS_JSON = json.dumps({
-    "elements": [
-        {"type": "node", "tags": {
-            "name": "Acme Transport SRL", "office": "logistics",
-            "phone": "+373 22 000000", "website": "https://acme-transport.md",
-            "addr:street": "Str. Exemplu", "addr:housenumber": "10", "addr:city": "Chisinau"}},
-        {"type": "node", "tags": {
-            "name": "Beta Warehouse", "industrial": "warehouse",
-            "contact:email": "office@beta-wh.md"}},
-        {"type": "node", "tags": {"industrial": "yes"}},  # no name -> dropped
-    ]
-})
+# A fake DuckDuckGo: real company sites mixed with directories and a dupe.
+FAKE_RESULTS = [
+    {"title": "Acme Transport SRL | Transport marfa Bucuresti", "href": "https://www.acme-transport.ro/"},
+    {"title": "Beta Logistica - Depozitare si distributie", "href": "http://beta-logistica.ro/servicii"},
+    {"title": "Top firme transport Bucuresti", "href": "https://listafirme.eu/bucuresti/j1.htm"},
+    {"title": "Companii - Bucuresti | Kompass", "href": "https://ro.kompass.com/r/bucuresti/"},
+    {"title": "Acme Transport - Contact", "href": "https://acme-transport.ro/contact"},  # dupe host
+    {"title": "", "href": ""},  # junk
+]
 
 
-def _overpass_fetch(url, data, timeout=25):
-    assert "nwr" in data["data"]
-    return OVERPASS_JSON
+def _fake_searcher(query, *, max_results, region):
+    assert region == "ro-ro"
+    return FAKE_RESULTS
 
 
-def _geo_fetch(url, timeout=15):
-    assert "nominatim" in url
-    return NOMINATIM_JSON
-
-
-def test_search_businesses_parses_elements(monkeypatch):
+def test_search_keeps_company_sites_drops_directories(monkeypatch):
     monkeypatch.setattr(lead_sourcing.time, "sleep", lambda *_: None)
-    leads = lead_sourcing.search_businesses(
-        "", "Chisinau", fetch=_overpass_fetch, geocode_fetch=_geo_fetch)
-    assert [l["Company"] for l in leads] == ["Acme Transport SRL", "Beta Warehouse"]
-    acme = leads[0]
-    assert acme["Phone"] == "+373 22 000000"
-    assert acme["Website"] == "https://acme-transport.md"
-    assert acme["Address"] == "Str. Exemplu, 10, Chisinau"
-    assert acme["Source"] == "OSM"
-    assert acme["Email"] == ""
-    assert leads[1]["Email"] == "office@beta-wh.md"
+    leads = lead_sourcing.search_businesses("transport", "Bucuresti", searcher=_fake_searcher)
+
+    assert [l["Website"] for l in leads] == [
+        "https://acme-transport.ro", "http://beta-logistica.ro"]
+    assert leads[0]["Company"] == "Acme Transport SRL"
+    assert leads[0]["Source"] == "web"
+    assert leads[0]["Email"] == "" and leads[0]["Phone"] == ""
 
 
-def test_search_free_text_filter(monkeypatch):
+def test_search_needs_both_terms():
+    assert lead_sourcing.search_businesses("", "Bucuresti", searcher=_fake_searcher) == []
+    assert lead_sourcing.search_businesses("transport", "", searcher=_fake_searcher) == []
+
+
+def test_search_swallows_search_errors(monkeypatch):
     monkeypatch.setattr(lead_sourcing.time, "sleep", lambda *_: None)
-    leads = lead_sourcing.search_businesses(
-        "warehouse", "Chisinau", fetch=_overpass_fetch, geocode_fetch=_geo_fetch)
-    assert [l["Company"] for l in leads] == ["Beta Warehouse"]
+
+    def boom(query, *, max_results, region):
+        raise RuntimeError("ddg down")
+
+    assert lead_sourcing.search_businesses("x", "Paris", searcher=boom) == []
 
 
-def test_search_returns_empty_when_geocode_fails(monkeypatch):
+def test_search_respects_limit(monkeypatch):
     monkeypatch.setattr(lead_sourcing.time, "sleep", lambda *_: None)
+    many = [{"title": f"Co {i}", "href": f"https://co{i}.example"} for i in range(50)]
     leads = lead_sourcing.search_businesses(
-        "x", "Nowhere", fetch=_overpass_fetch, geocode_fetch=lambda *a, **k: "[]")
-    assert leads == []
+        "x", "London", limit=5, searcher=lambda *a, **k: many)
+    assert len(leads) == 5
 
 
 HTML = """
-<a href="mailto:hello@acme-transport.md">write us</a>
+<a href="mailto:hello@acme-transport.ro">write us</a>
 background:url(logo@2x.png); img/spacer.png
 sentry-key@o123.ingest.sentry.io
 also: sales@othersite.com
@@ -68,8 +62,8 @@ also: sales@othersite.com
 
 def test_scrape_site_emails_filters_junk_and_prefers_host():
     got = lead_sourcing.scrape_site_emails(
-        "https://acme-transport.md", fetch=lambda url: HTML)
-    assert got[0] == "hello@acme-transport.md"
+        "https://acme-transport.ro", fetch=lambda url: HTML)
+    assert got[0] == "hello@acme-transport.ro"
     assert "sales@othersite.com" in got
     assert all("sentry" not in a and "2x" not in a for a in got)
 
@@ -77,7 +71,7 @@ def test_scrape_site_emails_filters_junk_and_prefers_host():
 def test_scrape_site_emails_swallows_network_errors():
     def boom(url):
         raise OSError("connection reset")
-    assert lead_sourcing.scrape_site_emails("https://acme-transport.md", fetch=boom) == []
+    assert lead_sourcing.scrape_site_emails("https://acme-transport.ro", fetch=boom) == []
 
 
 def test_scrape_site_emails_blank_url():
@@ -86,12 +80,12 @@ def test_scrape_site_emails_blank_url():
 
 def test_enrich_fills_missing_email(monkeypatch):
     monkeypatch.setattr(lead_sourcing.time, "sleep", lambda *_: None)
-    biz = [{"Company": "Acme", "Email": "", "Website": "https://acme-transport.md"}]
+    biz = [{"Company": "Acme", "Email": "", "Website": "https://acme-transport.ro"}]
     lead_sourcing.enrich(biz, do_scrape=True, fetch=lambda url: HTML)
-    assert biz[0]["Email"] == "hello@acme-transport.md"
+    assert biz[0]["Email"] == "hello@acme-transport.ro"
 
 
 def test_enrich_noop_when_disabled():
-    biz = [{"Company": "Acme", "Email": "", "Website": "https://acme-transport.md"}]
+    biz = [{"Company": "Acme", "Email": "", "Website": "https://acme-transport.ro"}]
     lead_sourcing.enrich(biz, do_scrape=False, fetch=lambda url: HTML)
     assert biz[0]["Email"] == ""
