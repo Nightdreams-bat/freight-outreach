@@ -12,9 +12,23 @@ frozen build.
         --selfcheck   verify a freshly built .exe has everything it needs
 """
 
+import os
 import sys
 
 FROZEN = getattr(sys, "frozen", False)
+
+
+def _ensure_std_streams():
+    """A windowed (console=False) frozen build has sys.stdout/stderr set to None;
+    any stray print() - Flask's startup banner, a library warning - then raises
+    'lost sys.stdout'. Point them at the null device so the GUI never crashes on
+    output. The console build (kairo-cli.exe) has real streams and is untouched."""
+    for name in ("stdout", "stderr"):
+        if getattr(sys, name, None) is None:
+            try:
+                setattr(sys, name, open(os.devnull, "w", encoding="utf-8", errors="replace"))
+            except OSError:
+                pass
 
 
 def _pause_if_frozen():
@@ -27,6 +41,7 @@ def _pause_if_frozen():
 
 
 def main(argv=None):
+    _ensure_std_streams()
     argv = list(sys.argv[1:] if argv is None else argv)
 
     # Downstream mains parse their own args with argparse; hide our dispatch flags from them.

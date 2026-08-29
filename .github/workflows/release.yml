@@ -50,7 +50,7 @@ jobs:
         run: python -m PyInstaller --clean --noconfirm packaging/Kairo.spec
 
       - name: Self-check the frozen build
-        run: dist/Kairo/Kairo.exe --selfcheck
+        run: dist/Kairo/kairo-cli.exe --selfcheck
 
       - name: Ensure Inno Setup
         shell: pwsh

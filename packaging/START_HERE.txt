@@ -4,8 +4,7 @@ KAIRO
 START HERE
 ----------
 1. Double-click  Kairo.exe
-   Your browser opens the dashboard. A small black window stays open in the
-   background - closing it stops the app.
+   The dashboard opens in its own window. Closing that window stops the app.
 
 2. Go to the Settings page (left menu) and fill in:
    - Business details: your name, company, phone, one-line pitch.
@@ -42,7 +41,8 @@ To turn this on, in Settings:
 
 WHAT THE FILES ARE
 ------------------
-  Kairo.exe  the app - opens the dashboard
+  Kairo.exe      the app - opens the dashboard
+  kairo-cli.exe  same app for a terminal (kairo-cli.exe --cold, --selfcheck)
   client_secret.json   Google sign-in file (needed for "Connect Gmail")
   config.json          your settings (created automatically; safe to back up)
   clients.xlsx         your leads (created on first use if you don't pick one)

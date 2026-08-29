@@ -15,7 +15,8 @@ still produces the raw hand-over folder.
 ```
 Kairo\
   START HERE.txt        plain-English instructions
-  Kairo.exe             the app (opens the dashboard)
+  Kairo.exe             the app, windowed — opens the dashboard, no console
+  kairo-cli.exe         console build for the CLI flags + `--selfcheck`
   client_secret.json    Google OAuth client — copied in if present at the repo root
   _internal\            the frozen Python runtime
   Source code\          a full copy of the source

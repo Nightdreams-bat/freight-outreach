@@ -40,13 +40,14 @@ if (-not (Test-Path (Join-Path $built "Kairo.exe"))) {
 }
 
 Write-Host ""
-Invoke-Checked (Join-Path $built "Kairo.exe") @("--selfcheck")
+Invoke-Checked (Join-Path $built "kairo-cli.exe") @("--selfcheck")
 
 # --- Assemble the client-facing folder --------------------------------------
 $release = Join-Path $root "release\Kairo"
 New-Item -ItemType Directory -Force -Path $release | Out-Null
 
 Copy-Item (Join-Path $built "Kairo.exe") $release
+Copy-Item (Join-Path $built "kairo-cli.exe") $release
 Copy-Item (Join-Path $built "_internal") $release -Recurse
 
 $secret = Join-Path $root "client_secret.json"

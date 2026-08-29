@@ -86,19 +86,27 @@ a = Analysis(
 )
 pyz = PYZ(a.pure)
 
-exe = EXE(
-    pyz,
-    a.scripts,
-    [],
+# Two executables from the same entry point, sharing one _internal/ folder:
+#
+#   Kairo.exe      - windowed (no console). A double-click opens the dashboard
+#                    window with no black terminal flashing behind it.
+#   kairo-cli.exe  - console build for the command-line flags (--cold, --followup,
+#                    --selfcheck) and the CI self-check, where stdout must be visible.
+#
+# Both run kairo/__main__.py; it dispatches on argv, so `kairo-cli.exe --cold`
+# and a bare `Kairo.exe` behave exactly as before.
+_common = dict(
     exclude_binaries=True,
-    name="Kairo",
-    console=True,  # keep a console for CLI flags (--cold, --selfcheck, scheduled tasks);
-                   # GUI mode hides the console window at runtime (kairo/desktop.py)
     disable_windowed_traceback=False,
     icon=_root("assets", "kairo.ico"),
 )
+
+exe_gui = EXE(pyz, a.scripts, [], name="Kairo", console=False, **_common)
+exe_cli = EXE(pyz, a.scripts, [], name="kairo-cli", console=True, **_common)
+
 coll = COLLECT(
-    exe,
+    exe_gui,
+    exe_cli,
     a.binaries,
     a.datas,
     strip=False,

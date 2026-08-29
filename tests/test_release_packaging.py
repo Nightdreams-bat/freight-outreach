@@ -121,3 +121,12 @@ def test_release_workflow_wiring():
 def test_spec_bundles_client_secret_when_present():
     spec = (REPO / "packaging" / "Kairo.spec").read_text(encoding="utf-8")
     assert 'os.path.exists(_secret)' in spec
+
+
+def test_spec_ships_a_windowed_gui_exe_and_a_console_cli_exe():
+    spec = (REPO / "packaging" / "Kairo.spec").read_text(encoding="utf-8")
+    assert 'name="Kairo", console=False' in spec
+    assert 'name="kairo-cli", console=True' in spec
+    # CI self-checks the console build so its stdout shows up in the logs.
+    wf = (REPO / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
+    assert "dist/Kairo/kairo-cli.exe --selfcheck" in wf
