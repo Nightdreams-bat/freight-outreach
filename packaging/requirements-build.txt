@@ -1,5 +1,7 @@
 # Only needed to build the standalone .exe (see BUILD.md). Not needed to run from source.
--r requirements.txt
+# Path is relative to THIS file (pip resolves nested -r against the including file),
+# so it must point up into the repo root, not sit bare as "requirements.txt".
+-r ../requirements.txt
 pyinstaller
 pywin32
 pytest

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Kairo{% endblock %} · Kairo</title>
-  <link href="{{ url_for('static', filename='style.css') }}" rel="stylesheet">
+  <link href="{{ url_for('static', filename='style.css') }}?v={{ asset_v }}" rel="stylesheet">
   <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
   <link rel="alternate icon" href="{{ url_for('static', filename='favicon.ico') }}">
 </head>
@@ -47,6 +47,10 @@
       <a class="navitem {{ 'active' if active == 'send' }}" {% if active == 'send' %}aria-current="page"{% endif %} href="{{ url_for('send_page') }}">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
         <span class="label">Send</span>
+      </a>
+      <a class="navitem {{ 'active' if active == 'templates' }}" {% if active == 'templates' %}aria-current="page"{% endif %} href="{{ url_for('templates_page') }}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v14H8l-4 4z"/><path d="M8 9h8M8 13h5"/></svg>
+        <span class="label">Templates</span>
       </a>
       <a class="navitem {{ 'active' if active == 'replies' }}" {% if active == 'replies' %}aria-current="page"{% endif %} href="{{ url_for('replies_page') }}">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
@@ -182,6 +186,17 @@
         d.showModal();
       });
     };
+
+    // Textareas grow with their content, capped at ~65% of the viewport then
+    // scroll internally (with the themed scrollbar). rows= stays as a fallback.
+    document.querySelectorAll("textarea.field").forEach(function (t) {
+      function grow() {
+        t.style.height = "auto";
+        t.style.height = Math.min(t.scrollHeight + 2, window.innerHeight * 0.65) + "px";
+      }
+      t.addEventListener("input", grow);
+      grow();
+    });
 
     document.querySelectorAll("form[data-confirm]").forEach(function (f) {
       f.addEventListener("submit", function (e) {

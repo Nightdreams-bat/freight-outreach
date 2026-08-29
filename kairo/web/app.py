@@ -1,3 +1,4 @@
+import os
 import secrets
 import socket
 import threading
@@ -49,6 +50,90 @@ from kairo.send_tracker import (
 log = get_logger("web")
 
 SUPPRESSED_TRUE_VALUES = ("1", "true", "yes", "y")
+
+# ---- Templates tab --------------------------------------------------------
+# The message library, Gmail-style: a rail of message types on the left, one
+# editable message (subject + body/bodies + live preview) on the right. Every
+# field name here is a real config key; templates.py owns the defaults.
+_COMMON_VARS = [
+    "name", "company", "phone", "sender_name", "sender_company",
+    "sender_phone", "sender_pitch", "sender_address", "unsubscribe_line",
+]
+TEMPLATE_MESSAGES = [
+    {
+        "key": "cold", "name": "Cold intro", "group": "Outreach",
+        "subject_key": "cold_subject_template",
+        "bodies": [{"key": "cold_body_template", "label": "Body"}],
+        "vars": _COMMON_VARS + ["hook"],
+        "has_hooks": True,
+    },
+    {
+        "key": "followup", "name": "Follow-up", "group": "Outreach",
+        "subject_key": "followup_subject_template",
+        "bodies": [
+            {"key": "followup_body_template", "label": "Nudge body"},
+            {"key": "followup_breakup_body_template", "label": "Breakup body"},
+        ],
+        "vars": _COMMON_VARS + ["stage", "is_last"],
+        "has_hooks": False,
+    },
+    {
+        "key": "reminder", "name": "Reminder", "group": "Meeting",
+        "subject_key": "reminder_subject_template",
+        "bodies": [{"key": "reminder_body_template", "label": "Body"}],
+        "vars": _COMMON_VARS + ["meeting_time"],
+        "has_hooks": False,
+    },
+    {
+        "key": "confirm", "name": "Confirmation", "group": "Meeting",
+        "subject_key": "meeting_confirm_subject_template",
+        "bodies": [{"key": "meeting_confirm_body_template", "label": "Body"}],
+        "vars": _COMMON_VARS + ["meeting_time"],
+        "has_hooks": False,
+    },
+    {
+        "key": "propose", "name": "Propose times", "group": "Meeting",
+        "subject_key": "propose_times_subject_template",
+        "bodies": [{"key": "propose_times_body_template", "label": "Body"}],
+        "vars": _COMMON_VARS + ["slots"],
+        "has_hooks": False,
+    },
+    {
+        "key": "decline", "name": "Decline reply", "group": "Meeting",
+        "subject_key": "decline_ack_subject_template",
+        "bodies": [{"key": "decline_ack_body_template", "label": "Body"}],
+        "vars": _COMMON_VARS,
+        "has_hooks": False,
+    },
+]
+_TEMPLATE_MESSAGE_KEYS = {m["key"] for m in TEMPLATE_MESSAGES}
+# Every config key a message form is allowed to write.
+_TEMPLATE_TEXT_KEYS = {
+    m["subject_key"] for m in TEMPLATE_MESSAGES
+} | {b["key"] for m in TEMPLATE_MESSAGES for b in m["bodies"]}
+
+
+def _sample_context(cfg):
+    """Stand-in values for the Templates preview - a plausible lead plus the
+    operator's own business details, so the preview reads like a real send."""
+    lang = cfg_get(cfg, "template_language")
+    carrier = cfg.get("hook_snippets_carrier") or []
+    return {
+        "name": "Maria",
+        "company": "Acme Logistics",
+        "phone": "+373 60 000 000",
+        "sender_name": cfg.get("sender_name") or "Your name",
+        "sender_company": cfg.get("sender_company") or "Your company",
+        "sender_phone": cfg.get("sender_phone") or "",
+        "sender_pitch": cfg.get("sender_pitch") or "we help teams move freight with less overhead",
+        "sender_address": cfg.get("sender_address") or "",
+        "unsubscribe_line": templates.unsubscribe_line(lang),
+        "hook": carrier[0] if carrier else "",
+        "meeting_time": "Thursday, Aug 21 at 10:00 AM",
+        "stage": 1,
+        "is_last": False,
+        "slots": ["Monday 10:00", "Tuesday 14:00", "Wednesday 09:30"],
+    }
 
 
 def _is_valid_timezone(name):
@@ -301,6 +386,10 @@ def create_app():
             "blocklist_page": "blocklist",
             "diagnostics_page": "diagnostics",
             "settings": "settings",
+            "templates_page": "templates",
+            "templates_save": "templates",
+            "templates_language": "templates",
+            "templates_reset": "templates",
             "logs_page": "logs",
             "find_leads": "find_leads",
             "find_leads_search": "find_leads",
@@ -314,8 +403,13 @@ def create_app():
             pending = len(reply_queue.pending())
         except Exception:  # noqa: BLE001
             pending = 0
+        try:
+            asset_v = int(os.path.getmtime(resource_path("kairo/web/static/style.css")))
+        except OSError:
+            asset_v = 0
         return {
             "active": active,
+            "asset_v": asset_v,
             "pending_replies": pending,
             "gmail_connected": bool((cfg.get("gmail_address") or "").strip()),
             "gmail_address": cfg.get("gmail_address") or "",
@@ -797,6 +891,84 @@ def create_app():
         save_config(cfg)
         flash(f"All templates reset to the {'Romanian' if lang == 'ro' else 'English'} defaults.", "success")
         return redirect(url_for("settings"))
+
+    # ---- Templates tab -----------------------------------------------------
+    def _current_message(cfg):
+        key = (request.values.get("m") or "").strip()
+        if key not in _TEMPLATE_MESSAGE_KEYS:
+            key = TEMPLATE_MESSAGES[0]["key"]
+        return key
+
+    @app.route("/templates")
+    def templates_page():
+        cfg = load_config()
+        groups = []
+        for m in TEMPLATE_MESSAGES:
+            if not groups or groups[-1][0] != m["group"]:
+                groups.append((m["group"], []))
+            groups[-1][1].append(m)
+        return render_template(
+            "templates.html",
+            cfg=cfg,
+            messages=TEMPLATE_MESSAGES,
+            groups=groups,
+            current=_current_message(cfg),
+            lang=cfg_get(cfg, "template_language"),
+        )
+
+    @app.route("/templates/save", methods=["POST"])
+    def templates_save():
+        cfg = load_config()
+        for field in _TEMPLATE_TEXT_KEYS:
+            if field in request.form:
+                cfg[field] = request.form.get(field, cfg.get(field))
+        if "hooks" in request.form:
+            cfg["hook_snippets_enabled"] = request.form.get("hook_snippets_enabled") == "on"
+            for seg in ("carrier", "shipper"):
+                raw = request.form.get(f"hook_snippets_{seg}")
+                if raw is not None:
+                    cfg[f"hook_snippets_{seg}"] = [
+                        line.strip() for line in raw.splitlines() if line.strip()
+                    ]
+        save_config(cfg)
+        flash("Message saved.", "success")
+        return redirect(url_for("templates_page", m=_current_message(cfg)))
+
+    @app.route("/templates/preview", methods=["POST"])
+    def templates_preview():
+        cfg = load_config()
+        ctx = _sample_context(cfg)
+        out = {}
+        for field in ("subject", "body"):
+            text = request.form.get(field)
+            if text is None:
+                continue
+            try:
+                out[field] = templates.render(text, **ctx)
+            except Exception as e:  # noqa: BLE001 - user-authored template text
+                out[field] = None
+                out.setdefault("errors", {})[field] = str(e)
+        return jsonify(out)
+
+    @app.route("/templates/language", methods=["POST"])
+    def templates_language():
+        cfg = load_config()
+        lang = request.form.get("template_language")
+        if lang in ("en", "ro"):
+            cfg["template_language"] = lang
+            cfg.update(templates.defaults(lang))
+            save_config(cfg)
+            flash(f"Templates switched to the {'Romanian' if lang == 'ro' else 'English'} defaults.", "success")
+        return redirect(url_for("templates_page", m=_current_message(cfg)))
+
+    @app.route("/templates/reset", methods=["POST"])
+    def templates_reset():
+        cfg = load_config()
+        lang = cfg_get(cfg, "template_language")
+        cfg.update(templates.defaults(lang))
+        save_config(cfg)
+        flash(f"All templates reset to the {'Romanian' if lang == 'ro' else 'English'} defaults.", "success")
+        return redirect(url_for("templates_page", m=_current_message(cfg)))
 
     # ---- Find leads (BETA) ---------------------------------------------
     @app.route("/find-leads")

@@ -1,25 +1,87 @@
-"""Single source of truth for where files live, whether running from source or as a frozen .exe.
+r"""Single source of truth for where files live, whether running from source or as a frozen .exe.
 
 When running from source, user data (config.json, client_secret.json, logs, the send
 trackers) sits in the project root next to the `kairo/` package - unchanged from before.
 
-When running as a PyInstaller onedir/onefile build, `__file__` points inside a temporary
-extraction dir, so that logic would put user data somewhere useless. Instead we anchor it
-to the folder the .exe itself lives in, so the client can see and back up config.json and
-client_secret.json right next to Kairo.exe.
+When running as a PyInstaller build, `__file__` points inside a temporary extraction
+dir, so that logic would put user data somewhere useless. Installed copies keep their
+data in `%APPDATA%\Kairo` - a stable per-user location that survives an uninstall,
+reinstall, or version upgrade (the installer only ever touches `%LocalAppData%\Programs\Kairo`).
+Older builds kept data next to `Kairo.exe`; `_migrate_from_exe_dir` moves it across once.
 """
 
+import os
+import shutil
 import sys
 from pathlib import Path
 
 FROZEN = getattr(sys, "frozen", False)
 
+# Files an older (next-to-the-exe) build may have left behind, to carry across on
+# first run of an installed build. The Gmail/Anthropic tokens live in the Windows
+# credential store, not here, so they are untouched.
+_MIGRATABLE = (
+    "config.json", "client_secret.json", "clients.xlsx",
+    "send_log.json", "send_history.jsonl", "llm_calls.json",
+    "processed_replies.json", "reply_failures.json", "reply_queue.jsonl",
+    "kairo.log",
+)
+
+_DATA_DIR: "Path | None" = None
+
+
+def _frozen_data_dir() -> Path:
+    base = os.environ.get("APPDATA") or str(Path.home() / "AppData" / "Roaming")
+    return Path(base) / "Kairo"
+
+
+def _migrate_from_exe_dir(dest: Path) -> None:
+    """One-time copy of user data from builds that kept it beside Kairo.exe."""
+    try:
+        old = Path(sys.executable).resolve().parent
+    except OSError:
+        return
+    if old == dest:
+        return
+    for name in _MIGRATABLE:
+        src, tgt = old / name, dest / name
+        if src.exists() and not tgt.exists():
+            try:
+                shutil.copy2(src, tgt)
+            except OSError:
+                pass
+
+
+def _seed_bundled_client_secret(dest: Path) -> None:
+    """Copy the OAuth client bundled into the build out to the data dir on first run."""
+    target = dest / "client_secret.json"
+    if target.exists():
+        return
+    bundled = resource_path("client_secret.json")
+    if bundled.exists():
+        try:
+            shutil.copy2(bundled, target)
+        except OSError:
+            pass
+
 
 def data_dir() -> Path:
     """Folder that holds user data (config, credentials, logs, trackers)."""
+    global _DATA_DIR
+    if _DATA_DIR is not None:
+        return _DATA_DIR
     if FROZEN:
-        return Path(sys.executable).resolve().parent
-    return Path(__file__).resolve().parent.parent
+        d = _frozen_data_dir()
+        try:
+            d.mkdir(parents=True, exist_ok=True)
+            _migrate_from_exe_dir(d)
+            _seed_bundled_client_secret(d)
+        except OSError:
+            pass
+    else:
+        d = Path(__file__).resolve().parent.parent
+    _DATA_DIR = d
+    return d
 
 
 def resource_path(relative: str) -> Path:
@@ -27,8 +89,9 @@ def resource_path(relative: str) -> Path:
 
     `relative` is given relative to the project root, e.g. "kairo/web/templates".
     """
-    if FROZEN:
-        return Path(sys._MEIPASS) / relative  # type: ignore[attr-defined]
+    meipass = getattr(sys, "_MEIPASS", None)
+    if FROZEN and meipass:
+        return Path(meipass) / relative
     return Path(__file__).resolve().parent.parent / relative
 
 

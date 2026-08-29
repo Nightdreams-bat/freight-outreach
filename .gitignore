@@ -25,6 +25,9 @@ build/
 dist/
 release/
 
+# Inno Setup installer output
+packaging/Output/
+
 # Local-only dev notes / design lab
 .dev/
 

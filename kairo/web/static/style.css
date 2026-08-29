@@ -17,6 +17,28 @@
 
 * { box-sizing: border-box; }
 
+/* ---------- Scrollbars — themed liquid glass ----------
+   WebView2 is Chromium, so ::-webkit-scrollbar applies. Replaces the stock
+   light-grey Windows bar (which reads as a bright white stripe against the
+   near-black theme) with a chunky green gradient pill on a dark track. */
+* { scrollbar-width: thin; scrollbar-color: rgba(61, 220, 132, 0.45) transparent; }
+::-webkit-scrollbar { width: 16px; height: 16px; }
+::-webkit-scrollbar-track { background: rgba(10, 17, 13, 0.5); }
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(61, 220, 132, 0.45), rgba(61, 220, 132, 0.24));
+  background-clip: padding-box;
+  border: 4px solid transparent;
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1px rgba(61, 220, 132, 0.35), var(--glass-top-highlight);
+  min-height: 44px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #52e695, rgba(61, 220, 132, 0.4));
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:active { background: var(--accent); background-clip: padding-box; }
+::-webkit-scrollbar-corner { background: transparent; }
+
 :root {
   --bg: #05080a;
   --surface: rgba(20, 32, 24, 0.55);
@@ -59,12 +81,15 @@
 body {
   margin: 0;
   font-family: 'IBM Plex Sans', 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-  font-size: 14px;
+  font-size: 14.5px;
   line-height: 1.55;
   color: var(--ink);
   background: var(--bg);
   display: flex;
   min-height: 100vh;
+  /* One reversible knob: scale the whole UI (text, icons, rail, tiles) up a
+     notch — the stock 14px / 64px rail felt cramped on a maximized window. */
+  zoom: 1.09;
 }
 
 /* Fixed backdrop: radial glow stack + faint scattered pixel squares.
@@ -352,7 +377,7 @@ code {
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 14px 28px;
+  padding: 16px 40px;
   max-width: 1180px;
   width: 100%;
   margin-inline: auto;
@@ -378,7 +403,7 @@ code {
 .conn svg { width: 13px; height: 13px; }
 .conn.ok { color: var(--accent-soft-ink); background: var(--accent-soft); border-color: rgba(61, 220, 132, 0.25); }
 .conn.off { color: var(--ink-faint); background: var(--slate-soft); }
-.content { padding: 24px 28px 52px; max-width: 1180px; width: 100%; margin-inline: auto; }
+.content { padding: 30px 40px 64px; max-width: 1180px; width: 100%; margin-inline: auto; }
 .content.narrow { max-width: 980px; }
 
 .subtitle { color: var(--ink-soft); margin: -6px 0 20px; }
@@ -438,8 +463,8 @@ form.inline { display: inline; margin: 0; }
   -webkit-backdrop-filter: var(--glass-blur);
   border: 1px solid var(--glass-border);
   border-radius: var(--radius);
-  padding: 20px 22px;
-  margin-bottom: 18px;
+  padding: 24px 28px;
+  margin-bottom: 22px;
   box-shadow: var(--card-shadow), var(--glass-top-highlight), 0 0 40px -12px rgba(61, 220, 132, 0.18);
 }
 .card > * { position: relative; z-index: 1; }
@@ -451,16 +476,16 @@ form.inline { display: inline; margin: 0; }
   text-transform: none;
   letter-spacing: -0.005em;
   color: var(--ink);
-  margin: 0 0 16px;
+  margin: 0 0 18px;
 }
 .card h2:last-child { margin-bottom: 0; }
-.card-head { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+.card-head { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }
 .card-head h2 { margin: 0; }
 .card-head .spacer { flex: 1; }
 .card.warn-edge { border-left: 2px solid var(--amber); box-shadow: var(--card-shadow), var(--glass-top-highlight), inset 3px 0 18px -6px rgba(227, 181, 103, 0.4); }
 
 /* ---------- Stat tiles ---------- */
-.tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-bottom: 18px; }
+.tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; margin-bottom: 22px; }
 .tiles.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .tile {
   position: relative;
@@ -469,7 +494,7 @@ form.inline { display: inline; margin: 0; }
   background: var(--glass-solid);
   border: 1px solid var(--glass-border);
   border-radius: var(--radius);
-  padding: 17px;
+  padding: 20px;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -489,7 +514,7 @@ form.inline { display: inline; margin: 0; }
 .tile .ic.slate { background: var(--slate-soft); color: var(--slate); box-shadow: none; }
 .tile .num { font-family: var(--display); font-size: 26px; font-weight: 600; letter-spacing: -0.02em; line-height: 1; color: #f3fdf5; }
 .tile .num small { font-size: 15px; font-weight: 500; color: var(--ink-faint); }
-.tile .lbl { font-size: 12px; color: var(--ink-soft); }
+.tile .lbl { font-size: 12.5px; color: var(--ink-soft); }
 .tile .sub { font-size: 11px; color: var(--ink-faint); }
 
 /* ---------- Tables ---------- */
@@ -498,7 +523,7 @@ table.grid { width: 100%; border-collapse: collapse; font-size: 13px; line-heigh
 table.grid caption { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 table.grid th {
   text-align: left;
-  font-size: 11px;
+  font-size: 11.5px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -653,10 +678,10 @@ td.truncate, .truncate { max-width: 220px; overflow: hidden; text-overflow: elli
 }
 
 /* ---------- Forms / settings ---------- */
-.setrow { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; align-items: start; padding: 15px 0; border-bottom: 1px solid var(--line); line-height: 1.45; }
+.setrow { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 28px; align-items: start; padding: 18px 0; border-bottom: 1px solid var(--line); line-height: 1.45; }
 .setrow:first-of-type { padding-top: 0; }
 .setrow:last-child { border-bottom: none; padding-bottom: 0; }
-.setrow .help { font-size: 12.5px; color: var(--ink-soft); }
+.setrow .help { font-size: 13px; color: var(--ink-soft); }
 .field {
   width: 100%;
   font: inherit;
@@ -668,7 +693,9 @@ td.truncate, .truncate { max-width: 220px; overflow: hidden; text-overflow: elli
   color: var(--ink);
 }
 select.field { appearance: auto; }
-textarea.field { resize: vertical; }
+/* Grows with its content via the autogrow script in base.html; manual drag
+   still works, and overflow-y keeps the themed scrollbar once it hits the cap. */
+textarea.field { resize: vertical; overflow-y: auto; transition: height .12s ease; }
 textarea.field.mono { font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 12.5px; }
 .field:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft), 0 0 16px rgba(61, 220, 132, 0.15); }
 .field::placeholder { color: var(--ink-faint); }
@@ -760,6 +787,168 @@ input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px;
 .activity-row .ago { color: var(--ink-faint); font-size: 12px; white-space: nowrap; }
 .activity-day { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-faint); margin: 16px 0 4px; }
 .activity-day:first-child { margin-top: 0; }
+
+/* ---------- Templates tab (Gmail-style message library) ---------- */
+.tmpl { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 24px; align-items: start; }
+
+.tmpl-rail {
+  position: sticky;
+  top: 88px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-height: calc(100vh - 110px);
+  overflow-y: auto;
+}
+.tmpl-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 14px 16px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius);
+  box-shadow: var(--glass-top-highlight);
+}
+.tmpl-toolbar .lab { margin-bottom: 4px; }
+.tmpl-toolbar form.inline { display: block; }
+
+.tmpl-list { display: flex; flex-direction: column; gap: 3px; }
+.tmpl-group {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-faint);
+  padding: 12px 10px 5px;
+}
+.tmpl-group:first-child { padding-top: 2px; }
+.tmpl-link {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: left;
+  font: inherit;
+  padding: 9px 12px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  transition: background .15s ease, border-color .15s ease, box-shadow .15s ease;
+}
+.tmpl-link:hover {
+  background: rgba(61, 220, 132, 0.07);
+  border-color: rgba(61, 220, 132, 0.22);
+}
+.tmpl-link.active {
+  background: var(--accent-soft);
+  border-color: rgba(61, 220, 132, 0.35);
+  box-shadow: var(--glass-top-highlight), 0 0 18px -6px rgba(61, 220, 132, 0.4);
+}
+.tmpl-link-name { font-weight: 600; font-size: 13.5px; }
+.tmpl-link.active .tmpl-link-name { color: var(--accent-soft-ink); }
+.tmpl-link-sub {
+  font-size: 11.5px;
+  color: var(--ink-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tmpl-pane { min-width: 0; }
+.tmpl-msg {
+  display: grid;
+  gap: 18px;
+  animation: tmpl-fade .18s ease;
+}
+.tmpl-msg[hidden] { display: none; }
+@keyframes tmpl-fade { from { opacity: 0; transform: translateY(5px); } }
+
+.tmpl-form {
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius);
+  padding: 22px 24px;
+  box-shadow: var(--card-shadow), var(--glass-top-highlight), 0 0 40px -12px rgba(61, 220, 132, 0.18);
+}
+.tmpl-msg-head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+.tmpl-msg-head h2 { font-family: var(--display); font-size: 16px; font-weight: 600; margin: 0; }
+.tmpl-msg-head .spacer { flex: 1; }
+.tmpl-dirty {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--amber);
+  background: var(--amber-soft);
+  border: 1px solid rgba(227, 181, 103, 0.25);
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+.tmpl-form .lab { margin-top: 14px; }
+.tmpl-form .lab:first-of-type { margin-top: 0; }
+
+.tmpl-vars { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.varchip {
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-size: 11.5px;
+  color: var(--accent-soft-ink);
+  background: var(--surface-2);
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  padding: 3px 9px;
+  cursor: pointer;
+  transition: border-color .12s ease, background .12s ease;
+}
+.varchip:hover { border-color: var(--accent); background: var(--accent-soft); }
+
+.tmpl-hooks { margin-top: 16px; border-top: 1px solid var(--line); padding-top: 12px; }
+.tmpl-hooks summary { cursor: pointer; font-weight: 600; font-size: 13px; display: flex; align-items: center; gap: 8px; }
+.tmpl-hooks .check { margin: 12px 0; }
+.tmpl-hooks .lab { margin-top: 12px; }
+
+.tmpl-preview {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 18px 20px;
+}
+.tmpl-preview-head {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-faint);
+  margin-bottom: 12px;
+}
+.tmpl-preview-subject {
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: 14px;
+  color: #f3fdf5;
+  padding-bottom: 10px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.tmpl-preview-body {
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: #a9d9bb;
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 0;
+}
+.tmpl-preview-subject.is-error, .tmpl-preview-body.is-error { color: var(--red); }
+
+@media (max-width: 1024px) {
+  .tmpl { grid-template-columns: 1fr; }
+  .tmpl-rail { position: static; max-height: none; }
+  .tmpl-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+  .tmpl-group { grid-column: 1 / -1; }
+}
 
 /* ---------- Responsive ---------- */
 @media (max-width: 900px) {

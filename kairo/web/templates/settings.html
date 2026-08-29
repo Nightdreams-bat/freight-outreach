@@ -214,115 +214,16 @@
 </div>
 
 <div class="card">
-  <h2>Email templates</h2>
-  <input type="hidden" name="hook_snippets" value="1">
-  <p class="help" style="margin:0 0 6px">
-    Written by you, in full. Variables: <code>{{ '{{ name }}' }}</code>, <code>{{ '{{ company }}' }}</code>,
-    <code>{{ '{{ phone }}' }}</code>, <code>{{ '{{ sender_name }}' }}</code>, <code>{{ '{{ sender_company }}' }}</code>,
-    <code>{{ '{{ sender_phone }}' }}</code>, <code>{{ '{{ sender_pitch }}' }}</code>,
-    <code>{{ '{{ sender_address }}' }}</code>, <code>{{ '{{ unsubscribe_line }}' }}</code>
-    (reminders also get <code>{{ '{{ meeting_time }}' }}</code>; follow-ups also get <code>{{ '{{ stage }}' }}</code>).
-    Every template's footer already carries <code>{{ '{{ sender_address }}' }}</code> and <code>{{ '{{ unsubscribe_line }}' }}</code> — keep them if you edit the templates.
-    Wrap a line in <code>{% raw %}{% if phone %}…{% endif %}{% endraw %}</code> to skip it when a field is empty.
-    The cold intro also gets <code>{{ '{{ hook }}' }}</code> — an opening line picked from the carrier/shipper
-    snippet lists below (empty unless snippets are enabled).
-  </p>
-
+  <h2>Message templates</h2>
   <div class="setrow">
-    <div><label class="lab">Template language</label>
-      <select class="field" name="template_language">
-        <option value="en" {{ 'selected' if cfg.template_language != 'ro' }}>English</option>
-        <option value="ro" {{ 'selected' if cfg.template_language == 'ro' }}>Română</option>
-      </select>
+    <div>
+      <a href="{{ url_for('templates_page') }}" class="btn sm primary">Open Templates</a>
     </div>
-    <div class="help">Language of the built-in defaults. Changing this here does not rewrite the text below —
-      use the reset button beneath this card for that.</div>
-  </div>
-
-  <h3 class="section">Cold intro</h3>
-  <div class="setrow">
-    <div><label class="lab">Subject</label>
-      <input class="field" name="cold_subject_template" value="{{ cfg.cold_subject_template or '' }}"></div>
-    <div class="help">Subject for the first-contact email to a new lead.</div>
-  </div>
-  <div class="setrow">
-    <div><textarea class="field mono" name="cold_body_template" rows="9">{{ cfg.cold_body_template or '' }}</textarea></div>
-    <div class="help">The full first-contact message body. Include <code>{{ '{{ hook }}' }}</code> to splice in a segment opening line.</div>
-  </div>
-
-  <h3 class="section">Carrier / shipper hooks <span class="newpill">new</span></h3>
-  <div class="setrow">
-    <div><label class="lab"><input type="checkbox" name="hook_snippets_enabled" {{ 'checked' if cfg.hook_snippets_enabled }}> Use a segment opening line in the cold intro</label></div>
-    <div class="help">The lead is tagged carrier or shipper from keywords in its Company/Notes; one line
-      from the matching list below is rotated into <code>{{ '{{ hook }}' }}</code>. Off by default. Static text — no AI.</div>
-  </div>
-  <div class="setrow">
-    <div><label class="lab">Carrier snippets (one per line)</label>
-      <textarea class="field mono" name="hook_snippets_carrier" rows="4">{{ (cfg.hook_snippets_carrier or [])|join('\n') }}</textarea></div>
-    <div class="help">Used when the lead looks like a trucking company / owner-operator.</div>
-  </div>
-  <div class="setrow">
-    <div><label class="lab">Shipper snippets (one per line)</label>
-      <textarea class="field mono" name="hook_snippets_shipper" rows="4">{{ (cfg.hook_snippets_shipper or [])|join('\n') }}</textarea></div>
-    <div class="help">Used for manufacturers / distributors / warehouses (the default when nothing matches).</div>
-  </div>
-
-  <h3 class="section">Follow-up <span class="newpill">new</span></h3>
-  <div class="setrow">
-    <div><label class="lab">Subject</label>
-      <input class="field" name="followup_subject_template" value="{{ cfg.followup_subject_template or '' }}"></div>
-    <div class="help">Subject for every follow-up nudge.</div>
-  </div>
-  <div class="setrow">
-    <div><label class="lab">Nudge body</label>
-      <textarea class="field mono" name="followup_body_template" rows="8">{{ cfg.followup_body_template or '' }}</textarea></div>
-    <div class="help">Used for every follow-up except the last.</div>
-  </div>
-  <div class="setrow">
-    <div><label class="lab">Breakup body</label>
-      <textarea class="field mono" name="followup_breakup_body_template" rows="6">{{ cfg.followup_breakup_body_template or '' }}</textarea></div>
-    <div class="help">The final touch — a polite "I'll stop here".</div>
-  </div>
-
-  <h3 class="section">Reminder</h3>
-  <div class="setrow">
-    <div><label class="lab">Subject</label>
-      <input class="field" name="reminder_subject_template" value="{{ cfg.reminder_subject_template or '' }}"></div>
-    <div class="help">Subject for the automatic 24h-before-meeting reminder.</div>
-  </div>
-  <div class="setrow">
-    <div><textarea class="field mono" name="reminder_body_template" rows="8">{{ cfg.reminder_body_template or '' }}</textarea></div>
-    <div class="help">Sent automatically the day before a meeting, or on demand from Send.</div>
-  </div>
-
-  <h3 class="section">Scheduling replies</h3>
-  <p class="help" style="margin:0 0 6px">Used only when reply handling is on. Extra vars: <code>{{ '{{ meeting_time }}' }}</code> (confirm), <code>{{ '{{ slots }}' }}</code> (a list, in "Propose times").</p>
-  <div class="setrow">
-    <div><label class="lab">Confirm — subject</label>
-      <input class="field" name="meeting_confirm_subject_template" value="{{ cfg.meeting_confirm_subject_template or '' }}"></div>
-    <div class="help">Subject of the confirmation sent when you approve a booking.</div>
-  </div>
-  <div class="setrow">
-    <div><textarea class="field mono" name="meeting_confirm_body_template" rows="7">{{ cfg.meeting_confirm_body_template or '' }}</textarea></div>
-    <div class="help">Goes out alongside the calendar invite.</div>
-  </div>
-  <div class="setrow">
-    <div><label class="lab">Propose times — subject</label>
-      <input class="field" name="propose_times_subject_template" value="{{ cfg.propose_times_subject_template or '' }}"></div>
-    <div class="help">Subject when offering the lead a few open slots.</div>
-  </div>
-  <div class="setrow">
-    <div><textarea class="field mono" name="propose_times_body_template" rows="7">{{ cfg.propose_times_body_template or '' }}</textarea></div>
-    <div class="help">Sent when the lead said yes but gave no time, or their time was taken.</div>
-  </div>
-  <div class="setrow">
-    <div><label class="lab">Decline ack — subject</label>
-      <input class="field" name="decline_ack_subject_template" value="{{ cfg.decline_ack_subject_template or '' }}"></div>
-    <div class="help">Subject of the short acknowledgement when a lead says no.</div>
-  </div>
-  <div class="setrow">
-    <div><textarea class="field mono" name="decline_ack_body_template" rows="6">{{ cfg.decline_ack_body_template or '' }}</textarea></div>
-    <div class="help">Only sent if you approve it on the Replies page.</div>
+    <div class="help">
+      Every message the app sends — cold intro, follow-ups, reminder, and the scheduling
+      replies — is now edited on its own <strong>Templates</strong> page, with a live preview.
+      The default template language and "reset to defaults" live there too.
+    </div>
   </div>
 </div>
 
@@ -384,18 +285,6 @@
   <button type="submit" class="btn primary">Save settings</button>
 </div>
 </form>
-
-<div class="card">
-  <h2>Reset templates</h2>
-  <div class="setrow">
-    <form method="post" action="{{ url_for('reset_templates') }}"
-          data-confirm="This overwrites every template above with the built-in {{ 'Romanian' if cfg.template_language == 'ro' else 'English' }} defaults. Any edits you made are lost."
-          data-confirm-ok="Reset templates" data-confirm-danger>
-      <button type="submit" class="btn danger">Reset all templates to {{ 'Romanian' if cfg.template_language == 'ro' else 'English' }} defaults</button>
-    </form>
-    <div class="help">Save the language selection first, then use this to replace all template text with that language's defaults.</div>
-  </div>
-</div>
 
 {% endblock %}
 

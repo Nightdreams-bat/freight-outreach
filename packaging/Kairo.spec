@@ -1,9 +1,19 @@
 # PyInstaller spec for the standalone Windows build.
-# Run via  .\packaging\build.ps1  (which sets the working dir to the repo root),
-# or by hand from the repo root:  pyinstaller packaging\Kairo.spec
+# Run via  .\packaging\build.ps1 , or by hand from anywhere:  pyinstaller packaging\Kairo.spec
 # Output: dist/Kairo/Kairo.exe  (a folder the client can copy anywhere)
 
+import os
+
 from PyInstaller.utils.hooks import collect_submodules, collect_data_files, collect_all
+
+# PyInstaller resolves relative paths in this spec against the spec file's own
+# directory (packaging/), NOT the working directory - so anchor every source path
+# to the repo root explicitly. SPECPATH is the dir containing this spec.
+ROOT = os.path.dirname(os.path.abspath(SPECPATH))
+
+
+def _root(*parts):
+    return os.path.join(ROOT, *parts)
 
 hiddenimports = []
 hiddenimports += collect_submodules("keyring.backends")
@@ -16,10 +26,18 @@ hiddenimports += ["win32ctypes.pywin32", "win32timezone"]
 hiddenimports += ["tzdata", "tzlocal", "httpx", "httpcore"]
 
 datas = [
-    ("kairo/web/templates", "kairo/web/templates"),
-    ("kairo/web/static", "kairo/web/static"),
+    (_root("kairo", "web", "templates"), "kairo/web/templates"),
+    (_root("kairo", "web", "static"), "kairo/web/static"),
 ]
 datas += collect_data_files("googleapiclient")
+
+# The one-time Google OAuth client. Not in the repo (gitignored); the release
+# workflow writes it from a GitHub secret before this runs. When present it is
+# bundled at the archive root and copied out to %APPDATA%\Kairo on first run
+# (kairo/paths.py) so "Connect Gmail" works without any manual setup.
+_secret = _root("client_secret.json")
+if os.path.exists(_secret):
+    datas.append((_secret, "."))
 
 # anthropic (reply classification) and its stack. anthropic 1.x pulls httpx +
 # jiter (compiled) + pydantic; none are fully covered by PyInstaller's built-in
@@ -47,8 +65,8 @@ for _pkg in ("anthropic", "httpx", "httpcore", "jiter", "anyio", "sniffio", "dis
 hiddenimports += ["webview.platforms.edgechromium", "clr_loader", "clr_loader.netfx"]
 
 a = Analysis(
-    ["kairo/__main__.py"],
-    pathex=[],
+    [_root("kairo", "__main__.py")],
+    pathex=[ROOT],
     binaries=binaries,
     datas=datas,
     hiddenimports=hiddenimports,
@@ -74,7 +92,7 @@ exe = EXE(
     console=True,  # keep a console for CLI flags (--cold, --selfcheck, scheduled tasks);
                    # GUI mode hides the console window at runtime (kairo/desktop.py)
     disable_windowed_traceback=False,
-    icon="assets/kairo.ico",
+    icon=_root("assets", "kairo.ico"),
 )
 coll = COLLECT(
     exe,

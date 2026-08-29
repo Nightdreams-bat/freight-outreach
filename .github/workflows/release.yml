@@ -1,0 +1,84 @@
+name: release
+
+# Push a version tag to cut a release:
+#   (bump kairo/__init__.py __version__ first, commit, then)
+#   git tag v0.1.0 && git push origin v0.1.0
+# Builds the PyInstaller app + Inno Setup installer on Windows and publishes it
+# to a GitHub Release. The Google OAuth client is injected from the
+# CLIENT_SECRET_JSON repo secret so "Connect Gmail" works out of the box.
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Tag matches kairo.__version__
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $ver = (python -c "import kairo; print(kairo.__version__)").Trim()
+          if ("v$ver" -ne $tag) { throw "tag '$tag' does not match kairo.__version__ 'v$ver'" }
+          "APP_VERSION=$ver" | Out-File $env:GITHUB_ENV -Append
+
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r packaging/requirements-build.txt
+
+      - name: Write OAuth client secret
+        shell: pwsh
+        env:
+          CLIENT_SECRET_JSON: ${{ secrets.CLIENT_SECRET_JSON }}
+        run: |
+          if (-not $env:CLIENT_SECRET_JSON) { throw "CLIENT_SECRET_JSON secret is not set" }
+          [IO.File]::WriteAllText("$PWD\client_secret.json", $env:CLIENT_SECRET_JSON)
+
+      - name: Build the app (PyInstaller)
+        run: python -m PyInstaller --clean --noconfirm packaging/Kairo.spec
+
+      - name: Self-check the frozen build
+        run: dist/Kairo/Kairo.exe --selfcheck
+
+      - name: Ensure Inno Setup
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup --no-progress -y }
+          "ISCC=$iscc" | Out-File $env:GITHUB_ENV -Append
+
+      - name: Build the installer (Inno Setup)
+        run: '& "$env:ISCC" /DAppVersion=$env:APP_VERSION packaging/Kairo.iss'
+
+      - name: Checksum
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem packaging/Output/KairoSetup-*.exe | Select-Object -First 1
+          $hash = (Get-FileHash $exe.FullName -Algorithm SHA256).Hash.ToLower()
+          "$hash  $($exe.Name)" | Out-File "$($exe.FullName).sha256" -Encoding ascii -NoNewline
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Kairo ${{ env.APP_VERSION }}
+          generate_release_notes: true
+          files: |
+            packaging/Output/KairoSetup-*.exe
+            packaging/Output/KairoSetup-*.exe.sha256
+
+      - name: Remove the OAuth client secret
+        if: always()
+        shell: pwsh
+        run: Remove-Item "$PWD\client_secret.json" -ErrorAction SilentlyContinue

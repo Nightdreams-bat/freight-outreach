@@ -9,7 +9,8 @@ Leads live in one Excel file. Nothing is hosted, and nothing sends or books
 without your approval.**
 
 [![tests](https://github.com/Nightdreams-bat/kairo/actions/workflows/tests.yml/badge.svg)](https://github.com/Nightdreams-bat/kairo/actions/workflows/tests.yml)
-![Tests](https://img.shields.io/badge/tests-361%20passing-2E7D32?style=flat-square)
+[![latest release](https://img.shields.io/github/v/release/Nightdreams-bat/kairo?style=flat-square&color=3ddc84)](https://github.com/Nightdreams-bat/kairo/releases/latest)
+![Tests](https://img.shields.io/badge/tests-381%20passing-2E7D32?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=flat-square&logo=python&logoColor=white)
 ![Windows](https://img.shields.io/badge/Windows-10%2F11-0078D6?style=flat-square&logo=windows&logoColor=white)
 ![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)
@@ -27,7 +28,7 @@ without your approval.**
 - **LLM as a typed component.** Reply classification is a single forced-tool-use
   Claude Haiku call with a strict schema, a monthly spend counter, and a
   no-API-key keyword fallback — the model never has authority to send or book.
-- **361 tests, fully network-free.** Gmail, Calendar and Anthropic are all faked
+- **381 tests, fully network-free.** Gmail, Calendar and Anthropic are all faked
   in the suite; CI runs it on every push. `python -m pytest` finishes in ~8s.
 - **One core, many front-ends.** The dashboard, the CLI, and the Windows
   scheduled tasks all call the same `kairo/core.py` functions, so they can never
@@ -81,7 +82,23 @@ Google sign-in (OAuth), not SMTP or app passwords.
 
 ---
 
-## Quick start
+## Install (Windows)
+
+Grab **`KairoSetup-<version>.exe`** from the
+**[latest release](https://github.com/Nightdreams-bat/kairo/releases/latest)** and
+run it. It installs per-user into `%LocalAppData%\Programs\Kairo` (no admin prompt,
+pick another folder if you like), offers a Desktop shortcut, and can launch the app
+straight away. Your settings and credentials live in `%APPDATA%\Kairo` and survive
+upgrades and uninstalls.
+
+The installer is unsigned, so Windows SmartScreen shows a blue *"Windows protected
+your PC"* prompt on first run — click **More info → Run anyway**. Verify the download
+against the `.sha256` published beside it if you want.
+
+Releases are built by [`.github/workflows/release.yml`](.github/workflows/release.yml)
+on every `v*` tag push (PyInstaller → Inno Setup → GitHub Release).
+
+## Quick start (from source)
 
 ```bash
 git clone https://github.com/Nightdreams-bat/kairo.git
@@ -108,7 +125,9 @@ handling — a pay-as-you-go Anthropic API key (roughly $0.001 per reply on Haik
 ```
 
 Runs PyInstaller against `packaging\Kairo.spec`, self-checks the result, and
-assembles `release\Kairo\` — one folder the client copies anywhere. See
+assembles `release\Kairo\` — one folder the client copies anywhere.
+`.\packaging\build-installer.ps1` goes one step further and compiles the
+`KairoSetup-<version>.exe` installer locally (needs Inno Setup 6). See
 **[`docs/BUILD.md`](docs/BUILD.md)**.
 
 ---

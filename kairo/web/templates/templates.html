@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% block title %}Templates{% endblock %}
+{% block content_class %}tmpl-content{% endblock %}
+{% block content %}
+
+<p class="subtitle">Every message the app can send, written by you. Pick one on the left to edit it and see a live preview.</p>
+
+<div class="tmpl">
+  <aside class="tmpl-rail">
+    <div class="tmpl-toolbar">
+      <form method="post" action="{{ url_for('templates_language') }}" class="inline"
+            data-confirm="Switching the language replaces every template below with the built-in defaults for that language. Any edits you have made are lost."
+            data-confirm-ok="Switch &amp; replace" data-confirm-danger>
+        <input type="hidden" name="m" value="{{ current }}">
+        <label class="lab" for="tmpl-lang">Language</label>
+        <select class="field" id="tmpl-lang" name="template_language">
+          <option value="en" {{ 'selected' if lang != 'ro' }}>English</option>
+          <option value="ro" {{ 'selected' if lang == 'ro' }}>Română</option>
+        </select>
+        <button type="submit" class="btn sm" style="margin-top:6px">Apply language</button>
+      </form>
+      <form method="post" action="{{ url_for('templates_reset') }}" class="inline"
+            data-confirm="This overwrites every template below with the built-in {{ 'Romanian' if lang == 'ro' else 'English' }} defaults. Any edits you made are lost."
+            data-confirm-ok="Reset templates" data-confirm-danger>
+        <input type="hidden" name="m" value="{{ current }}">
+        <button type="submit" class="btn sm danger">Reset all to defaults</button>
+      </form>
+    </div>
+
+    <nav class="tmpl-list" aria-label="Message templates">
+      {% for group_name, msgs in groups %}
+      <div class="tmpl-group">{{ group_name }}</div>
+      {% for m in msgs %}
+      <button type="button" class="tmpl-link {{ 'active' if m.key == current }}"
+              data-msg="{{ m.key }}" aria-pressed="{{ 'true' if m.key == current else 'false' }}">
+        <span class="tmpl-link-name">{{ m.name }}</span>
+        <span class="tmpl-link-sub">{{ cfg[m.subject_key] or '—' }}</span>
+      </button>
+      {% endfor %}
+      {% endfor %}
+    </nav>
+  </aside>
+
+  <section class="tmpl-pane">
+    {% for m in messages %}
+    <article class="tmpl-msg {{ 'active' if m.key == current }}" data-msg="{{ m.key }}" {{ 'hidden' if m.key != current }}>
+      <form method="post" action="{{ url_for('templates_save') }}" class="tmpl-form" data-msg="{{ m.key }}">
+        <input type="hidden" name="m" value="{{ m.key }}">
+        <div class="tmpl-msg-head">
+          <h2>{{ m.name }}</h2>
+          <span class="tmpl-dirty" hidden>Unsaved changes</span>
+          <div class="spacer"></div>
+          <button type="submit" class="btn primary sm">Save</button>
+        </div>
+
+        <label class="lab" for="f-{{ m.subject_key }}">Subject</label>
+        <input class="field tmpl-subject" id="f-{{ m.subject_key }}" name="{{ m.subject_key }}"
+               value="{{ cfg[m.subject_key] or '' }}" autocomplete="off">
+
+        {% for b in m.bodies %}
+        <label class="lab" for="f-{{ b.key }}">{{ b.label }}</label>
+        <textarea class="field mono tmpl-body" id="f-{{ b.key }}" name="{{ b.key }}" rows="10">{{ cfg[b.key] or '' }}</textarea>
+        {% endfor %}
+
+        <div class="tmpl-vars" role="group" aria-label="Insert a variable">
+          {% for v in m.vars %}
+          <button type="button" class="varchip" data-var="{{ v }}">{{ '{{ ' ~ v ~ ' }}' }}</button>
+          {% endfor %}
+        </div>
+        <p class="form-hint">
+          Click a chip to insert it where your cursor is. Wrap a line in
+          <code>{% raw %}{% if phone %}…{% endif %}{% endraw %}</code> to drop it when that field is empty.
+        </p>
+
+        {% if m.has_hooks %}
+        <details class="tmpl-hooks">
+          <summary>Opening-line snippets <span class="chip">carrier / shipper</span></summary>
+          <input type="hidden" name="hooks" value="1">
+          <label class="check">
+            <input type="checkbox" name="hook_snippets_enabled" {{ 'checked' if cfg.hook_snippets_enabled }}>
+            Rotate a segment opening line into <code>{{ '{{ hook }}' }}</code>
+          </label>
+          <label class="lab" for="f-hooks-carrier">Carrier snippets (one per line)</label>
+          <textarea class="field mono" id="f-hooks-carrier" name="hook_snippets_carrier" rows="4">{{ (cfg.hook_snippets_carrier or [])|join('\n') }}</textarea>
+          <label class="lab" for="f-hooks-shipper">Shipper snippets (one per line)</label>
+          <textarea class="field mono" id="f-hooks-shipper" name="hook_snippets_shipper" rows="4">{{ (cfg.hook_snippets_shipper or [])|join('\n') }}</textarea>
+        </details>
+        {% endif %}
+      </form>
+
+      <div class="tmpl-preview" aria-live="polite">
+        <div class="tmpl-preview-head">Preview <span class="muted">— sample data (Maria · Acme Logistics)</span></div>
+        <div class="tmpl-preview-subject" data-preview-subject></div>
+        <pre class="tmpl-preview-body" data-preview-body></pre>
+      </div>
+    </article>
+    {% endfor %}
+  </section>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='templates.js') }}"></script>
+{% endblock %}
