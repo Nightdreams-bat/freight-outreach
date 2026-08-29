@@ -99,5 +99,16 @@ def lead_name(row):
     return _present(row.get("Name")) or derive_name(row.get("Email")) or "there"
 
 
+def lead_company_or_none(row):
+    """The real or email-derived company, or None when we have neither.
+
+    Use this anywhere the value stands on its own - an email subject, a queue
+    label - where the "your company" fallback from `lead_company()` would read as
+    a literal placeholder. `lead_company()` keeps that fallback for in-sentence
+    body copy ("worth connecting with your company").
+    """
+    return _present(row.get("Company")) or derive_company(row.get("Email"))
+
+
 def lead_company(row):
-    return _present(row.get("Company")) or derive_company(row.get("Email")) or "your company"
+    return lead_company_or_none(row) or "your company"

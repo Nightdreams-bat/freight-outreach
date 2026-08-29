@@ -10,6 +10,7 @@ frozen build.
         --reminders   run the reminder + follow-up scan now (headless; scheduled task)
         --replies     scan for lead replies and draft actions (headless; scheduled task)
         --selfcheck   verify a freshly built .exe has everything it needs
+        --version     print "Kairo <version>" and exit
 """
 
 import os
@@ -45,8 +46,14 @@ def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
 
     # Downstream mains parse their own args with argparse; hide our dispatch flags from them.
-    dispatch_flags = {"--web", "--cold", "--followup", "--reminders", "--replies", "--selfcheck"}
+    dispatch_flags = {"--web", "--cold", "--followup", "--reminders", "--replies",
+                      "--selfcheck", "--version"}
     sys.argv = [sys.argv[0]] + [a for a in argv if a not in dispatch_flags]
+
+    if "--version" in argv or "-V" in argv:
+        from kairo import __version__
+        print(f"Kairo {__version__}")
+        return
 
     if "--selfcheck" in argv:
         _selfcheck()

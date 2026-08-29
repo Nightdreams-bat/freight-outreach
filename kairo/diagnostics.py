@@ -11,6 +11,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 
+from kairo import __version__
 from kairo.config import get as cfg_get
 from kairo.logging_setup import get_logger
 
@@ -19,6 +20,7 @@ log = get_logger("diagnostics")
 # Stable, order-fixed names so the /diagnostics page can match async results to
 # the placeholder rows it renders first.
 CHECK_NAMES = [
+    "Kairo version",
     "Business details",
     "Postal address",
     "Leads spreadsheet",
@@ -76,6 +78,10 @@ class _GmailCtx:
 
 
 # --- individual checks ----------------------------------------------------
+
+def _check_version(_cfg, _gmail):
+    return _ok("Kairo version", f"running v{__version__}")
+
 
 def _check_config(cfg, _gmail):
     missing = [k for k in ("sender_name", "sender_company") if not (cfg.get(k) or "").strip()]
@@ -255,6 +261,7 @@ def _check_tasks(cfg, _gmail):
 
 
 _CHECKS = [
+    _check_version,
     _check_config,
     _check_postal_address,
     _check_excel,

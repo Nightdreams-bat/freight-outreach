@@ -1,3 +1,6 @@
+import shutil
+import zipfile
+
 import openpyxl
 import pytest
 
@@ -329,6 +332,121 @@ def test_remove_rows_noop_on_empty(tmp_path):
     store = ExcelStore(p)
     assert store.remove_rows([]) == 0
     assert store.remove_rows([1]) == 0
+
+
+def test_locked_file_reads_rows_via_temp_copy_fallback(tmp_path, monkeypatch):
+    p = _make(tmp_path / "leads.xlsx", ["Name", "Company", "Email", "Phone"],
+              ["Jane", "Acme", "jane@acme.test", "1"])
+
+    real_load = openpyxl.load_workbook
+    state = {"first": True}
+
+    def flaky_load(*a, **k):
+        if state["first"]:
+            state["first"] = False
+            raise PermissionError("open in Excel")
+        return real_load(*a, **k)
+
+    monkeypatch.setattr(openpyxl, "load_workbook", flaky_load)
+    store = ExcelStore(p, create_if_missing=False)
+    assert store.read_only_fallback is True
+    _, v = list(store.rows())[0]
+    assert v["Email"] == "jane@acme.test"
+
+
+def test_read_only_fallback_defaults_false(tmp_path):
+    p = _make(tmp_path / "leads.xlsx", ["Name", "Email"], ["Jane", "jane@acme.test"])
+    assert ExcelStore(p).read_only_fallback is False
+
+
+def test_locked_uncopyable_primary_falls_back_to_bak(tmp_path, monkeypatch):
+    p = _make(tmp_path / "leads.xlsx", ["Name", "Company", "Email", "Phone"],
+              ["Jane", "Acme", "jane@acme.test", "1"])
+    # First open makes the .bak snapshot.
+    ExcelStore(p, create_if_missing=False)
+
+    real_load = openpyxl.load_workbook
+
+    def load(src, *a, **k):
+        if str(src).endswith("leads.xlsx"):
+            raise zipfile.BadZipFile("truly locked")
+        return real_load(src, *a, **k)
+
+    real_copy = shutil.copy2
+
+    def copy(src, dst, *a, **k):
+        if str(src).endswith("leads.xlsx"):
+            raise OSError("bytes are locked")
+        return real_copy(src, dst, *a, **k)
+
+    monkeypatch.setattr(openpyxl, "load_workbook", load)
+    monkeypatch.setattr(shutil, "copy2", copy)
+
+    store = ExcelStore(p, create_if_missing=False)
+    assert store.read_only_fallback is True
+    _, v = list(store.rows())[0]
+    assert v["Email"] == "jane@acme.test"
+
+
+def test_locked_primary_with_no_bak_raises_locked(tmp_path, monkeypatch):
+    p = _make(tmp_path / "leads.xlsx", ["Name", "Email"], ["Jane", "jane@acme.test"])
+
+    real_load = openpyxl.load_workbook
+
+    def load(src, *a, **k):
+        if str(src).endswith("leads.xlsx"):
+            raise PermissionError("open in Excel")
+        return real_load(src, *a, **k)
+
+    real_copy = shutil.copy2
+
+    def copy(src, dst, *a, **k):
+        if str(src).endswith("leads.xlsx"):
+            raise OSError("bytes are locked")
+        return real_copy(src, dst, *a, **k)
+
+    monkeypatch.setattr(openpyxl, "load_workbook", load)
+    monkeypatch.setattr(shutil, "copy2", copy)
+
+    with pytest.raises(ExcelFileLocked):
+        ExcelStore(p, create_if_missing=False)
+
+
+def test_write_still_raises_locked_even_after_fallback(tmp_path, monkeypatch):
+    p = _make(tmp_path / "leads.xlsx", ["Name", "Email"], ["Jane", "jane@acme.test"])
+
+    real_load = openpyxl.load_workbook
+    state = {"first": True}
+
+    def flaky_load(*a, **k):
+        if state["first"]:
+            state["first"] = False
+            raise PermissionError("open in Excel")
+        return real_load(*a, **k)
+
+    monkeypatch.setattr(openpyxl, "load_workbook", flaky_load)
+    store = ExcelStore(p, create_if_missing=False)
+
+    def boom(*a, **k):
+        raise PermissionError("still open in Excel")
+
+    monkeypatch.setattr(store.wb, "save", boom)
+    with pytest.raises(ExcelFileLocked):
+        store.set_value(2, "Notes", "x")
+
+
+def test_sheet_headers_empty_sheet_returns_empty_without_warning(tmp_path, caplog):
+    p = tmp_path / "blank.xlsx"
+    openpyxl.Workbook().save(p)
+    with caplog.at_level("DEBUG"):
+        assert sheet_headers(p) == []
+    assert not [r for r in caplog.records if r.levelno >= 30]
+
+
+def test_sheet_headers_normal_workbook_returns_headers(tmp_path):
+    p = _make(tmp_path / "leads.xlsx", ["Name", "Email", "Phone"],
+              ["Jane", "jane@acme.test", "1"])
+    assert sheet_headers(p) == ["Name", "Email", "Phone"]
 
 
 def test_data_and_state_column_split_is_exhaustive():

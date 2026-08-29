@@ -123,6 +123,21 @@ def test_end_to_end_queues_and_marks(wired):
     assert (2, "LastReplyAt") in statuses
 
 
+def test_blank_company_lead_enqueues_empty_company_label(wired):
+    # Jane: no Company, webmail address -> nothing to derive. The queue record
+    # must carry "" (so the Replies UI shows just the name), never "your company".
+    jane = wired["rows"][0][1]
+    jane["Company"] = ""
+    jane["Email"] = "jane.doe@gmail.com"
+    wired["replies"][0]["email"] = "jane.doe@gmail.com"
+    wired["classify"]["jane.doe@gmail.com"] = wired["classify"].pop("jane@acme.test")
+
+    process_replies.main([])
+
+    meta = next(m for _, m in wired["enqueued"] if m["lead_email"] == "jane.doe@gmail.com")
+    assert meta["lead_company"] == ""
+
+
 def test_terminal_reply_state_is_skipped(wired):
     wired["rows"][1][1]["ReplyStatus"] = "booked"  # Bob already booked
     # only jane + sue remain as candidates; fetch is still faked to return all 3,

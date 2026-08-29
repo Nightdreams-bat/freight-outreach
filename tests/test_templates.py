@@ -74,6 +74,33 @@ def test_sandbox_blocks_ssti_payload():
         t.render(payload, **_DUMMY_CONTEXT)
 
 
+@pytest.mark.parametrize("lang", ["en", "ro"])
+def test_subjects_have_no_dangling_generic_word_when_company_blank(lang):
+    d = templates.defaults(lang)
+    ctx = {**_DUMMY_CONTEXT, "company": "your company" if lang == "en" else "compania dumneavoastră"}
+    for key in ("cold_subject_template", "followup_subject_template",
+                "propose_times_subject_template", "decline_ack_subject_template"):
+        out = templates.render(d[key], **ctx)
+        assert "your company" not in out
+        assert "compania dumneavoastr" not in out
+        assert out == out.strip() and not out.endswith("-")
+
+
+@pytest.mark.parametrize("lang", ["en", "ro"])
+def test_propose_body_acknowledges_a_declined_proposed_time(lang):
+    body = templates.defaults(lang)["propose_times_body_template"]
+    plain = templates.render(body, **_DUMMY_CONTEXT)
+    declined = templates.render(
+        body, **{**_DUMMY_CONTEXT, "declined_their_time": True,
+                 "their_proposed_time": "Monday, Sep 1 at 12:00 PM"},
+    )
+    assert "Monday, Sep 1 at 12:00 PM" in declined
+    assert "Monday, Sep 1 at 12:00 PM" not in plain
+    # both variants still list the slots
+    for out in (plain, declined):
+        assert "Mon 10:00 AM" in out and "Tue 2:00 PM" in out
+
+
 def test_check_template_catches_non_template_errors():
     from kairo.core import _check_template
     # {{1/0}} raises ZeroDivisionError, not a jinja2.TemplateError - must still be

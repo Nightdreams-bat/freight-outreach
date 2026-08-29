@@ -147,6 +147,19 @@ def test_activity_items_friendly_text(monkeypatch):
     assert "Pricing?" in items[1]["text"]
 
 
+def test_activity_items_suppressed_is_not_a_send(monkeypatch):
+    monkeypatch.setattr(web_app, "recent_history", lambda limit=12: [
+        {"timestamp": "2026-08-27 10:00:00", "kind": "suppressed", "email": "b@x.com",
+         "name": "Bob Vance", "company": "Dead Co", "subject": "undeliverable: hard bounce"},
+    ])
+    it = web_app._activity_items()[0]
+    assert it["icon"] == "block"
+    assert it["icon"] != "send"
+    assert it["text"].startswith("Removed Bob Vance")
+    assert "Dead Co" in it["text"]
+    assert "undeliverable: hard bounce" in it["text"]
+
+
 def test_find_leads_sidebar_link_and_beta_badge(client):
     html = client.get("/find-leads").get_data(as_text=True)
     assert "/find-leads" in html

@@ -113,9 +113,11 @@ def _decline_ack(lead, cfg):
     }
 
 
-def _propose(lead, cfg, slots):
+def _propose(lead, cfg, slots, declined_time=None):
     ctx = _base_ctx(lead, cfg)
     ctx["slots"] = [_fmt(s) for s in slots]
+    ctx["declined_their_time"] = declined_time is not None
+    ctx["their_proposed_time"] = _fmt(declined_time) if declined_time is not None else ""
     return {
         "kind": "propose",
         "slots": list(slots),
@@ -166,9 +168,13 @@ def plan_action(classification, lead, cfg, gmail_address, now=None):
     calendar_id = cfg_get(cfg, "calendar_id")
     tz = _resolve_tz(cfg)
     proposed = _parse_iso(classification.get("proposed_start"))
+    # A time the lead actually asked for that we end up declining - so the
+    # proposal email can acknowledge it rather than ignore it.
+    declined_time = None
     if proposed is not None and not _proposed_time_ok(proposed, cfg, now):
         log.info("Lead's proposed time %s is out of bounds (past / too far / off-hours) "
                  "- offering alternatives instead of booking", proposed)
+        declined_time = proposed
         proposed = None
 
     try:
@@ -179,6 +185,7 @@ def plan_action(classification, lead, cfg, gmail_address, now=None):
 
         if proposed is not None:
             log.info("Lead's proposed time %s is taken - offering alternatives", proposed)
+            declined_time = proposed
 
         slots = calendar_api.find_open_slots(
             gmail_address,
@@ -201,4 +208,4 @@ def plan_action(classification, lead, cfg, gmail_address, now=None):
             "reason": "no open slots in the scheduling window - widen business hours or the window",
         }
 
-    return _propose(lead, cfg, slots)
+    return _propose(lead, cfg, slots, declined_time=declined_time)

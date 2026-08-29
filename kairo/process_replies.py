@@ -21,7 +21,7 @@ from kairo import gmail_read, llm, llm_tracker, optout_scan, reply_queue, schedu
 from kairo.config import get as cfg_get
 from kairo.config import load_config, save_config
 from kairo.excel_store import ExcelFileLocked, ExcelStore
-from kairo.lead_fields import lead_company, lead_name
+from kairo.lead_fields import lead_company_or_none, lead_name
 from kairo.llm import LLMNotConfigured
 from kairo.logging_setup import get_logger
 from kairo.paths import REPLY_FAILURES_PATH, REPLY_SCAN_LOCK_PATH
@@ -281,7 +281,7 @@ def _scan(args, cfg):
                 lead_row_idx=row_idx,
                 lead_email=reply["email"],
                 lead_name=lead_name(values),
-                lead_company=lead_company(values),
+                lead_company=lead_company_or_none(values) or "",
                 thread_id=reply.get("thread_id") or "",
                 reply_summary=summary,
             )

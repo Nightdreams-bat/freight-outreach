@@ -120,6 +120,37 @@ def test_write_action_when_file_open_in_excel_does_not_dead_end(client, monkeypa
     assert "Close Excel" in body
 
 
+def test_leads_page_shows_locked_banner_when_file_open_in_excel(client, monkeypatch):
+    from kairo.excel_store import ExcelFileLocked
+
+    def locked(*a, **k):
+        raise ExcelFileLocked("open in Excel")
+
+    monkeypatch.setattr(web_app, "ExcelStore", locked)
+    html = client.get("/leads").get_data(as_text=True)
+    assert "leads-banner" in html
+    assert "open in Excel" in html
+    supp = client.get("/leads/suppressed").get_data(as_text=True)
+    assert "leads-banner" in supp
+
+
+def test_leads_page_shows_missing_banner_when_file_gone(client, monkeypatch):
+    from kairo.excel_store import ExcelFileMissing
+
+    def missing(*a, **k):
+        raise ExcelFileMissing("gone")
+
+    monkeypatch.setattr(web_app, "ExcelStore", missing)
+    html = client.get("/leads").get_data(as_text=True)
+    assert "leads-banner" in html
+    assert "can't find your leads file" in html
+
+
+def test_leads_page_no_banner_when_file_ok(client):
+    html = client.get("/leads").get_data(as_text=True)
+    assert "leads-banner" not in html
+
+
 def test_import_when_file_missing_keeps_results_and_redirects(monkeypatch, tmp_path):
     from kairo.excel_store import ExcelFileMissing
     from tests.test_web_replies import BASE_CFG, FakeQueue

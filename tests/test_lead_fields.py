@@ -5,6 +5,7 @@ from kairo.lead_fields import (
     derive_company,
     derive_name,
     lead_company,
+    lead_company_or_none,
     lead_name,
     valid_email,
 )
@@ -97,3 +98,11 @@ def test_lead_company_prefers_real_value_then_derives():
     assert lead_company({"Company": "Real Co", "Email": "a@acme.com"}) == "Real Co"
     assert lead_company({"Email": "a@acme-freight.com"}) == "Acme Freight"
     assert lead_company({"Email": "a@gmail.com"}) == "your company"
+
+
+def test_lead_company_or_none_has_no_placeholder_fallback():
+    assert lead_company_or_none({"Company": "Real Co", "Email": "a@acme.com"}) == "Real Co"
+    assert lead_company_or_none({"Email": "a@acme-freight.com"}) == "Acme Freight"
+    # blank company + webmail domain -> None, not the literal "your company"
+    assert lead_company_or_none({"Email": "a@gmail.com"}) is None
+    assert lead_company_or_none({}) is None

@@ -2,7 +2,15 @@
 {% block title %}Replies{% endblock %}
 {% block content %}
 
-<p class="subtitle">Drafted from lead replies. Nothing is sent or booked until you approve it.</p>
+<p class="subtitle">Drafted from lead replies. Nothing is sent or booked until you approve it.
+  <span id="repliesChecking" class="muted" hidden>· checking for replies…</span>
+</p>
+
+<button type="button" id="repliesRefresh" class="alert success" role="status" hidden
+        style="width:100%;text-align:left;cursor:pointer;border:0;font:inherit">
+  <svg class="ai" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.7 9.7 0 0 0-6.36 2.64L3 8"/><path d="M3 3v5h5"/></svg>
+  <span>Replies have changed — click to refresh.</span>
+</button>
 
 {% if not items %}
 <div class="card">
@@ -75,4 +83,9 @@
 </div>
 {% endfor %}
 
+{% endblock %}
+
+{% block scripts %}
+<script>window.__repliesRendered = {{ items | length }};</script>
+<script src="{{ url_for('static', filename='replies.js') }}?v={{ asset_v }}"></script>
 {% endblock %}

@@ -1,6 +1,8 @@
 import os
 import shutil
+import tempfile
 import time
+import zipfile
 from datetime import datetime
 from pathlib import Path
 
@@ -58,7 +60,19 @@ def sheet_headers(path):
         return []
     try:
         wb = openpyxl.load_workbook(p, read_only=True)
-        first_row = next(wb.active.iter_rows(values_only=True), ())
+        ws = wb.active
+        if ws is None:
+            wb.close()
+            return []
+        try:
+            first_row = next(ws.iter_rows(values_only=True), ())
+        except (IndexError, TypeError):
+            # read_only + a worksheet with no dimensions: openpyxl raises
+            # "tuple index out of range" from inside iter_rows. That just means
+            # the sheet is empty - no headers, and nothing worth warning about.
+            wb.close()
+            log.debug(f"No headers in {p}: sheet is empty")
+            return []
         wb.close()
         return [v for v in first_row if v is not None and str(v).strip()]
     except Exception as e:  # noqa: BLE001
@@ -76,6 +90,10 @@ class ExcelStore:
         self.disallowed_domains = disallowed_domains or []
         self.email_column_missing = False
         self._headers_dirty = False
+        # Set True when the workbook could only be read via a temp copy because
+        # the real file was locked (open in Excel). Callers surface this to the
+        # operator as "showing last saved data; close Excel to edit".
+        self.read_only_fallback = False
         if not self.path.exists():
             if not create_if_missing:
                 raise ExcelFileMissing(
@@ -146,7 +164,22 @@ class ExcelStore:
         for attempt in range(2):
             try:
                 return openpyxl.load_workbook(self.path)
-            except PermissionError as e:
+            except (PermissionError, zipfile.BadZipFile) as e:
+                # The real file is locked (open in Excel, OneDrive sync,
+                # "mark as final") or was caught half-written. For a READ we
+                # can still serve the last saved data: copy the file aside and
+                # parse the copy. Writes go through self.wb.save(self.path) and
+                # will still raise ExcelFileLocked if the lock persists.
+                wb = self._load_from_temp_copy()
+                if wb is None:
+                    # Even copying the bytes failed - the file is truly locked.
+                    # Fall back to the .bak snapshot _refresh_backup() keeps so
+                    # the Leads page shows the last saved version instead of
+                    # going blank.
+                    wb = self._load_from_backup()
+                if wb is not None:
+                    self.read_only_fallback = True
+                    return wb
                 raise ExcelFileLocked(
                     f"Could not open {self.path} - is it open in Excel? Close it and try again."
                 ) from e
@@ -155,6 +188,55 @@ class ExcelStore:
                 if attempt == 0:
                     time.sleep(0.1)
         raise RuntimeError(f"Could not read {self.path}: {last_err}")
+
+    def _load_from_temp_copy(self):
+        """Copy self.path to a temp file and load that, in normal (writable)
+        mode so setup can still mutate self.ws in memory. Returns the workbook,
+        or None if even the copy failed. The temp file is removed once openpyxl
+        has parsed it fully into memory."""
+        tmp_path = None
+        try:
+            fd, tmp_path = tempfile.mkstemp(suffix=".xlsx")
+            os.close(fd)
+            shutil.copy2(self.path, tmp_path)
+            return openpyxl.load_workbook(tmp_path)
+        except Exception:  # noqa: BLE001
+            return None
+        finally:
+            if tmp_path and os.path.exists(tmp_path):
+                try:
+                    os.remove(tmp_path)
+                except OSError:
+                    pass
+
+    def _load_from_backup(self):
+        """Last-resort read path: load the '<file>.xlsx.bak' snapshot that
+        _refresh_backup() maintains. Used only when self.path is so locked that
+        even copying its bytes fails. Returns the workbook, or None if there is
+        no readable .bak. Writes still target self.path - never the .bak."""
+        bak = self.path.with_suffix(self.path.suffix + ".bak")
+        if not bak.exists():
+            return None
+        tmp_path = None
+        try:
+            # openpyxl only opens .xlsx/.xlsm by extension, so parse a copy.
+            fd, tmp_path = tempfile.mkstemp(suffix=".xlsx")
+            os.close(fd)
+            shutil.copy2(bak, tmp_path)
+            wb = openpyxl.load_workbook(tmp_path)
+            log.warning(
+                f"{self.path.name} is locked and uncopyable - serving the last "
+                f"saved version from {bak.name}"
+            )
+            return wb
+        except Exception:  # noqa: BLE001
+            return None
+        finally:
+            if tmp_path and os.path.exists(tmp_path):
+                try:
+                    os.remove(tmp_path)
+                except OSError:
+                    pass
 
     def _refresh_backup(self):
         """Best-effort snapshot so a crash or corruption mid-save leaves the

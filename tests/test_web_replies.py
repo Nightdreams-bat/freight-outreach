@@ -112,6 +112,28 @@ def test_nav_badge_shows_pending_count(client):
     assert ">2</span>" in body  # the badge
 
 
+def test_replies_page_includes_live_refresh_script(client):
+    body = client.get("/replies").data.decode()
+    assert "replies.js" in body
+    assert "window.__repliesRendered = 0" in body
+
+
+def test_replies_count_endpoint(client):
+    client.fake.items = [_item("q1", "manual", reason="x"), _item("q2", "manual", reason="y")]
+    r = client.get("/replies/count")
+    assert r.status_code == 200
+    data = r.get_json()
+    assert data == {"pending": 2, "job_running": False}
+
+
+def test_replies_count_job_running_only_for_replies(client, monkeypatch):
+    monkeypatch.setitem(web_app._JOB, "status", "running")
+    monkeypatch.setitem(web_app._JOB, "action", "cold")
+    assert client.get("/replies/count").get_json()["job_running"] is False
+    monkeypatch.setitem(web_app._JOB, "action", "replies")
+    assert client.get("/replies/count").get_json()["job_running"] is True
+
+
 def test_settings_shows_reply_section(client):
     body = client.get("/settings").data.decode()
     assert "Reply handling" in body

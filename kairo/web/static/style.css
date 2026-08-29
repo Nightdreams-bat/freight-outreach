@@ -17,6 +17,11 @@
 
 * { box-sizing: border-box; }
 
+/* The `hidden` attribute must win over component display rules (e.g. .alert is
+   display:flex) — JS toggles visibility via el.hidden on the Replies refresh
+   bar, the "checking…" note and similar. */
+[hidden] { display: none !important; }
+
 /* ---------- Scrollbars — themed liquid glass ----------
    WebView2 is Chromium, so ::-webkit-scrollbar applies. Replaces the stock
    light-grey Windows bar (which reads as a bright white stripe against the
@@ -345,6 +350,7 @@ code {
   padding: 8px 12px 12px;
   border-top: 1px solid var(--side-line);
 }
+.version-tag { margin: 8px 0 0; padding: 0 4px; font-size: 11px; color: var(--ink-faint); }
 .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex-shrink: 0; box-shadow: 0 0 8px var(--accent); }
 
 /* ---------- Main column ---------- */
@@ -598,6 +604,7 @@ td.truncate, .truncate { max-width: 220px; overflow: hidden; text-overflow: elli
 .alert.success { background: var(--accent-soft); color: var(--accent-soft-ink); border-color: rgba(61, 220, 132, 0.25); }
 .alert.warning { background: var(--amber-soft); color: var(--amber); border-color: rgba(227, 181, 103, 0.25); }
 .alert.danger { background: var(--red-soft); color: var(--red); border-color: rgba(236, 122, 111, 0.3); }
+.leads-banner { margin-bottom: 16px; }
 
 /* ---------- Run panel ---------- */
 .runstatus {

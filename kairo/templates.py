@@ -15,14 +15,14 @@ import jinja2.sandbox
 #   Follow-up:       name, company, phone, sender_name, sender_company, sender_phone, sender_pitch, sender_address, unsubscribe_line, stage, is_last
 #   Reminder:        name, company, phone, sender_name, sender_company, sender_phone, sender_address, unsubscribe_line, meeting_time
 #   Meeting confirm: name, company, sender_name, sender_company, sender_phone, sender_address, unsubscribe_line, meeting_time
-#   Propose times:   name, company, sender_name, sender_company, sender_phone, sender_address, unsubscribe_line, slots (list of strings)
+#   Propose times:   name, company, sender_name, sender_company, sender_phone, sender_address, unsubscribe_line, slots (list of strings), declined_their_time (bool), their_proposed_time (string)
 #   Decline ack:     name, company, sender_name, sender_company, sender_address, unsubscribe_line
 
 # Human-readable meeting time shown in reminder emails, the scheduling module,
 # and the reply-queue display helpers. One source of truth.
 MEETING_TIME_DISPLAY_FMT = "%A, %b %d at %I:%M %p"
 
-COLD_INTRO_SUBJECT = "{{ company }} freight - quick question"
+COLD_INTRO_SUBJECT = "Quick question about your freight"
 
 COLD_INTRO_BODY = """Hi {{ name }},
 
@@ -42,7 +42,7 @@ Best,
 {% endif %}{% if unsubscribe_line %}{{ unsubscribe_line }}
 {% endif %}"""
 
-FOLLOWUP_SUBJECT = "Following up - {{ company }} freight"
+FOLLOWUP_SUBJECT = "Following up on your freight"
 
 FOLLOWUP_BODY = """Hi {{ name }},
 
@@ -106,11 +106,11 @@ Best,
 {% endif %}{% if unsubscribe_line %}{{ unsubscribe_line }}
 {% endif %}"""
 
-PROPOSE_TIMES_SUBJECT = "A few times that work - {{ company }}"
+PROPOSE_TIMES_SUBJECT = "A few times that work"
 
 PROPOSE_TIMES_BODY = """Hi {{ name }},
 
-Glad you're open to a call. Here are a few times that work on my end:
+{% if declined_their_time %}Thanks for the reply. {{ their_proposed_time }} doesn't work on my end, but here are a few that do:{% else %}Glad you're open to a call. Here are a few times that work on my end:{% endif %}
 
 {% for slot in slots %}  - {{ slot }}
 {% endfor %}
@@ -124,7 +124,7 @@ Best,
 {% endif %}{% if unsubscribe_line %}{{ unsubscribe_line }}
 {% endif %}"""
 
-DECLINE_ACK_SUBJECT = "Thanks for the reply - {{ company }}"
+DECLINE_ACK_SUBJECT = "Thanks for the reply"
 
 DECLINE_ACK_BODY = """Hi {{ name }},
 
@@ -144,7 +144,7 @@ Best,
 # The tool is used mainly in Romanian. Same Jinja variables and {% if sender_phone %}
 # guards as the English constants above; natural business Romanian.
 
-COLD_INTRO_SUBJECT_RO = "Transport {{ company }} - o întrebare scurtă"
+COLD_INTRO_SUBJECT_RO = "O întrebare scurtă despre transportul dumneavoastră"
 
 COLD_INTRO_BODY_RO = """Bună ziua {{ name }},
 
@@ -164,7 +164,7 @@ Cu stimă,
 {% endif %}{% if unsubscribe_line %}{{ unsubscribe_line }}
 {% endif %}"""
 
-FOLLOWUP_SUBJECT_RO = "Revin - transport {{ company }}"
+FOLLOWUP_SUBJECT_RO = "Revin la mesajul meu anterior"
 
 FOLLOWUP_BODY_RO = """Bună ziua {{ name }},
 
@@ -226,11 +226,11 @@ Cu stimă,
 {% endif %}{% if unsubscribe_line %}{{ unsubscribe_line }}
 {% endif %}"""
 
-PROPOSE_TIMES_SUBJECT_RO = "Câteva intervale disponibile - {{ company }}"
+PROPOSE_TIMES_SUBJECT_RO = "Câteva intervale disponibile"
 
 PROPOSE_TIMES_BODY_RO = """Bună ziua {{ name }},
 
-Mă bucur că sunteți deschis unui apel. Iată câteva intervale care îmi convin:
+{% if declined_their_time %}Vă mulțumesc pentru răspuns. {{ their_proposed_time }} nu îmi este posibil, însă iată câteva intervale care îmi convin:{% else %}Mă bucur că sunteți deschis unui apel. Iată câteva intervale care îmi convin:{% endif %}
 
 {% for slot in slots %}  - {{ slot }}
 {% endfor %}
@@ -244,7 +244,7 @@ Cu stimă,
 {% endif %}{% if unsubscribe_line %}{{ unsubscribe_line }}
 {% endif %}"""
 
-DECLINE_ACK_SUBJECT_RO = "Mulțumesc pentru răspuns - {{ company }}"
+DECLINE_ACK_SUBJECT_RO = "Vă mulțumesc pentru răspuns"
 
 DECLINE_ACK_BODY_RO = """Bună ziua {{ name }},
 

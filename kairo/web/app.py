@@ -17,7 +17,7 @@ from flask import (
     url_for,
 )
 
-from kairo import lead_sourcing, reply_queue, templates
+from kairo import __version__, lead_sourcing, reply_queue, templates
 from kairo.config import get as cfg_get
 from kairo.config import load_config, save_config
 from kairo.credentials import get_anthropic_key, set_anthropic_key
@@ -69,6 +69,9 @@ class _UnavailableStore:
     in Excel). Reads yield nothing so the page renders; writes never reach here."""
 
     email_column_missing = True
+    file_locked = False
+    file_missing = False
+    read_only_fallback = False
 
     def all_rows(self):
         return iter(())
@@ -457,6 +460,7 @@ def _activity_items(limit=12):
         "followup": ("nudge", "Follow-up nudge sent to {who}"),
         "reminder": ("clock", "Call reminder sent to {who}"),
         "reply": ("reply", "Reply handled — {subject}"),
+        "suppressed": ("block", "Removed {who} — {subject}"),
     }
     out = []
     for e in recent_history(limit):
@@ -497,6 +501,10 @@ def create_app():
         if not _same_origin_ok():
             abort(403)
         return None
+
+    @app.context_processor
+    def inject_version():
+        return {"app_version": __version__}
 
     @app.context_processor
     def inject_active():
@@ -564,6 +572,7 @@ def create_app():
                 "warning",
             )
             store = _UnavailableStore()
+            store.file_locked = True
         except ExcelFileMissing:
             if not readonly:
                 raise
@@ -573,6 +582,7 @@ def create_app():
                 "danger",
             )
             store = _UnavailableStore()
+            store.file_missing = True
         return cfg, store
 
     def writable_store(action_label="save that change"):
@@ -696,6 +706,9 @@ def create_app():
         return _fresh(render_template(
             "leads.html", rows=rows, excel_path=cfg["excel_path"],
             suppressed_count=suppressed_count, synced_at=datetime.now().strftime("%H:%M:%S"),
+            file_locked=getattr(store, "file_locked", False),
+            file_missing=getattr(store, "file_missing", False),
+            read_only_fallback=getattr(store, "read_only_fallback", False),
         ))
 
     @app.route("/leads/suppressed")
@@ -705,6 +718,9 @@ def create_app():
         return _fresh(render_template(
             "leads_suppressed.html", rows=rows, excel_path=cfg["excel_path"],
             synced_at=datetime.now().strftime("%H:%M:%S"),
+            file_locked=getattr(store, "file_locked", False),
+            file_missing=getattr(store, "file_missing", False),
+            read_only_fallback=getattr(store, "read_only_fallback", False),
         ))
 
     @app.route("/leads/<int:row_idx>/suppress", methods=["POST"])
@@ -833,6 +849,19 @@ def create_app():
         with _JOB_LOCK:
             return jsonify(dict(_JOB))
 
+    @app.route("/replies/count")
+    def replies_count():
+        """Lightweight poll target for the Replies page: how many drafts are
+        waiting, and whether a reply-scan job kicked off from the dashboard is
+        still running. Fail-soft - never raises."""
+        try:
+            pending = len(reply_queue.pending())
+        except Exception:  # noqa: BLE001
+            pending = 0
+        with _JOB_LOCK:
+            job_running = (_JOB["status"] == "running" and _JOB.get("action") == "replies")
+        return jsonify({"pending": pending, "job_running": job_running})
+
     @app.route("/logs/tail")
     def logs_tail():
         try:
@@ -853,7 +882,9 @@ def create_app():
 
     @app.route("/replies")
     def replies_page():
-        return render_template("replies.html", items=reply_queue.pending())
+        # no-store so a reopened tab never renders replies.js against a stale
+        # __repliesRendered count from bfcache (would fire a false "changed").
+        return _fresh(render_template("replies.html", items=reply_queue.pending()))
 
     @app.route("/replies/<qid>/approve", methods=["POST"])
     def reply_approve(qid):

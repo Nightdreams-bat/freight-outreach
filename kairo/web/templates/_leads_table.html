@@ -1,4 +1,23 @@
 {% set empty_text = empty_text | default("No leads yet — add rows to your spreadsheet.") %}
+
+{% if file_missing %}
+<div class="alert danger leads-banner" role="alert">
+  <svg class="ai" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6M9 9l6 6"/></svg>
+  <span>Kairo can't find your leads file, so this list is empty and nothing can be saved.
+    <a href="{{ url_for('settings') }}#lead-columns">Fix the file path in Settings</a> or restore the file.</span>
+</div>
+{% elif file_locked %}
+<div class="alert warning leads-banner" role="alert">
+  <svg class="ai" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><path d="M12 9v4M12 17h.01"/></svg>
+  <span>Your leads file is open in Excel — close it to see your latest edits and let Kairo record sends.</span>
+</div>
+{% elif read_only_fallback %}
+<div class="alert leads-banner" role="status">
+  <svg class="ai" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+  <span>Showing the last saved version — close Excel to make changes.</span>
+</div>
+{% endif %}
+
 <div class="card pad-tight">
   <div class="table-wrap">
     <table class="grid" id="leadsTable">

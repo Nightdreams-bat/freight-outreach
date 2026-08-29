@@ -198,6 +198,37 @@ def test_yes_in_bounds_still_books(monkeypatch):
     assert action["start"] == datetime(2026, 6, 3, 14, 0)
 
 
+def test_propose_acknowledges_a_declined_out_of_bounds_time(monkeypatch):
+    cal = FakeCal(free=True)
+    monkeypatch.setattr(scheduling, "calendar_api", cal)
+    past = datetime(2020, 1, 2, 10, 0).isoformat()
+    action = scheduling.plan_action(
+        {"intent": "yes", "proposed_start": past, "summary": "yes"}, LEAD, CFG, "me@x.com"
+    )
+    assert action["kind"] == "propose"
+    # the rejected time the lead asked for is named in the email
+    assert "Jan 02 at 10:00 AM" in action["email_body"]
+    assert "doesn't work on my end" in action["email_body"]
+
+
+def test_propose_acknowledges_a_taken_proposed_time(monkeypatch):
+    cal = FakeCal(free=False)  # slot_is_free -> False, so we decline it
+    action = _plan(
+        {"intent": "yes", "proposed_start": "2026-09-02T14:00:00", "summary": "yes"},
+        cal, monkeypatch,
+    )
+    assert action["kind"] == "propose"
+    assert "Sep 02 at 02:00 PM" in action["email_body"]
+
+
+def test_propose_without_a_declined_time_uses_the_plain_opener(monkeypatch):
+    cal = FakeCal()
+    action = _plan({"intent": "yes", "proposed_start": None, "summary": "yes"}, cal, monkeypatch)
+    assert action["kind"] == "propose"
+    assert "Glad you're open to a call" in action["email_body"]
+    assert "doesn't work on my end" not in action["email_body"]
+
+
 def test_custom_templates_from_config_are_used(monkeypatch):
     cal = FakeCal(free=True)
     cfg = dict(CFG, meeting_confirm_body_template="CUSTOM {{ name }} {{ meeting_time }}")
