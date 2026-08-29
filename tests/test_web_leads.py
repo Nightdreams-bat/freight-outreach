@@ -146,6 +146,39 @@ def test_import_when_file_missing_keeps_results_and_redirects(monkeypatch, tmp_p
     assert web_app._LEADS_LAST["leads"] == [{"Company": "X", "Email": "x@x.test"}]
 
 
+def test_import_into_blank_workbook_adds_email_leads_and_skips_no_email(monkeypatch, tmp_path):
+    import openpyxl
+
+    from kairo.excel_store import ExcelStore
+    from tests.test_web_replies import BASE_CFG, FakeQueue
+
+    p = tmp_path / "1.xlsx"
+    openpyxl.Workbook().save(p)  # operator's hand-made empty sheet
+
+    cfg = dict(BASE_CFG)
+    cfg["excel_path"] = str(p)
+    monkeypatch.setattr(web_app, "reply_queue", FakeQueue())
+    monkeypatch.setattr(web_app, "load_config", lambda: dict(cfg))
+    monkeypatch.setattr(web_app, "save_config", lambda c: cfg.update(c))
+    web_app._LEADS_LAST.update(
+        leads=[
+            {"Company": "HasMail", "Email": "hi@hasmail.test"},
+            {"Company": "NoMail", "Email": ""},
+        ],
+        autoadded=[],
+    )
+
+    application = web_app.create_app()
+    application.config.update(TESTING=True)
+    c = application.test_client()
+    r = c.post("/find-leads/import", data={"pick": ["0", "1"]}, follow_redirects=True)
+    body = r.get_data(as_text=True)
+    assert "Added 1 lead(s)" in body
+    assert "no email address" in body
+    saved = {v["Email"] for _, v, _ in ExcelStore(str(p), create_if_missing=False).all_rows()}
+    assert "hi@hasmail.test" in saved
+
+
 def test_toggle_moves_lead_between_pages(client):
     # Suppress the active lead -> it leaves /leads and appears on /leads/suppressed
     client.post("/leads/2/suppress", follow_redirects=True)

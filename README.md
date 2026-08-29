@@ -10,7 +10,7 @@ without your approval.**
 
 [![tests](https://github.com/Nightdreams-bat/kairo/actions/workflows/tests.yml/badge.svg)](https://github.com/Nightdreams-bat/kairo/actions/workflows/tests.yml)
 [![latest release](https://img.shields.io/github/v/release/Nightdreams-bat/kairo?style=flat-square&color=3ddc84)](https://github.com/Nightdreams-bat/kairo/releases/latest)
-![Tests](https://img.shields.io/badge/tests-431%20passing-2E7D32?style=flat-square)
+![Tests](https://img.shields.io/badge/tests-434%20passing-2E7D32?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=flat-square&logo=python&logoColor=white)
 ![Windows](https://img.shields.io/badge/Windows-10%2F11-0078D6?style=flat-square&logo=windows&logoColor=white)
 ![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)

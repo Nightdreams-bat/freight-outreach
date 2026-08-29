@@ -58,9 +58,9 @@ def sheet_headers(path):
         return []
     try:
         wb = openpyxl.load_workbook(p, read_only=True)
-        headers = [c.value for c in wb.active[1] if c.value is not None and str(c.value).strip()]
+        first_row = next(wb.active.iter_rows(values_only=True), ())
         wb.close()
-        return headers
+        return [v for v in first_row if v is not None and str(v).strip()]
     except Exception as e:  # noqa: BLE001
         log.warning(f"Couldn't read headers from {p}: {e}")
         return []
@@ -89,6 +89,7 @@ class ExcelStore:
         self.ws = self.wb.active
         self._select_sheet_with_email()
         self._load_headers()
+        self._ensure_data_headers()
         self._ensure_headers()
         self._resolve_map()
         self._index_columns()
@@ -194,6 +195,33 @@ class ExcelStore:
             raise ExcelFileLocked(
                 f"Could not create {self.path} - is it open in Excel? Close it and try again."
             ) from e
+
+    def _ensure_data_headers(self):
+        """Seed the standard client columns when the target sheet has none of
+        its own - a brand-new workbook, or an empty .xlsx the operator created
+        by hand in Excel and then linked under Settings. Without a Name/Email
+        column add_lead() has nowhere to put a lead, so every append is
+        silently rejected and the operator just sees "skipped (duplicates / no
+        email)". A sheet that already has any client column is left untouched;
+        the new headers are held in memory and land on the first real write."""
+        if any(h not in STATE_COLUMNS for h in self.headers):
+            return
+        cols = [c for c, _ in self._row1_cells(self.ws)]
+        next_col = max(cols) if cols else 0
+        for logical in DATA_COLUMNS:
+            next_col += 1
+            self.ws.cell(row=1, column=next_col, value=logical)
+            self.headers.append(logical)
+            self._header_col[logical] = next_col
+        self._headers_dirty = True
+
+    def initialize(self):
+        """Persist a pending header row to disk now (used by Settings when the
+        operator links an empty file, so it isn't left header-less until the
+        first append)."""
+        if self._headers_dirty:
+            self._save()
+            self._headers_dirty = False
 
     def _ensure_headers(self):
         """Register any missing STATE columns. Never touches the client's data

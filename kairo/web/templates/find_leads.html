@@ -92,7 +92,7 @@
 
 {% if results %}
 <div class="card pad-tight">
-  <p class="help" style="margin:12px 12px 0">These had no email address — pick any to add anyway.</p>
+  <p class="help" style="margin:12px 12px 0">Only leads with an email address can be added. Rows with no email found are shown so you can open the website and look for one — add those to your sheet by hand in Excel.</p>
   <form method="post" action="{{ url_for('find_leads_import') }}">
     <div class="table-wrap">
       <table class="grid">
@@ -101,10 +101,11 @@
         </thead>
         <tbody>
           {% for r in results %}
-          <tr {{ 'class=muted' if r.duplicate }}>
+          <tr {{ 'class=muted' if r.duplicate or r.no_email }}>
             <td>
               {% if r.duplicate %}<span class="badge cold">already in sheet</span>
-              {% else %}<input type="checkbox" name="pick" value="{{ r.i }}" {{ 'checked' if r.lead.Email }}>{% endif %}
+              {% elif r.no_email %}<span class="badge cold">no email found</span>
+              {% else %}<input type="checkbox" name="pick" value="{{ r.i }}" checked>{% endif %}
             </td>
             <td>{{ r.lead.Company }}</td>
             <td>{{ r.lead.Email or '—' }}</td>

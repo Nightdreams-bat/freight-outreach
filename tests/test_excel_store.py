@@ -211,6 +211,28 @@ def test_add_lead_rejects_duplicate_and_invalid(tmp_path):
     assert store.add_lead({"Company": "X", "Email": ""}) is None
 
 
+def test_add_lead_seeds_columns_on_empty_workbook(tmp_path):
+    # An operator can make a blank .xlsx by hand in Excel and link it. It has no
+    # Name/Email column, so add_lead used to have nowhere to write and every
+    # append was silently rejected ("skipped - duplicates / no email").
+    p = tmp_path / "blank.xlsx"
+    openpyxl.Workbook().save(p)
+    store = ExcelStore(p, create_if_missing=False)
+    assert not store.email_column_missing
+    idx = store.add_lead({"Name": "New", "Company": "NewCo", "Email": "new@newco.test"})
+    assert idx is not None
+    reopened = ExcelStore(p, create_if_missing=False)
+    assert "new@newco.test" in reopened.existing_emails()
+
+
+def test_initialize_persists_headers(tmp_path):
+    p = tmp_path / "blank.xlsx"
+    openpyxl.Workbook().save(p)
+    ExcelStore(p, create_if_missing=False).initialize()
+    headers = [c.value for c in openpyxl.load_workbook(p).active[1] if c.value]
+    assert "Email" in headers and "Name" in headers
+
+
 def test_add_lead_writes_website_address_only_when_mapped(tmp_path):
     p = _make(tmp_path / "leads.xlsx", ["Name", "Company", "Email", "Phone"],
               ["Jane", "Acme", "jane@acme.test", "1"])

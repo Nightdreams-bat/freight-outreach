@@ -1086,6 +1086,17 @@ def create_app():
                             probe = sheet_headers(candidate)
                         except Exception:  # noqa: BLE001
                             probe = []
+                        if not created and path_changed and os.path.exists(candidate) and not probe:
+                            # An existing but empty .xlsx (operator made it by
+                            # hand in Excel): lay down the standard columns now
+                            # so the first import isn't silently rejected.
+                            try:
+                                ExcelStore(candidate, create_if_missing=False,
+                                           column_map=cfg.get("column_map")).initialize()
+                                probe = sheet_headers(candidate)
+                                created = True
+                            except Exception as e:  # noqa: BLE001
+                                flash(f"Couldn't set up columns in that file: {e}", "warning")
                         if created:
                             flash("Created a new leads file with the standard columns.", "success")
                         elif not os.path.exists(candidate):
@@ -1332,11 +1343,14 @@ def create_app():
             leads = _LEADS_LAST["leads"]
             added_emails = {str(a.get("Email") or "").lower() for a in autoadded}
             # The manual list is everything that wasn't auto-added - the no-email
-            # leads, plus every lead when auto-import is off. Duplicates are still
-            # marked for clarity.
+            # leads, plus every lead when auto-import is off. Rows are flagged so
+            # the page can show why a lead can't be picked: no_email (nothing to
+            # cold-email) or duplicate (already in the sheet).
             results = [
                 {"i": i, "lead": lead,
-                 "duplicate": bool(lead.get("Email")) and lead["Email"].lower() in existing}
+                 "no_email": not valid_email(str(lead.get("Email") or "")),
+                 "duplicate": bool(lead.get("Email"))
+                 and lead["Email"].lower() in existing}
                 for i, lead in enumerate(leads)
                 if not (lead.get("Email") and lead["Email"].lower() in added_emails)
             ]
@@ -1393,18 +1407,32 @@ def create_app():
             return redirect(url_for("find_leads"))
         picks = request.form.getlist("pick")
         leads = _LEADS_LAST["leads"]
-        added = skipped = 0
+        existing = store.existing_emails()
+        added = no_email = dupe = failed = 0
         for raw in picks:
             try:
                 lead = leads[int(raw)]
             except (ValueError, IndexError):
                 continue
-            if store.add_lead(lead) is not None:
+            email = str(lead.get("Email") or "").strip()
+            if not valid_email(email):
+                no_email += 1
+            elif email.lower() in existing:
+                dupe += 1
+            elif store.add_lead(lead) is not None:
                 added += 1
+                existing.add(email.lower())
             else:
-                skipped += 1
-        flash(f"Added {added} lead(s), skipped {skipped} (duplicates / no email).",
-              "success" if added else "warning")
+                failed += 1
+        bits = []
+        if dupe:
+            bits.append(f"{dupe} already in your sheet")
+        if no_email:
+            bits.append(f"{no_email} with no email address")
+        if failed:
+            bits.append(f"{failed} Kairo couldn't write")
+        tail = f" - skipped {', '.join(bits)}" if bits else ""
+        flash(f"Added {added} lead(s){tail}.", "success" if added else "warning")
         return redirect(url_for("leads"))
 
     @app.route("/find-leads/undo-import", methods=["POST"])
