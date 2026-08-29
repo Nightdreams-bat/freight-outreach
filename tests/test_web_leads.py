@@ -41,6 +41,14 @@ class FakeStore:
     def add_lead(self, data):
         return 5
 
+    def remove_rows(self, row_idxs):
+        removed = 0
+        for i in row_idxs:
+            if i in self._rows:
+                del self._rows[i]
+                removed += 1
+        return removed
+
 
 @pytest.fixture
 def client(monkeypatch, tmp_path):
@@ -75,6 +83,25 @@ def test_suppressed_page_shows_only_suppressed(client):
 def test_suppressed_count_shown_on_leads(client):
     html = client.get("/leads").get_data(as_text=True)
     assert "Suppressed (1)" in html
+
+
+def test_suppressed_page_has_delete_and_block_buttons(client):
+    html = client.get("/leads/suppressed").get_data(as_text=True)
+    assert "/leads/4/delete" in html
+    assert "/leads/4/block" in html
+    # the main list must not offer destructive actions
+    assert "/delete" not in client.get("/leads").get_data(as_text=True)
+
+
+def test_delete_removes_the_row(client):
+    client.post("/leads/4/delete", follow_redirects=True)
+    assert "hush@quiet.test" not in client.get("/leads/suppressed").get_data(as_text=True)
+
+
+def test_block_adds_email_to_blocklist(client):
+    r = client.post("/leads/4/block", follow_redirects=True)
+    assert "hush@quiet.test" in web_app.load_config()["disallowed_emails"]
+    assert b"Blocked" in r.data
 
 
 def test_toggle_moves_lead_between_pages(client):

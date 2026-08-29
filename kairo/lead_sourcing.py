@@ -157,6 +157,29 @@ def search_businesses(what, where, *, limit=25, searcher=_ddgs_search):
     return leads
 
 
+def drop_blocked(leads, disallowed_emails=None, disallowed_domains=None):
+    """Remove any lead whose email - or, failing that, whose website domain - is
+    on the blocklist. Run before and after enrichment so a blocked address is
+    never surfaced by a search, whether it was already known or just scraped."""
+    from kairo.blocklist import is_blocked
+
+    emails = disallowed_emails or []
+    domains = disallowed_domains or []
+    if not emails and not domains:
+        return list(leads)
+
+    kept = []
+    for lead in leads:
+        email = str(lead.get("Email") or "").strip()
+        if email and is_blocked(email, emails, domains):
+            continue
+        host = _host_of(lead.get("Website") or "")
+        if host and domains and is_blocked("x@" + host, [], domains):
+            continue
+        kept.append(lead)
+    return kept
+
+
 def _clean_emails(text, site_host=None):
     found = []
     for raw in _EMAIL_RE.findall(text or ""):
@@ -206,11 +229,16 @@ def scrape_site_emails(url, *, fetch=_http_get, deadline=None):
     return []
 
 
-def enrich(businesses, *, do_scrape, fetch=_http_get):
-    """Fill a missing Email by scraping the Website, when do_scrape is on."""
+def enrich(businesses, *, do_scrape, fetch=_http_get, budget_seconds=None):
+    """Fill a missing Email by scraping the Website, when do_scrape is on.
+
+    `budget_seconds` overrides the default whole-run scraping budget - the caller
+    scales it up when a larger lead limit is in play so the extra sites still get
+    a scrape attempt.
+    """
     if not do_scrape:
         return businesses
-    deadline = time.monotonic() + SCRAPE_BUDGET_SECONDS
+    deadline = time.monotonic() + (budget_seconds or SCRAPE_BUDGET_SECONDS)
     for biz in businesses:
         if biz.get("Email") or not biz.get("Website"):
             continue

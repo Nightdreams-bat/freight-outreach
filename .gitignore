@@ -11,6 +11,7 @@ send_history.jsonl
 llm_calls.json
 processed_replies.json
 reply_failures.json
+diagnostics_state.json
 reply_scan.lock
 .lock
 

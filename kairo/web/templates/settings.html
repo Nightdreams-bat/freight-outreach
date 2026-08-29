@@ -45,6 +45,16 @@
         <em>Undo</em> button right there. Leads with no email still wait for you to pick them.
       </div>
     </div>
+    <div class="setrow">
+      <label class="lab" for="fl-limit">Leads per search</label>
+      <input class="field" id="fl-limit" type="number" min="5" max="75" step="1"
+             name="find_leads_limit" value="{{ cfg.find_leads_limit or 25 }}" style="max-width:120px">
+      <div class="help">
+        How many company sites one search aims for (5–75). Actual yield still depends on
+        what ranks on the first pages; higher numbers help broad categories and make a
+        search take longer.
+      </div>
+    </div>
     <button type="submit" class="btn primary sm">Save</button>
   </form>
 </div>

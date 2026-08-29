@@ -120,6 +120,22 @@ def test_state_columns_readable_before_any_write(tmp_path):
     assert "Suppressed" not in on_disk  # still not persisted
 
 
+def test_reads_survive_a_blank_column_in_the_header_row(tmp_path):
+    # A gap between B and D used to shift every later column, so a Note typed
+    # into D was read from the empty C and shown as blank on the Leads page.
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws["A1"], ws["B1"], ws["D1"] = "Name", "Email", "Notes"
+    ws["A2"], ws["B2"], ws["D2"] = "Jane", "jane@acme.test", "called Tuesday"
+    p = tmp_path / "gappy.xlsx"
+    wb.save(p)
+
+    store = ExcelStore(p)
+    _, v, _ = list(store.all_rows())[0]
+    assert v["Email"] == "jane@acme.test"
+    assert v["Notes"] == "called Tuesday"
+
+
 def test_first_write_persists_state_headers(tmp_path):
     p = _make(tmp_path / "leads.xlsx", ["Name", "Email"], ["Jane", "jane@acme.test"])
     store = ExcelStore(p)

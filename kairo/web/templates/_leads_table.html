@@ -50,11 +50,24 @@
             {% endif %}
           </td>
           <td class="right">
+            <div class="rowactions">
             {% if r.reason != "blocked" %}
             <form method="post" action="{{ url_for('toggle_suppress', row_idx=r.row_idx) }}" class="inline">
               <button class="btn sm ghost" type="submit">{{ "Unsuppress" if r.reason == "suppressed" else "Suppress" }}</button>
             </form>
             {% endif %}
+            {% if suppressed_view %}
+              {% if r.v.Email %}
+              <form method="post" action="{{ url_for('block_lead', row_idx=r.row_idx) }}" class="inline">
+                <button class="btn sm ghost" type="submit" title="Add {{ r.v.Email }} to the blocklist">Block</button>
+              </form>
+              {% endif %}
+              <form method="post" action="{{ url_for('delete_lead', row_idx=r.row_idx) }}" class="inline"
+                    onsubmit="return confirm('Delete this lead from your spreadsheet? This can\'t be undone.');">
+                <button class="btn sm danger" type="submit">Delete</button>
+              </form>
+            {% endif %}
+            </div>
           </td>
         </tr>
         {% else %}

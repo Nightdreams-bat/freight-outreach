@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Leads file missing{% endblock %}
+{% block content %}
+
+<div class="card" style="text-align:center;padding:44px 20px">
+  <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="var(--red)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:12px"><path d="M12 9v4M12 17h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/></svg>
+  <h2 style="text-transform:none;font-size:17px;color:var(--ink);letter-spacing:0">Your leads file isn't there any more</h2>
+  <p class="muted">
+    Kairo won't recreate a leads file you deleted or moved. Restore it, or point
+    Kairo at another <code>.xlsx</code> on the Settings page.
+  </p>
+  <p style="margin-top:16px"><a class="btn primary" href="{{ url_for('settings') }}">Open Settings</a></p>
+</div>
+
+{% endblock %}

@@ -95,14 +95,22 @@ def _check_postal_address(cfg, _gmail):
 
 def _check_excel(cfg, _gmail):
     try:
-        from kairo.excel_store import ExcelStore
+        from kairo.excel_store import ExcelFileMissing, ExcelStore
 
-        store = ExcelStore(
-            cfg["excel_path"],
-            column_map=cfg.get("column_map"),
-            disallowed_emails=cfg.get("disallowed_emails"),
-            disallowed_domains=cfg.get("disallowed_domains"),
-        )
+        try:
+            store = ExcelStore(
+                cfg["excel_path"],
+                column_map=cfg.get("column_map"),
+                disallowed_emails=cfg.get("disallowed_emails"),
+                disallowed_domains=cfg.get("disallowed_domains"),
+                create_if_missing=False,
+            )
+        except ExcelFileMissing:
+            return _fail(
+                "Leads spreadsheet",
+                f"File not found: {cfg['excel_path']} - restore it or pick another "
+                f"under Settings. Kairo will not recreate a deleted leads file.",
+            )
         if store.email_column_missing:
             return _fail("Leads spreadsheet", "No email column found - map one in Settings.")
         n = sum(1 for _ in store.all_rows())

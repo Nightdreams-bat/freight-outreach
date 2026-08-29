@@ -5,7 +5,17 @@ import threading
 import webbrowser
 from datetime import datetime
 
-from flask import Flask, abort, flash, jsonify, redirect, render_template, request, url_for
+from flask import (
+    Flask,
+    abort,
+    flash,
+    jsonify,
+    make_response,
+    redirect,
+    render_template,
+    request,
+    url_for,
+)
 
 from kairo import lead_sourcing, reply_queue, templates
 from kairo.config import get as cfg_get
@@ -26,8 +36,9 @@ from kairo.core import (
     send_followup_batch,
     send_reminder_batch,
 )
+from kairo import diag_state
 from kairo.diagnostics import CHECK_NAMES, run_checks
-from kairo.excel_store import ExcelFileLocked, ExcelStore, sheet_headers
+from kairo.excel_store import ExcelFileLocked, ExcelFileMissing, ExcelStore, sheet_headers
 from kairo.column_map import detect as detect_columns
 from kairo.gmail_oauth import run_oauth_flow
 from kairo.lead_fields import valid_email
@@ -209,10 +220,32 @@ _LEADS_JOB = {"status": "idle", "what": "", "where": "", "scrape": True,
 _LEADS_JOB_LOCK = threading.Lock()
 
 
-def _run_lead_search(what, where, scrape):
+def _lead_search_limit(cfg):
     try:
-        leads = lead_sourcing.search_businesses(what, where, limit=15)
-        lead_sourcing.enrich(leads, do_scrape=scrape)
+        return max(5, min(int(cfg_get(cfg, "find_leads_limit")), 75))
+    except (TypeError, ValueError):
+        return 25
+
+
+def _run_lead_search(what, where, scrape):
+    cfg = load_config()
+    limit = _lead_search_limit(cfg)
+    block_emails = cfg.get("disallowed_emails") or []
+    block_domains = cfg.get("disallowed_domains") or []
+    try:
+        leads = lead_sourcing.search_businesses(what, where, limit=limit)
+        # Blocklist first: drop blocked domains before we spend time scraping
+        # them, then again after enrichment catches blocked addresses.
+        found = len(leads)
+        leads = lead_sourcing.drop_blocked(leads, block_emails, block_domains)
+        # Scale the scrape budget with the lead count so the extra sites a bigger
+        # limit turns up still get an email-scrape attempt (~4s each, capped).
+        lead_sourcing.enrich(
+            leads, do_scrape=scrape,
+            budget_seconds=min(240, 40 + 4 * len(leads)),
+        )
+        leads = lead_sourcing.drop_blocked(leads, block_emails, block_domains)
+        n_blocked = found - len(leads)
     except Exception as e:  # noqa: BLE001 - sourcing is best-effort
         with _LEADS_JOB_LOCK:
             _LEADS_JOB.update(status="failed",
@@ -222,7 +255,7 @@ def _run_lead_search(what, where, scrape):
 
     autoadded = []
     sheet_busy = False
-    cfg = load_config()
+    sheet_missing = False
     if leads and cfg_get(cfg, "find_leads_autoimport"):
         try:
             store = ExcelStore(
@@ -230,6 +263,7 @@ def _run_lead_search(what, where, scrape):
                 column_map=cfg.get("column_map"),
                 disallowed_emails=cfg.get("disallowed_emails"),
                 disallowed_domains=cfg.get("disallowed_domains"),
+                create_if_missing=False,
             )
             existing = store.existing_emails()
             for lead in leads:
@@ -243,6 +277,9 @@ def _run_lead_search(what, where, scrape):
         except ExcelFileLocked:
             sheet_busy = True
             autoadded = []
+        except ExcelFileMissing:
+            sheet_missing = True
+            autoadded = []
         except Exception as e:  # noqa: BLE001 - auto-import is best-effort
             log.warning(f"Find-leads auto-import failed: {e}")
             sheet_busy = True
@@ -253,14 +290,20 @@ def _run_lead_search(what, where, scrape):
 
     n_added = len(autoadded)
     n_no_email = sum(1 for l in leads if not valid_email(str(l.get("Email") or "")))
-    if not leads:
+    blocked_note = f" · skipped {n_blocked} on your blocklist" if n_blocked else ""
+    if not leads and n_blocked:
+        summary = f"All {n_blocked} result(s) were on your blocklist — nothing new to add."
+    elif not leads:
         summary = "No businesses found. Try a broader type or a larger region."
+    elif sheet_missing:
+        summary = (f"Found {len(leads)}. Your leads file is missing — Kairo won't "
+                   f"recreate it; fix it under Settings, then use Import selected below.")
     elif sheet_busy:
         summary = (f"Found {len(leads)}. Couldn't write to your Excel file "
                    f"(open in Excel?) — use Import selected below.")
     else:
         summary = (f"Found {len(leads)} · added {n_added} to your sheet · "
-                   f"{n_no_email} need an email")
+                   f"{n_no_email} need an email{blocked_note}")
     with _LEADS_JOB_LOCK:
         _LEADS_JOB.update(
             status="done",
@@ -278,6 +321,7 @@ def _run_job(action):
             column_map=cfg.get("column_map"),
             disallowed_emails=cfg.get("disallowed_emails"),
             disallowed_domains=cfg.get("disallowed_domains"),
+            create_if_missing=False,
         ) if action != "replies" else None
 
         if action == "cold":
@@ -362,6 +406,15 @@ def _run_job(action):
             _JOB["severity"] = "danger"
             _JOB["summary"] = f"{action}: {e}"
             _JOB["finished"] = datetime.now().strftime("%H:%M:%S")
+
+
+def _fresh(html):
+    """Wrap a rendered page so the browser never serves it from cache or the
+    back/forward cache - the Leads pages must reflect edits made in Excel the
+    moment the tab is reopened."""
+    resp = make_response(html)
+    resp.headers["Cache-Control"] = "no-store, max-age=0"
+    return resp
 
 
 def _relative_time(ts):
@@ -490,6 +543,7 @@ def create_app():
                 column_map=cfg.get("column_map"),
                 disallowed_emails=cfg.get("disallowed_emails"),
                 disallowed_domains=cfg.get("disallowed_domains"),
+                create_if_missing=False,
             )
         except ExcelFileLocked:
             if not readonly:
@@ -500,12 +554,26 @@ def create_app():
                 "warning",
             )
             store = _UnavailableStore()
+        except ExcelFileMissing:
+            if not readonly:
+                raise
+            flash(
+                f"Your leads file ({cfg['excel_path']}) is missing - Kairo won't "
+                f"recreate it. Restore it or pick another file under Settings.",
+                "danger",
+            )
+            store = _UnavailableStore()
         return cfg, store
 
     @app.errorhandler(ExcelFileLocked)
     def handle_locked(e):
         flash(str(e), "danger")
         return render_template("excel_locked.html"), 200
+
+    @app.errorhandler(ExcelFileMissing)
+    def handle_missing(e):
+        flash(str(e), "danger")
+        return render_template("excel_missing.html"), 200
 
     @app.route("/")
     def dashboard():
@@ -567,18 +635,18 @@ def create_app():
         suppressed_count = sum(
             1 for _, _, reason in store.all_rows() if reason == "suppressed"
         )
-        return render_template(
+        return _fresh(render_template(
             "leads.html", rows=rows, excel_path=cfg["excel_path"],
             suppressed_count=suppressed_count,
-        )
+        ))
 
     @app.route("/leads/suppressed")
     def leads_suppressed():
         cfg, store = get_config_and_store(readonly=True)
         rows = _lead_rows(cfg, store, lambda reason: reason == "suppressed")
-        return render_template(
+        return _fresh(render_template(
             "leads_suppressed.html", rows=rows, excel_path=cfg["excel_path"],
-        )
+        ))
 
     @app.route("/leads/<int:row_idx>/suppress", methods=["POST"])
     def toggle_suppress(row_idx):
@@ -591,6 +659,34 @@ def create_app():
         if _host_only(ref.split("://", 1)[-1].split("/", 1)[0]) in _ALLOWED_HOSTS and "/leads" in ref:
             return redirect(ref)
         return redirect(url_for("leads"))
+
+    @app.route("/leads/<int:row_idx>/delete", methods=["POST"])
+    def delete_lead(row_idx):
+        _, store = get_config_and_store()
+        email = str(store.get_row(row_idx).get("Email") or "").strip()
+        n = store.remove_rows([row_idx])
+        if n:
+            flash(f"Deleted {email or 'the lead'} from your spreadsheet.", "success")
+        else:
+            flash("That row is no longer in the sheet.", "warning")
+        return redirect(url_for("leads_suppressed"))
+
+    @app.route("/leads/<int:row_idx>/block", methods=["POST"])
+    def block_lead(row_idx):
+        cfg, store = get_config_and_store(readonly=True)
+        email = str(store.get_row(row_idx).get("Email") or "").strip().lower()
+        if not email:
+            flash("That lead has no email address to block.", "warning")
+            return redirect(url_for("leads_suppressed"))
+        cfg.setdefault("disallowed_emails", [])
+        if email in cfg["disallowed_emails"]:
+            flash(f"{email} is already on your blocklist.", "warning")
+        else:
+            cfg["disallowed_emails"].append(email)
+            save_config(cfg)
+            flash(f"Blocked {email} - it won't be emailed or returned by Find leads again.",
+                  "success")
+        return redirect(url_for("leads_suppressed"))
 
     @app.route("/send")
     def send_page():
@@ -716,7 +812,13 @@ def create_app():
         referer = request.headers.get("Referer")
         if referer and _host_only(referer.split("://", 1)[-1].split("/", 1)[0]) not in _ALLOWED_HOSTS:
             abort(403)
-        return jsonify(run_checks(load_config()))
+        checks = run_checks(load_config())
+        meta = diag_state.diff_and_record(checks)
+        return jsonify({
+            "checks": checks,
+            "changes": meta["changes"],
+            "previous_run": meta["previous_run"],
+        })
 
     @app.route("/blocklist")
     def blocklist_page():
@@ -849,6 +951,12 @@ def create_app():
 
             if "find_leads_settings" in request.form:
                 cfg["find_leads_autoimport"] = request.form.get("find_leads_autoimport") == "on"
+                raw_limit = (request.form.get("find_leads_limit") or "").strip()
+                if raw_limit:
+                    try:
+                        cfg["find_leads_limit"] = max(5, min(int(raw_limit), 75))
+                    except ValueError:
+                        flash("Find-leads limit must be a whole number (5-75).", "warning")
 
             if "hook_snippets" in request.form:
                 cfg["hook_snippets_enabled"] = request.form.get("hook_snippets_enabled") == "on"
@@ -881,11 +989,24 @@ def create_app():
                         )
                     else:
                         cfg["excel_path"] = candidate
+                        created = False
+                        if not os.path.exists(candidate):
+                            # An explicit path change is a clear "use this file"
+                            # intent, so create it now. This and first-run are the
+                            # only times Kairo creates a leads file - a deleted
+                            # one is never silently rebuilt.
+                            try:
+                                ExcelStore(candidate, create_if_missing=True)
+                                created = True
+                            except Exception as e:  # noqa: BLE001
+                                flash(f"Couldn't create a leads file there: {e}", "warning")
                         try:
                             probe = sheet_headers(candidate)
                         except Exception:  # noqa: BLE001
                             probe = []
-                        if probe:
+                        if created:
+                            flash("Created a new leads file with the standard columns.", "success")
+                        elif probe:
                             flash(
                                 f"Leads file linked - found {len(probe)} column(s): "
                                 + ", ".join(str(h) for h in probe[:8]),
@@ -1132,11 +1253,14 @@ def create_app():
             ]
             if not leads and not autoadded:
                 flash(job["summary"], "warning")
+        # Show the search that's running / just ran, not the one before it. The
+        # job dict is updated the instant a new search starts; _LEADS_LAST only
+        # catches up when that search finishes, so it must not win here.
         return render_template(
             "find_leads.html", results=results, job=job, autoadded=autoadded,
-            what=_LEADS_LAST["what"] or job["what"],
-            where=_LEADS_LAST["where"] or job["where"],
-            scrape=_LEADS_LAST["scrape"],
+            what=job["what"] or _LEADS_LAST["what"],
+            where=job["where"] or _LEADS_LAST["where"],
+            scrape=job["scrape"] if job["status"] != "idle" else _LEADS_LAST["scrape"],
         )
 
     @app.route("/find-leads/search", methods=["POST"])

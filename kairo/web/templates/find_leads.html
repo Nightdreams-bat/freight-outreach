@@ -15,7 +15,7 @@
       <label class="lab" for="lf-what">Business type</label>
       <input class="field" id="lf-what" name="what" value="{{ what or '' }}" placeholder="distribuitor ambalaje, producător mobilă, import fructe…" required>
       <label class="lab" for="lf-where" style="margin-top:10px">City / region</label>
-      <input class="field" id="lf-where" name="where" value="{{ where or '' }}" placeholder="București" required>
+      <input class="field" id="lf-where" name="where" value="{{ where or 'București' }}" placeholder="București" required>
       <label class="check" style="margin-top:12px">
         <input type="checkbox" name="scrape" {{ 'checked' if scrape is not defined or scrape }}>
         <span>Try to find email addresses on company websites</span>

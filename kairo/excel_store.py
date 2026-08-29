@@ -43,6 +43,13 @@ class ExcelFileLocked(RuntimeError):
     """Raised when clients.xlsx can't be saved, typically because it's open in Excel."""
 
 
+class ExcelFileMissing(RuntimeError):
+    """Raised when the configured leads file isn't on disk and the caller asked
+    us not to silently recreate it (create_if_missing=False). The running app
+    passes this so a file the user deleted surfaces as an error on the pages and
+    in Diagnostics instead of a fresh empty workbook reappearing."""
+
+
 def sheet_headers(path):
     """The first-row header text of a workbook, for the Settings mapping UI.
     Returns [] if the file doesn't exist or can't be read."""
@@ -61,7 +68,7 @@ def sheet_headers(path):
 
 class ExcelStore:
     def __init__(self, path, column_map=None, disallowed_emails=None,
-                 disallowed_domains=None, column_aliases=None):
+                 disallowed_domains=None, column_aliases=None, create_if_missing=True):
         self.path = Path(path)
         # column_aliases is the old (wizard-era) name for the same thing.
         self.explicit_map = dict(column_map or column_aliases or {})
@@ -70,13 +77,18 @@ class ExcelStore:
         self.email_column_missing = False
         self._headers_dirty = False
         if not self.path.exists():
+            if not create_if_missing:
+                raise ExcelFileMissing(
+                    f"The leads file {self.path} is not on this PC. Kairo will not "
+                    f"recreate it - restore the file or pick another one under Settings."
+                )
             self._create_blank_workbook()
         else:
             self._refresh_backup()
         self.wb = self._load_workbook()
         self.ws = self.wb.active
-        self.headers = self._row1_headers(self.ws)
         self._select_sheet_with_email()
+        self._load_headers()
         self._ensure_headers()
         self._resolve_map()
         self._index_columns()
@@ -84,8 +96,31 @@ class ExcelStore:
     # --- setup -----------------------------------------------------------
 
     @staticmethod
-    def _row1_headers(ws):
-        return [c.value for c in ws[1] if c.value is not None and str(c.value).strip()]
+    def _row1_cells(ws):
+        """[(column_index, value)] for every non-empty header cell in row 1.
+
+        Keeps the real 1-based column index of each header - a blank column in
+        the middle of the sheet must not shift the ones after it, or every read
+        past the gap lands in the wrong cell (e.g. a Note typed in Excel never
+        showing up on the Leads page)."""
+        out = []
+        for cell in ws[1]:
+            if cell.value is not None and str(cell.value).strip():
+                out.append((cell.column, cell.value))
+        return out
+
+    @classmethod
+    def _row1_headers(cls, ws):
+        return [v for _, v in cls._row1_cells(ws)]
+
+    def _load_headers(self):
+        """(Re)build self.headers (names, in column order) and self._header_col
+        (name -> real 1-based column) from the active worksheet."""
+        cells = self._row1_cells(self.ws)
+        self.headers = [v for _, v in cells]
+        self._header_col = {}
+        for col, value in cells:
+            self._header_col.setdefault(value, col)
 
     def _load_workbook(self):
         """Open the workbook, retrying once on a transient read error. A genuine
@@ -122,20 +157,20 @@ class ExcelStore:
 
     def _select_sheet_with_email(self):
         """The active sheet is usually the leads. If it has no detectable Email
-        column but another worksheet does, switch to that one."""
-        data_headers = [h for h in self.headers if h not in STATE_COLUMNS]
-        if "Email" in column_map.detect(data_headers):
+        column but another worksheet does, switch to that one. Only picks the
+        sheet - _load_headers() then reads headers off whichever sheet wins."""
+        def has_email(ws):
+            names = self._row1_headers(ws)
+            return "Email" in column_map.detect([h for h in names if h not in STATE_COLUMNS])
+
+        if has_email(self.ws):
             return
         for ws in self.wb.worksheets:
-            if ws is self.ws:
-                continue
-            other = self._row1_headers(ws)
-            if "Email" in column_map.detect([h for h in other if h not in STATE_COLUMNS]):
+            if ws is not self.ws and has_email(ws):
                 log.info(
                     f"Using sheet {ws.title!r} - it has an Email column and the active sheet doesn't"
                 )
                 self.ws = ws
-                self.headers = other
                 return
 
     def _save(self):
@@ -167,8 +202,10 @@ class ExcelStore:
         real write (set_value / add_lead) persists the workbook."""
         for logical in STATE_COLUMNS:
             if logical not in self.headers:
-                self.ws.cell(row=1, column=self.ws.max_column + 1, value=logical)
+                col = self.ws.max_column + 1
+                self.ws.cell(row=1, column=col, value=logical)
                 self.headers.append(logical)
+                self._header_col[logical] = col
                 self._headers_dirty = True
 
     def _resolve_map(self):
@@ -183,10 +220,7 @@ class ExcelStore:
     # --- column indexing -----------------------------------------------
 
     def _col_for_header(self, header):
-        try:
-            return self.headers.index(header) + 1  # openpyxl is 1-based
-        except ValueError:
-            return None
+        return self._header_col.get(header)
 
     def _index_columns(self):
         self.col_index = {}

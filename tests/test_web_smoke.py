@@ -75,6 +75,8 @@ GET_ROUTES = ["/", "/leads", "/send", "/replies", "/history", "/diagnostics",
 
 POST_ROUTES = [
     ("/leads/2/suppress", {}),
+    ("/leads/2/delete", {}),
+    ("/leads/2/block", {}),
     ("/send/cold", {}),
     ("/send/followups", {}),
     ("/send/reminders", {}),
@@ -262,6 +264,54 @@ def test_find_leads_undo_import_removes_rows(client, monkeypatch):
     assert "Removed 1" in r.get_data(as_text=True)
     assert store.removed == [101]
     assert web_app._LEADS_LAST["autoadded"] == []
+
+
+def test_search_bar_shows_the_current_query_not_the_previous_one(client, monkeypatch):
+    import time
+
+    client.post("/find-leads/search", data={"what": "games", "where": "Chisinau"})
+    _wait_for_search(client)
+
+    # Second search: make it slow so we can observe the page mid-flight.
+    monkeypatch.setattr(web_app.lead_sourcing, "enrich",
+                        lambda b, **k: (time.sleep(0.5), b)[1])
+    client.post("/find-leads/search", data={"what": "food", "where": "Chisinau"})
+
+    body = client.get("/find-leads").get_data(as_text=True)
+    assert 'value="food"' in body
+    assert 'value="games"' not in body
+    _wait_for_search(client)
+
+
+def test_find_leads_skips_blocklisted_results(client, monkeypatch):
+    cfg = dict(BASE_CFG)
+    cfg["excel_path"] = "x.xlsx"
+    cfg["disallowed_domains"] = ["blocked.test"]
+    cfg["disallowed_emails"] = ["nope@ok.test"]
+    monkeypatch.setattr(web_app, "load_config", lambda: dict(cfg))
+    monkeypatch.setattr(web_app, "save_config", lambda c: cfg.update(c))
+    store = _RecordingStore()
+    monkeypatch.setattr(web_app, "ExcelStore", lambda *a, **k: store)
+    monkeypatch.setattr(web_app.lead_sourcing, "search_businesses", lambda what, where, **k: [
+        {"Company": "Good SRL", "Email": "hi@ok.test", "Website": "https://ok.test", "Phone": "", "Address": ""},
+        {"Company": "Bad SRL", "Email": "x@blocked.test", "Website": "https://blocked.test", "Phone": "", "Address": ""},
+        {"Company": "Also Bad", "Email": "nope@ok.test", "Website": "https://ok2.test", "Phone": "", "Address": ""},
+    ])
+    monkeypatch.setattr(web_app.lead_sourcing, "enrich", lambda b, **k: b)
+
+    client.post("/find-leads/search", data={"what": "x", "where": "București"})
+    _wait_for_search(client)
+
+    companies = [l["Company"] for l in web_app._LEADS_LAST["leads"]]
+    assert companies == ["Good SRL"]
+    assert "blocklist" in web_app._LEADS_JOB["summary"]
+
+
+def test_find_leads_where_defaults_to_bucuresti(client):
+    web_app._LEADS_JOB.update(status="idle", what="", where="", scrape=True)
+    web_app._LEADS_LAST.update(what="", where="", leads=[], autoadded=[])
+    body = client.get("/find-leads").get_data(as_text=True)
+    assert 'value="București"' in body
 
 
 def test_cross_origin_post_is_rejected(client):

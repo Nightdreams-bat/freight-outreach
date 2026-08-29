@@ -119,6 +119,10 @@ DEFAULTS = {
     # valid email and isn't already in the sheet. Leads with no email still wait
     # for a manual pick on the Find leads page.
     "find_leads_autoimport": True,
+    # How many company sites a single Find-leads search aims for. Yield is still
+    # capped by what actually ranks on the first pages; raising this mostly helps
+    # broad categories. Clamped to 5..75 when set from Settings.
+    "find_leads_limit": 25,
 }
 
 # New installs are seeded in Romanian (the tool's primary use); the DEFAULTS
@@ -195,10 +199,28 @@ def _migrate(cfg):
     return cfg, changed
 
 
+def _seed_leads_file(path):
+    """Create the standard leads workbook on a brand-new install. This is the
+    only place (besides an explicit path change in Settings) that Kairo creates
+    the file - once it exists and is later deleted, it is not recreated."""
+    try:
+        from pathlib import Path
+
+        from kairo.excel_store import ExcelStore
+
+        if not Path(path).exists():
+            ExcelStore(path, create_if_missing=True)
+    except Exception as e:  # noqa: BLE001 - first-run convenience only
+        from kairo.logging_setup import get_logger
+
+        get_logger("config").warning("Couldn't seed the initial leads file: %s", e)
+
+
 def load_config():
     if not CONFIG_PATH.exists():
         cfg = default_config()
         save_config(cfg)
+        _seed_leads_file(cfg["excel_path"])
         return cfg
 
     cfg = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))

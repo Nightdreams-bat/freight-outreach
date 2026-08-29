@@ -7,6 +7,8 @@
 
 <p class="subtitle">Live checks of every connection the tool needs. Re-run after connecting Gmail or changing settings.</p>
 
+<div class="alert" id="diagChanges" hidden style="display:block"></div>
+
 <div class="card" id="diagCard">
   {% for name in check_names %}
   <div class="diag-row checking" data-name="{{ name }}">
@@ -41,13 +43,31 @@
     r.querySelector(".detail").textContent = detail || "";
   }
 
+  var changeBox = document.getElementById("diagChanges");
+  var ARROW = "→";
+
+  function showChanges(changes, previousRun) {
+    if (!changes || !changes.length) { changeBox.hidden = true; return; }
+    var word = { ok: "OK", warn: "WARN", fail: "FAIL" };
+    var lines = changes.map(function (c) {
+      return c.name + ": " + (word[c.from] || c.from) + " " + ARROW + " " + (word[c.to] || c.to);
+    });
+    var since = previousRun ? (" since the last run (" + previousRun + ")") : "";
+    changeBox.className = "alert warning";
+    changeBox.textContent = changes.length + (changes.length === 1 ? " check changed" : " checks changed")
+      + since + " — " + lines.join("  ·  ");
+    changeBox.hidden = false;
+  }
+
   function run() {
     btn.disabled = true;
     Object.values(rows).forEach(function (r) { setRow(r, null, ""); });
     fetch("{{ url_for('diagnostics_run') }}")
       .then(function (res) { return res.json(); })
-      .then(function (checks) {
+      .then(function (data) {
+        var checks = Array.isArray(data) ? data : data.checks;
         checks.forEach(function (c) { if (rows[c.name]) setRow(rows[c.name], c.status, c.detail); });
+        showChanges(data && data.changes, data && data.previous_run);
         btn.disabled = false;
       })
       .catch(function (e) {
