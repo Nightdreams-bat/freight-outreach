@@ -10,7 +10,7 @@ without your approval.**
 
 [![tests](https://github.com/Nightdreams-bat/kairo/actions/workflows/tests.yml/badge.svg)](https://github.com/Nightdreams-bat/kairo/actions/workflows/tests.yml)
 [![latest release](https://img.shields.io/github/v/release/Nightdreams-bat/kairo?style=flat-square&color=3ddc84)](https://github.com/Nightdreams-bat/kairo/releases/latest)
-![Tests](https://img.shields.io/badge/tests-474%20passing-2E7D32?style=flat-square)
+![Tests](https://img.shields.io/badge/tests-484%20passing-2E7D32?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=flat-square&logo=python&logoColor=white)
 ![Windows](https://img.shields.io/badge/Windows-10%2F11-0078D6?style=flat-square&logo=windows&logoColor=white)
 ![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)
@@ -117,6 +117,10 @@ Calendar APIs, with your sending addresses as test users) and — only for reply
 handling — a pay-as-you-go Anthropic API key (roughly $0.001 per reply on Haiku;
 **not** a Claude.ai subscription). Full walkthrough:
 **[`docs/SETUP.md`](docs/SETUP.md)**.
+
+Each install can also point at its **own** Google Cloud project instead of the
+bundled OAuth client (no 100-user cap, no security audit, sign-ins don't expire):
+**[`docs/own-google-project.md`](docs/own-google-project.md)**.
 
 ### Packaged build (client gets no Python)
 

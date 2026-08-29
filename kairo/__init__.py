@@ -1,3 +1,3 @@
 """Kairo — local single-operator cold-outreach + follow-up + reply-handling tool."""
 
-__version__ = "0.1.8"
+__version__ = "0.1.9"
