@@ -225,6 +225,37 @@ def test_add_lead_seeds_columns_on_empty_workbook(tmp_path):
     assert "new@newco.test" in reopened.existing_emails()
 
 
+def test_state_write_preserves_a_note_typed_in_excel(tmp_path):
+    # The operator opens the sheet in Excel and adds a Note while a Kairo store
+    # is still alive from earlier. A later state write must merge, not clobber.
+    p = _make(tmp_path / "leads.xlsx", ["Name", "Company", "Email", "Phone"],
+              ["Jane", "Acme", "jane@acme.test", "1"])
+    ExcelStore(p).initialize()  # persist the STATE columns, as a real sheet has
+    store = ExcelStore(p)  # loaded now, before the edit
+
+    ext = openpyxl.load_workbook(p)
+    ws = ext.active
+    notes_col = next(c.column for c in ws[1] if c.value == "Notes")
+    ws.cell(row=2, column=notes_col, value="called - keen, follow up Tuesday")
+    ext.save(p)
+
+    store.set_value(2, "Status", "contacted")  # Kairo's own write, after the edit
+
+    reopened = ExcelStore(p, create_if_missing=False)
+    _, values, _ = next(reopened.all_rows())
+    assert values["Notes"] == "called - keen, follow up Tuesday"
+    assert values["Status"] == "contacted"
+
+
+def test_header_with_trailing_space_still_maps(tmp_path):
+    p = _make(tmp_path / "leads.xlsx", ["Name", "Company", "Email ", "Notes "],
+              ["Jane", "Acme", "jane@acme.test", "hi"])
+    store = ExcelStore(p, create_if_missing=False)
+    _, values, _ = next(store.all_rows())
+    assert values["Email"] == "jane@acme.test"
+    assert values["Notes"] == "hi"
+
+
 def test_initialize_persists_headers(tmp_path):
     p = tmp_path / "blank.xlsx"
     openpyxl.Workbook().save(p)

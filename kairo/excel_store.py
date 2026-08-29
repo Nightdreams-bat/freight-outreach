@@ -85,6 +85,12 @@ class ExcelStore:
             self._create_blank_workbook()
         else:
             self._refresh_backup()
+        self._read_from_disk()
+
+    def _read_from_disk(self):
+        """Load the workbook and (re)resolve every column. Split out of __init__
+        so a write can re-run it first - see refresh()."""
+        self._loaded_sig = self._disk_sig()
         self.wb = self._load_workbook()
         self.ws = self.wb.active
         self._select_sheet_with_email()
@@ -93,6 +99,14 @@ class ExcelStore:
         self._ensure_headers()
         self._resolve_map()
         self._index_columns()
+
+    def refresh(self):
+        """Re-read the workbook from disk so edits made in Excel since this store
+        was built - a Note typed by hand, a Priority changed - are picked up
+        before we layer a state write on top. Without this, a background batch
+        that loaded the sheet minutes ago would save its stale copy over the
+        operator's fresh edits. Cheap: openpyxl reads the whole sheet in a few ms."""
+        self._read_from_disk()
 
     # --- setup -----------------------------------------------------------
 
@@ -107,7 +121,9 @@ class ExcelStore:
         out = []
         for cell in ws[1]:
             if cell.value is not None and str(cell.value).strip():
-                out.append((cell.column, cell.value))
+                # Trim stray whitespace so a header saved as "Notes " from Excel
+                # still matches the logical "Notes" column on read and write.
+                out.append((cell.column, str(cell.value).strip()))
         return out
 
     @classmethod
@@ -174,11 +190,21 @@ class ExcelStore:
                 self.ws = ws
                 return
 
+    def _disk_sig(self):
+        """(mtime_ns, size) of the file, or None if it can't be stat-ed. Used to
+        notice an external edit before we write."""
+        try:
+            st = os.stat(self.path)
+            return (st.st_mtime_ns, st.st_size)
+        except OSError:
+            return None
+
     def _save(self):
         try:
             tmp = self.path.with_name(self.path.name + ".tmp")
             self.wb.save(tmp)
             os.replace(tmp, self.path)
+            self._loaded_sig = self._disk_sig()
         except PermissionError as e:
             raise ExcelFileLocked(
                 f"Could not save {self.path} - is it open in Excel? Close it and try again."
@@ -330,9 +356,18 @@ class ExcelStore:
 
     # --- writing (STATE columns only) --------------------------------
 
+    def _sync_if_changed(self):
+        """Re-read the workbook if it was touched on disk (edited in Excel) since
+        we loaded it, so our write merges with the operator's changes instead of
+        overwriting them."""
+        if self._disk_sig() != self._loaded_sig:
+            log.info(f"{self.path.name} changed on disk - re-reading before write")
+            self.refresh()
+
     def set_value(self, row_idx, logical, value):
         if logical not in STATE_COLUMNS:
             raise ValueError(f"Refusing to write to non-state column {logical!r}")
+        self._sync_if_changed()
         col = self.col_index.get(logical)
         if not isinstance(col, int):
             raise ValueError(f"State column {logical!r} is not present in the sheet")
@@ -373,6 +408,7 @@ class ExcelStore:
         real column - never invents a header."""
         from kairo.lead_fields import valid_email
 
+        self._sync_if_changed()
         email = str(data.get("Email") or "").strip()
         if not valid_email(email) or email.lower() in self.existing_emails():
             return None
@@ -399,6 +435,7 @@ class ExcelStore:
         in descending order so earlier indices stay valid. The header row (1) and
         any index outside the sheet are ignored. Returns the number of rows
         deleted."""
+        self._sync_if_changed()
         max_row = self.ws.max_row
         targets = sorted(
             {i for i in row_idxs if isinstance(i, int) and 2 <= i <= max_row},

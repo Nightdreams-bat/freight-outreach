@@ -694,7 +694,7 @@ def create_app():
         )
         return _fresh(render_template(
             "leads.html", rows=rows, excel_path=cfg["excel_path"],
-            suppressed_count=suppressed_count,
+            suppressed_count=suppressed_count, synced_at=datetime.now().strftime("%H:%M:%S"),
         ))
 
     @app.route("/leads/suppressed")
@@ -703,6 +703,7 @@ def create_app():
         rows = _lead_rows(cfg, store, lambda reason: reason == "suppressed")
         return _fresh(render_template(
             "leads_suppressed.html", rows=rows, excel_path=cfg["excel_path"],
+            synced_at=datetime.now().strftime("%H:%M:%S"),
         ))
 
     @app.route("/leads/<int:row_idx>/suppress", methods=["POST"])

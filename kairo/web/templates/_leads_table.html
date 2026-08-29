@@ -63,7 +63,9 @@
               </form>
               {% endif %}
               <form method="post" action="{{ url_for('delete_lead', row_idx=r.row_idx) }}" class="inline"
-                    onsubmit="return confirm('Delete this lead from your spreadsheet? This can\'t be undone.');">
+                    data-confirm="Delete {{ r.display_name if r.display_name != 'there' else r.v.Email }} from your spreadsheet? This row is removed for good."
+                    data-confirm-title="Delete this lead?"
+                    data-confirm-ok="Delete lead">
                 <button class="btn sm danger" type="submit">Delete</button>
               </form>
             {% endif %}
@@ -77,3 +79,33 @@
     </table>
   </div>
 </div>
+
+<script>
+(function () {
+  // Confirm dialogs use the in-app modal, not the browser's grey "127.0.0.1 says" box.
+  document.querySelectorAll("form[data-confirm]").forEach(function (form) {
+    form.addEventListener("submit", function (e) {
+      if (form.dataset.confirmed) return;            // second pass, after OK
+      e.preventDefault();
+      window.confirmDialog({
+        title: form.dataset.confirmTitle || "Please confirm",
+        body: form.dataset.confirm,
+        ok: form.dataset.confirmOk || "Confirm",
+        danger: true
+      }).then(function (go) {
+        if (go) { form.dataset.confirmed = "1"; form.submit(); }
+      });
+    });
+  });
+
+  // The sheet is read fresh on every page load, but the operator often edits it
+  // in Excel while the app sits in the background. Re-read when the tab comes
+  // back into focus after being away, so a note typed in Excel shows up without
+  // a manual refresh.
+  var hiddenSince = 0;
+  document.addEventListener("visibilitychange", function () {
+    if (document.hidden) { hiddenSince = Date.now(); return; }
+    if (hiddenSince && Date.now() - hiddenSince > 2000) location.reload();
+  });
+})();
+</script>

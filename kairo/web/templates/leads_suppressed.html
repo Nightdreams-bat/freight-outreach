@@ -9,6 +9,7 @@
 <p class="subtitle">
   These leads are held out of every send — cold, follow-up and reminder — until you unsuppress them.
   · <a href="{{ url_for('leads') }}">back to all leads</a>
+  {% if synced_at %}· synced {{ synced_at }} · <a href="{{ url_for('leads_suppressed') }}">reload from file</a>{% endif %}
 </p>
 
 {% set empty_text = "No suppressed leads." %}

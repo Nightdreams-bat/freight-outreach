@@ -12,6 +12,7 @@
 <p class="subtitle">
   Reading from <code>{{ excel_path }}</code> ·
   <a href="{{ url_for('settings') }}#lead-columns">change file or column mapping</a>
+  {% if synced_at %}· synced {{ synced_at }} · <a href="{{ url_for('leads') }}">reload from file</a>{% endif %}
 </p>
 
 {% include "_leads_table.html" %}
