@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kairo — Privacy Policy</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { margin: 0; font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+         background: #0d0f0e; color: #e8eae9; }
+  main { max-width: 720px; margin: 0 auto; padding: 56px 24px 96px; }
+  h1 { font-size: 1.8rem; margin: 0 0 .2em; }
+  h2 { font-size: 1.15rem; margin: 2.2em 0 .4em; }
+  .updated { color: #8a938d; margin: 0 0 2rem; }
+  a { color: #3ddc84; }
+  code { background: #1b1f1d; padding: 1px 5px; border-radius: 4px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Kairo — Privacy Policy</h1>
+  <p class="updated">Last updated: 29 August 2026</p>
+
+  <p>Kairo is a desktop application that a single operator installs and runs on
+  their own Windows computer to manage their own outbound email. This policy
+  explains what data Kairo touches and where it goes.</p>
+
+  <h2>Who runs Kairo</h2>
+  <p>Kairo is not a hosted service. There is no Kairo server and no Kairo account.
+  Each copy is operated solely by the person who installed it, on their own
+  machine, using their own Google account.</p>
+
+  <h2>Data Kairo accesses</h2>
+  <p>When the operator connects their Google account, Kairo requests these
+  permissions and uses them only for the purposes stated:</p>
+  <ul>
+    <li><strong>Send email on your behalf</strong> (<code>gmail.send</code>) &mdash;
+      to send the outreach, follow-up, reminder and scheduling emails that the
+      operator has configured.</li>
+    <li><strong>Read your email</strong> (<code>gmail.readonly</code>) &mdash;
+      to detect replies from the operator's own leads so a draft response can be
+      prepared. Kairo reads only messages in threads with those lead addresses.</li>
+    <li><strong>Manage calendar events</strong> (<code>calendar.events</code>) and
+      <strong>view free/busy</strong> (<code>calendar.freebusy</code>) &mdash; to
+      propose meeting times that don't clash and, on the operator's approval,
+      create the calendar invite.</li>
+    <li><strong>Basic profile email</strong> (<code>userinfo.email</code>,
+      <code>openid</code>) &mdash; to show which account is connected.</li>
+  </ul>
+
+  <h2>Where data goes</h2>
+  <ul>
+    <li>All lead data, settings, logs and the Google sign-in token stay in a
+      single folder on the operator's computer
+      (<code>%APPDATA%\Kairo</code>). The token is held in the Windows Credential
+      Manager.</li>
+    <li>Nothing is transmitted to the developer of Kairo. There is no telemetry,
+      no analytics, and no email open- or click-tracking.</li>
+    <li>Email content is sent to Google (to deliver the message) and, only if the
+      operator enables the optional reply-classification feature, the text of an
+      incoming reply is sent to Anthropic's API to categorise it. No other third
+      party receives any data.</li>
+  </ul>
+
+  <h2>Google Limited Use disclosure</h2>
+  <p>Kairo's use and transfer of information received from Google APIs adheres to
+  the <a href="https://developers.google.com/terms/api-services-user-data-policy">Google
+  API Services User Data Policy</a>, including the Limited Use requirements.
+  Data obtained from Gmail and Google Calendar is used only to provide the
+  user-facing features described above, is not sold, is not used for advertising,
+  and is not transferred to others except as needed to provide those features,
+  for security, or to comply with applicable law.</p>
+
+  <h2>Retention and deletion</h2>
+  <p>Because all data is local, the operator controls retention entirely.
+  Disconnecting the Google account in Kairo's settings, or deleting the
+  <code>%APPDATA%\Kairo</code> folder, removes the stored token and data. The
+  operator can also revoke Kairo's access at any time from
+  <a href="https://myaccount.google.com/permissions">their Google account
+  permissions page</a>.</p>
+
+  <h2>Contact</h2>
+  <p>Questions about this policy: <a href="mailto:goddgd5@gmail.com">goddgd5@gmail.com</a></p>
+
+  <p><a href="index.html">&larr; Back</a></p>
+</main>
+</body>
+</html>
