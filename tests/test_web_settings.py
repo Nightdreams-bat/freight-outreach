@@ -1,9 +1,22 @@
 """The de-wizarded first run: dashboard works with no config, Settings maps columns."""
 
+import json
+
 import pytest
 
+from kairo import google_client
+from kairo import paths as kpaths
 from kairo.web import app as web_app
 from tests.test_web_replies import BASE_CFG, FakeQueue
+
+_INSTALLED_JSON = json.dumps({
+    "installed": {
+        "client_id": "999-zzz.apps.googleusercontent.com",
+        "client_secret": "shh",
+        "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+        "token_uri": "https://oauth2.googleapis.com/token",
+    }
+})
 
 
 class FakeStore:
@@ -129,6 +142,38 @@ def test_find_leads_autoimport_toggle_round_trips(client):
     assert client.cfg["find_leads_autoimport"] is True
     client.post("/settings", data={"find_leads_settings": "1"}, follow_redirects=True)
     assert client.cfg["find_leads_autoimport"] is False
+
+
+def test_google_credentials_paste_switches_to_own_project_and_back(client, monkeypatch, tmp_path):
+    monkeypatch.setattr(kpaths, "CLIENT_SECRET_PATH", tmp_path / "client_secret.json")
+    monkeypatch.setattr(google_client, "load_config", lambda: dict(client.cfg))
+    monkeypatch.setattr(google_client, "save_config", lambda c: client.cfg.update(c))
+    monkeypatch.setattr(google_client, "delete_oauth_token", lambda a: None)
+    monkeypatch.setattr(kpaths, "resource_path", lambda rel: tmp_path / "no-bundled")
+    client.cfg["google_client_is_custom"] = False
+
+    r = client.post("/settings/google-credentials",
+                    data={"client_secret_json": _INSTALLED_JSON}, follow_redirects=True)
+    assert b"your own Google project" in r.data
+    assert client.cfg["google_client_is_custom"] is True
+    assert client.cfg["gmail_address"] == ""
+    body = client.get("/settings").data.decode()
+    assert "your own Google project" in body
+
+    client.post("/settings/google-credentials/reset", follow_redirects=True)
+    assert client.cfg["google_client_is_custom"] is False
+    assert "Using Kairo's shared Google app" in client.get("/settings").data.decode()
+
+
+def test_google_credentials_web_json_flashes_error(client, monkeypatch, tmp_path):
+    monkeypatch.setattr(kpaths, "CLIENT_SECRET_PATH", tmp_path / "client_secret.json")
+    monkeypatch.setattr(google_client, "load_config", lambda: dict(client.cfg))
+    monkeypatch.setattr(google_client, "save_config", lambda c: client.cfg.update(c))
+    r = client.post("/settings/google-credentials",
+                    data={"client_secret_json": '{"web": {"client_id": "x"}}'},
+                    follow_redirects=True)
+    assert b"Desktop app" in r.data
+    assert client.cfg.get("google_client_is_custom") in (False, None)
 
 
 def test_big_settings_form_does_not_wipe_column_map(client):

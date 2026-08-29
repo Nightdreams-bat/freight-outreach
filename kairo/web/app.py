@@ -17,7 +17,7 @@ from flask import (
     url_for,
 )
 
-from kairo import __version__, lead_sourcing, reply_queue, templates
+from kairo import __version__, google_client, lead_sourcing, reply_queue, templates
 from kairo.config import get as cfg_get
 from kairo.config import load_config, save_config
 from kairo.credentials import get_anthropic_key, set_anthropic_key
@@ -1182,6 +1182,7 @@ def create_app():
             followup_enabled=cfg_get(cfg, "followup_enabled"),
             sheet_headers=headers,
             column_view=column_view,
+            google_client=google_client.describe_client(cfg),
         )
 
     @app.route("/settings/browse-excel", methods=["POST"])
@@ -1230,6 +1231,38 @@ def create_app():
         cfg["gmail_address"] = gmail_address
         save_config(cfg)
         flash(f"Connected Gmail account: {gmail_address}", "success")
+        return redirect(url_for("settings"))
+
+    @app.route("/settings/google-credentials", methods=["POST"])
+    def google_credentials():
+        upload = request.files.get("client_secret_file")
+        pasted = (request.form.get("client_secret_json") or "").strip()
+        if upload and upload.filename:
+            payload = upload.read()
+        elif pasted:
+            payload = pasted
+        else:
+            flash("Choose the client_secret JSON file or paste its contents first.", "warning")
+            return redirect(url_for("settings"))
+
+        try:
+            client_id = google_client.install_client_secret(payload)
+        except ValueError as e:
+            flash(str(e), "danger")
+            return redirect(url_for("settings"))
+
+        short = client_id[:16]
+        flash(
+            f"Now using your own Google project (client id {short}…). "
+            f"Click Connect Gmail to sign in.",
+            "success",
+        )
+        return redirect(url_for("settings"))
+
+    @app.route("/settings/google-credentials/reset", methods=["POST"])
+    def google_credentials_reset():
+        note = google_client.reset_to_bundled()
+        flash(note, "success")
         return redirect(url_for("settings"))
 
     @app.route("/settings/automation/enable", methods=["POST"])

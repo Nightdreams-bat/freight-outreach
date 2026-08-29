@@ -46,6 +46,10 @@ def _is_valid_tz(name):
 # DEFAULTS[key])`) so a missing key falls back to the default below.
 DEFAULTS = {
     "reply_scan_enabled": False,
+    # True once the operator has swapped in their own Google Cloud OAuth client
+    # via Settings -> Gmail account -> Advanced. Kept as a plain flag rather than
+    # diffing client_secret.json contents.
+    "google_client_is_custom": False,
     # IANA time zone name (e.g. "Europe/Chisinau") used for every calendar
     # booking and reminder. Detected from the machine on install / migration;
     # editable on Settings. Empty or invalid -> Diagnostics warns and the

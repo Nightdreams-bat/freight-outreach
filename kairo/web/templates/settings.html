@@ -110,6 +110,66 @@
       <strong>Nothing is typed here</strong>: no password ever touches this app.
     </div>
   </div>
+
+  <details style="margin-top:14px">
+    <summary style="cursor:pointer;font-weight:600">Advanced — use your own Google project</summary>
+    <div style="margin-top:10px">
+      {% if google_client.is_custom %}
+        <p style="margin:0 0 8px">
+          Using your own Google project · client id
+          <code>{{ google_client.client_id[:16] }}…</code>
+        </p>
+        <form method="post" action="{{ url_for('google_credentials_reset') }}" class="inline">
+          <button type="submit" class="btn sm">Switch back to the shared app</button>
+        </form>
+      {% else %}
+        <p style="margin:0 0 8px">Using Kairo's shared Google app</p>
+      {% endif %}
+
+      <form method="post" action="{{ url_for('google_credentials') }}"
+            enctype="multipart/form-data" style="margin-top:12px">
+        <div class="setrow">
+          <div>
+            <label>Upload the client_secret JSON you downloaded from Google<br>
+              <input type="file" name="client_secret_file" accept=".json,application/json">
+            </label>
+            <p class="help" style="margin:8px 0 4px">…or paste its contents:</p>
+            <textarea name="client_secret_json" rows="4" style="width:100%"
+                      placeholder='{"installed":{"client_id":"…","client_secret":"…", …}}'></textarea>
+          </div>
+          <div class="help">
+            Kairo needs a <strong>Desktop app</strong> OAuth client. Uploading your own
+            project's credentials removes the 100-user cap and stops sign-ins from
+            expiring every 7 days. Saving this signs you out of Gmail — reconnect after.
+          </div>
+        </div>
+        <button type="submit" class="btn primary sm" style="margin-top:10px">Save</button>
+      </form>
+
+      <details style="margin-top:12px">
+        <summary style="cursor:pointer">How to create your own Google project (~10 minutes)</summary>
+        <ol class="help" style="margin-top:8px">
+          <li>Go to <code>console.cloud.google.com</code> and create a new project (any
+            name, e.g. "Kairo").</li>
+          <li>APIs &amp; Services → Library → enable <strong>Gmail API</strong> and
+            <strong>Google Calendar API</strong>.</li>
+          <li>APIs &amp; Services → OAuth consent screen → choose <strong>External</strong>
+            → fill in App name ("Kairo"), your email for support and developer contact →
+            Save and continue through the steps.</li>
+          <li>Back on the OAuth consent screen, click <strong>Publish app</strong> →
+            confirm "push to production". (This stops sign-ins from expiring every 7 days.)</li>
+          <li>APIs &amp; Services → Credentials → <strong>Create credentials → OAuth
+            client ID</strong> → Application type: <strong>Desktop app</strong> → Create →
+            <strong>Download JSON</strong>.</li>
+          <li>Upload that JSON file here and click Save, then click
+            <strong>Connect Gmail</strong>.</li>
+          <li>Google will warn "Google hasn't verified this app" — click
+            <strong>Advanced</strong>, then <strong>Go to Kairo (unsafe)</strong>, then
+            allow the permissions. This is expected for your own private app.</li>
+        </ol>
+      </details>
+    </div>
+  </details>
 </div>
 
 <div class="card" id="followup-drip">
