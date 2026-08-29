@@ -665,7 +665,7 @@ def create_app():
 
     def _lead_rows(cfg, store, keep):
         """Build the CRM row dicts. `keep(reason)` decides which rows to include."""
-        from kairo.lead_fields import lead_company, lead_name
+        from kairo.lead_fields import lead_company, lead_name, valid_email
 
         rows = []
         for row_idx, values, reason in store.all_rows():
@@ -676,6 +676,7 @@ def create_app():
                 "row_idx": row_idx,
                 "v": values,
                 "reason": reason,
+                "email_ok": valid_email(values.get("Email")),
                 "display_name": name,
                 "display_company": company,
                 "name_derived": not str(values.get("Name") or "").strip() and name != "there",
@@ -731,7 +732,7 @@ def create_app():
             flash(f"Deleted {email or 'the lead'} from your spreadsheet.", "success")
         else:
             flash("That row is no longer in the sheet.", "warning")
-        return redirect(url_for("leads_suppressed"))
+        return _post_redirect("leads_suppressed")
 
     @app.route("/leads/<int:row_idx>/block", methods=["POST"])
     def block_lead(row_idx):

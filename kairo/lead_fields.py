@@ -35,9 +35,26 @@ _SPLIT_RE = re.compile(r"[.\-_+]+")
 _EMAIL_RE = re.compile(r"^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$")
 
 
+def clean_email(addr):
+    """Strip the cruft that clings to an address copied off a web page or a
+    "mailto:" link: the scheme, angle brackets, a "?subject=..." tail, and any
+    trailing junk after the first address in a list. Case is left alone.
+
+        "mailto:sales@acme.com?subject=Hi"  -> "sales@acme.com"
+        "<john@acme.com>"                   -> "john@acme.com"
+    """
+    text = str(addr or "").strip().strip("<>").strip()
+    if text.lower().startswith("mailto:"):
+        text = text[len("mailto:"):]
+    text = text.split("?", 1)[0]          # drop ?subject=/&body=
+    text = re.split(r"[,;\s]", text, 1)[0]  # first address of a list
+    return text.strip().strip("<>").strip()
+
+
 def valid_email(addr):
-    """Syntactic-only check (no network / MX lookup). Lower-cases the domain."""
-    text = str(addr or "").strip()
+    """Syntactic-only check (no network / MX lookup). Lower-cases the domain.
+    Tolerates a mailto: / angle-bracket wrapper via clean_email()."""
+    text = clean_email(addr)
     if not text or len(text) > 254 or "@" not in text:
         return False
     local, _, domain = text.rpartition("@")

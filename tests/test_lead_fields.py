@@ -1,12 +1,32 @@
 import pytest
 
 from kairo.lead_fields import (
+    clean_email,
     derive_company,
     derive_name,
     lead_company,
     lead_name,
     valid_email,
 )
+
+
+@pytest.mark.parametrize("raw,expected", [
+    ("mailto:sales@acme.com", "sales@acme.com"),
+    ("MAILTO:Sales@Acme.com", "Sales@Acme.com"),
+    ("mailto:sales@acme.com?subject=Hello%20there", "sales@acme.com"),
+    ("<john@acme.com>", "john@acme.com"),
+    ("  john@acme.com  ", "john@acme.com"),
+    ("a@b.com, c@d.com", "a@b.com"),
+    ("plain@acme.com", "plain@acme.com"),
+    ("", ""),
+])
+def test_clean_email(raw, expected):
+    assert clean_email(raw) == expected
+
+
+def test_valid_email_tolerates_mailto_wrapper():
+    assert valid_email("mailto:osibgn@gmail.com") is True
+    assert valid_email("<osibgn@gmail.com>") is True
 
 
 @pytest.mark.parametrize("addr,ok", [

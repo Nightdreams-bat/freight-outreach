@@ -311,7 +311,14 @@ class ExcelStore:
         return self.ws.cell(row=row_idx, column=col).value
 
     def _read_row(self, row_idx):
-        return {logical: self._cell(row_idx, col) for logical, col in self.col_index.items()}
+        from kairo.lead_fields import clean_email
+
+        row = {logical: self._cell(row_idx, col) for logical, col in self.col_index.items()}
+        if row.get("Email"):
+            # Interpret "mailto:x@y.com" / "<x@y.com>" as x@y.com everywhere -
+            # display, dedup, sending. The operator's own cell is left as typed.
+            row["Email"] = clean_email(row["Email"]) or row["Email"]
+        return row
 
     def get_row(self, row_idx):
         return self._read_row(row_idx)
@@ -326,12 +333,18 @@ class ExcelStore:
         return None
 
     def rows(self):
-        """Yields (row_idx, values) for every row with an email address that isn't suppressed/blocked."""
+        """Yields (row_idx, values) for every row with a valid, unsuppressed,
+        unblocked email address - the ones a send can actually go to."""
+        from kairo.lead_fields import valid_email
+
         if self.email_column_missing:
             return
         for row_idx in range(2, self.ws.max_row + 1):
             values = self._read_row(row_idx)
             if not values.get("Email"):
+                continue
+            if not valid_email(values["Email"]):
+                log.info(f"Row {row_idx}: {values['Email']!r} skipped - not a valid email address")
                 continue
             reason = self._exclusion_reason(values)
             if reason:

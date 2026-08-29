@@ -26,7 +26,10 @@
             {{ r.display_company if r.display_company != "your company" else "—" }}
             {% if r.company_derived %}<span class="chip" title="Filled in from the email domain">from email</span>{% endif %}
           </td>
-          <td class="mono">{{ r.v.Email }}</td>
+          <td class="mono">
+            {{ r.v.Email }}
+            {% if r.email_ok is defined and not r.email_ok %}<span class="chip" title="Kairo can't send to this - fix the address in your spreadsheet">check address</span>{% endif %}
+          </td>
           <td data-sort-value="{{ r.score }}">
             <span class="prio {{ 'manual' if r.score_manual }}"
                   title="{{ 'Set in your spreadsheet' if r.score_manual else 'Computed from company / phone / notes' }}">

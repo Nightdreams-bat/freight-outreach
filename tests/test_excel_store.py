@@ -247,6 +247,25 @@ def test_state_write_preserves_a_note_typed_in_excel(tmp_path):
     assert values["Status"] == "contacted"
 
 
+def test_mailto_prefix_is_read_as_a_bare_address(tmp_path):
+    p = _make(tmp_path / "leads.xlsx", ["Name", "Company", "Email", "Phone"],
+              ["Ann", "Acme", "mailto:osibgn@gmail.com", "1"])
+    store = ExcelStore(p, create_if_missing=False)
+    _, values, _ = next(store.all_rows())
+    assert values["Email"] == "osibgn@gmail.com"
+    assert "osibgn@gmail.com" in store.existing_emails()
+    # ... and it's a real send candidate now, not skipped as junk
+    assert any(v["Email"] == "osibgn@gmail.com" for _, v in store.rows())
+
+
+def test_rows_skips_an_unfixable_email(tmp_path):
+    p = _make(tmp_path / "leads.xlsx", ["Name", "Company", "Email", "Phone"],
+              ["Ann", "Acme", "not an address", "1"])
+    store = ExcelStore(p, create_if_missing=False)
+    assert list(store.rows()) == []          # never emailed
+    assert len(list(store.all_rows())) == 1  # still visible on the Leads page
+
+
 def test_header_with_trailing_space_still_maps(tmp_path):
     p = _make(tmp_path / "leads.xlsx", ["Name", "Company", "Email ", "Notes "],
               ["Jane", "Acme", "jane@acme.test", "hi"])
