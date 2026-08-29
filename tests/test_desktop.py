@@ -98,7 +98,10 @@ def test_open_app_mode_launches_a_browser(monkeypatch, tmp_path):
     monkeypatch.setattr(desktop, "_find_browser", lambda: str(tmp_path / "msedge.exe"))
     monkeypatch.setattr(desktop, "data_dir", lambda: tmp_path)
     seen = {}
-    monkeypatch.setattr(desktop.subprocess, "Popen", lambda argv, *a, **k: seen.setdefault("argv", argv))
+    monkeypatch.setattr(
+        desktop.win_subprocess.subprocess, "Popen",
+        lambda argv, *a, **k: seen.setdefault("argv", argv),
+    )
     assert desktop._open_app_mode("http://127.0.0.1:5000") is True
     assert any(a.startswith("--app=") for a in seen["argv"])
 

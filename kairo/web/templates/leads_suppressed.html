@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Suppressed leads{% endblock %}
+{% block page_title %}Suppressed leads{% endblock %}
+{% block topbar_actions %}
+  <input id="leadSearch" type="search" class="field" style="max-width:240px" placeholder="Search anything…">
+{% endblock %}
+{% block content %}
+
+<p class="subtitle">
+  These leads are held out of every send — cold, follow-up and reminder — until you unsuppress them.
+  · <a href="{{ url_for('leads') }}">back to all leads</a>
+</p>
+
+{% set empty_text = "No suppressed leads." %}
+{% include "_leads_table.html" %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  var search = document.getElementById("leadSearch");
+  var table = document.getElementById("leadsTable");
+  if (search) {
+    search.addEventListener("input", function () {
+      var q = this.value.toLowerCase();
+      table.querySelectorAll("tbody tr").forEach(function (row) {
+        row.style.display = row.textContent.toLowerCase().indexOf(q) !== -1 ? "" : "none";
+      });
+    });
+  }
+})();
+</script>
+{% endblock %}

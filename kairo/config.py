@@ -115,6 +115,10 @@ DEFAULTS = {
     "warmup_start": 10,
     "warmup_step_per_day": 5,
     "warmup_started_on": "",
+    # Find leads (BETA): when a search finishes, append every new lead that has a
+    # valid email and isn't already in the sheet. Leads with no email still wait
+    # for a manual pick on the Find leads page.
+    "find_leads_autoimport": True,
 }
 
 # New installs are seeded in Romanian (the tool's primary use); the DEFAULTS

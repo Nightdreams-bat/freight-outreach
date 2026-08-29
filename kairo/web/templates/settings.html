@@ -20,6 +20,33 @@
       Point this at any <code>.xlsx</code> on this PC.
     </div>
   </div>
+  <div class="setrow">
+    <form method="post" action="{{ url_for('settings') }}" class="input-join" style="display:flex;gap:8px">
+      <input class="field" type="text" name="excel_path" value="{{ cfg.excel_path }}"
+             spellcheck="false" style="flex:1">
+      <button type="submit" class="btn sm primary">Save path</button>
+    </form>
+    <div class="help">Paste a full path to any <code>.xlsx</code> on this PC.</div>
+  </div>
+</div>
+
+<div class="card" id="find-leads-settings">
+  <div class="card-head"><h2>Find leads</h2><span class="beta">beta</span></div>
+  <form method="post">
+    <input type="hidden" name="find_leads_settings" value="1">
+    <div class="setrow">
+      <label class="flagrow" style="cursor:pointer">
+        <input type="checkbox" name="find_leads_autoimport" {{ "checked" if cfg.find_leads_autoimport }}>
+        <span style="font-weight:600">Add found leads with an email straight to my sheet</span>
+      </label>
+      <div class="help">
+        When a search on the <strong>Find leads</strong> page finishes, every new lead that has a
+        valid email and isn't already in your sheet is appended automatically — with an
+        <em>Undo</em> button right there. Leads with no email still wait for you to pick them.
+      </div>
+    </div>
+    <button type="submit" class="btn primary sm">Save</button>
+  </form>
 </div>
 
 <div class="card" id="lead-columns">

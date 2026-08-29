@@ -84,6 +84,31 @@ def test_leads_page_shows_derived_name_and_company(client):
     assert "from email" in body
 
 
+def test_settings_saves_valid_excel_path(client, tmp_path, monkeypatch):
+    monkeypatch.setattr(web_app, "sheet_headers", lambda path: ["Name", "Email"])
+    target = tmp_path / "my leads.xlsx"
+    target.write_bytes(b"x")
+    r = client.post("/settings", data={"excel_path": str(target)}, follow_redirects=True)
+    assert client.cfg["excel_path"] == str(target)
+    assert b"Leads file linked" in r.data
+
+
+def test_settings_rejects_bogus_excel_path(client):
+    before = client.cfg["excel_path"]
+    r = client.post("/settings", data={"excel_path": r"C:\nope\missing\leads.txt"},
+                    follow_redirects=True)
+    assert client.cfg["excel_path"] == before
+    assert b"kept the previous file" in r.data
+
+
+def test_find_leads_autoimport_toggle_round_trips(client):
+    client.post("/settings", data={"find_leads_settings": "1", "find_leads_autoimport": "on"},
+                follow_redirects=True)
+    assert client.cfg["find_leads_autoimport"] is True
+    client.post("/settings", data={"find_leads_settings": "1"}, follow_redirects=True)
+    assert client.cfg["find_leads_autoimport"] is False
+
+
 def test_big_settings_form_does_not_wipe_column_map(client):
     client.cfg["column_map"] = {"Name": "Full Name"}
     client.post("/settings", data={**BASE_CFG, "sender_name": "New"}, follow_redirects=True)

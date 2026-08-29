@@ -68,26 +68,75 @@ class ExcelStore:
         self.disallowed_emails = disallowed_emails or []
         self.disallowed_domains = disallowed_domains or []
         self.email_column_missing = False
+        self._headers_dirty = False
         if not self.path.exists():
             self._create_blank_workbook()
         else:
-            # Best-effort snapshot so a crash or corruption mid-save leaves the
-            # client a recoverable .bak. web/app.py builds a store per request, so
-            # only refresh the copy when it's missing or over 24h stale.
-            try:
-                bak = self.path.with_suffix(self.path.suffix + ".bak")
-                if not bak.exists() or time.time() - os.path.getmtime(bak) > 86400:
-                    shutil.copy2(self.path, bak)
-            except OSError:
-                pass
-        self.wb = openpyxl.load_workbook(self.path)
+            self._refresh_backup()
+        self.wb = self._load_workbook()
         self.ws = self.wb.active
-        self.headers = [c.value for c in self.ws[1] if c.value is not None and str(c.value).strip()]
+        self.headers = self._row1_headers(self.ws)
+        self._select_sheet_with_email()
         self._ensure_headers()
         self._resolve_map()
         self._index_columns()
 
     # --- setup -----------------------------------------------------------
+
+    @staticmethod
+    def _row1_headers(ws):
+        return [c.value for c in ws[1] if c.value is not None and str(c.value).strip()]
+
+    def _load_workbook(self):
+        """Open the workbook, retrying once on a transient read error. A genuine
+        lock (file open exclusively) still surfaces as ExcelFileLocked."""
+        last_err = None
+        for attempt in range(2):
+            try:
+                return openpyxl.load_workbook(self.path)
+            except PermissionError as e:
+                raise ExcelFileLocked(
+                    f"Could not open {self.path} - is it open in Excel? Close it and try again."
+                ) from e
+            except Exception as e:  # noqa: BLE001
+                last_err = e
+                if attempt == 0:
+                    time.sleep(0.1)
+        raise RuntimeError(f"Could not read {self.path}: {last_err}")
+
+    def _refresh_backup(self):
+        """Best-effort snapshot so a crash or corruption mid-save leaves the
+        client a recoverable .bak. web/app.py builds a store per request, so only
+        refresh the copy when it's missing or over 24h stale."""
+        bak = self.path.with_suffix(self.path.suffix + ".bak")
+        for attempt in range(2):
+            try:
+                if not bak.exists() or time.time() - os.path.getmtime(bak) > 86400:
+                    shutil.copy2(self.path, bak)
+                return
+            except PermissionError:
+                return  # locked for reading right now; a stale .bak is fine
+            except OSError:
+                if attempt == 0:
+                    time.sleep(0.1)
+
+    def _select_sheet_with_email(self):
+        """The active sheet is usually the leads. If it has no detectable Email
+        column but another worksheet does, switch to that one."""
+        data_headers = [h for h in self.headers if h not in STATE_COLUMNS]
+        if "Email" in column_map.detect(data_headers):
+            return
+        for ws in self.wb.worksheets:
+            if ws is self.ws:
+                continue
+            other = self._row1_headers(ws)
+            if "Email" in column_map.detect([h for h in other if h not in STATE_COLUMNS]):
+                log.info(
+                    f"Using sheet {ws.title!r} - it has an Email column and the active sheet doesn't"
+                )
+                self.ws = ws
+                self.headers = other
+                return
 
     def _save(self):
         try:
@@ -112,15 +161,15 @@ class ExcelStore:
             ) from e
 
     def _ensure_headers(self):
-        """Append any missing STATE columns. Never touches the client's data columns."""
-        changed = False
+        """Register any missing STATE columns. Never touches the client's data
+        columns, and never writes during construction - the header cells are held
+        in memory (openpyxl keeps them until .save()) and only land on disk when a
+        real write (set_value / add_lead) persists the workbook."""
         for logical in STATE_COLUMNS:
             if logical not in self.headers:
                 self.ws.cell(row=1, column=self.ws.max_column + 1, value=logical)
                 self.headers.append(logical)
-                changed = True
-        if changed:
-            self._save()
+                self._headers_dirty = True
 
     def _resolve_map(self):
         """Merge auto-detection with the explicit config map (config wins).
@@ -280,3 +329,21 @@ class ExcelStore:
             return None
         self._save()
         return row_idx
+
+    def remove_rows(self, row_idxs):
+        """Delete the given 1-based worksheet rows. Like add_lead this is a
+        structural write - it removes whole rows rather than mutating a cell the
+        client owns - so it's exempt from the state-column guard. Rows are deleted
+        in descending order so earlier indices stay valid. The header row (1) and
+        any index outside the sheet are ignored. Returns the number of rows
+        deleted."""
+        max_row = self.ws.max_row
+        targets = sorted(
+            {i for i in row_idxs if isinstance(i, int) and 2 <= i <= max_row},
+            reverse=True,
+        )
+        for i in targets:
+            self.ws.delete_rows(i, 1)
+        if targets:
+            self._save()
+        return len(targets)

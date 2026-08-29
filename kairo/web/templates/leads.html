@@ -3,6 +3,9 @@
 {% block page_title %}Leads / CRM{% endblock %}
 {% block topbar_actions %}
   <input id="leadSearch" type="search" class="field" style="max-width:240px" placeholder="Search anything…">
+  {% if suppressed_count %}
+  <a href="{{ url_for('leads_suppressed') }}" class="btn sm ghost">Suppressed ({{ suppressed_count }})</a>
+  {% endif %}
 {% endblock %}
 {% block content %}
 
@@ -11,71 +14,7 @@
   <a href="{{ url_for('settings') }}#lead-columns">change file or column mapping</a>
 </p>
 
-<div class="card pad-tight">
-  <div class="table-wrap">
-    <table class="grid" id="leadsTable">
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Company</th>
-          <th>Email</th>
-          <th class="sortable" data-sort="num" style="cursor:pointer">Priority &#8597;</th>
-          <th>Meeting</th>
-          <th>Follow-ups</th>
-          <th>Notes</th>
-          <th>Status</th>
-          <th class="right">Action</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for r in rows %}
-        <tr>
-          <td>
-            {{ r.display_name if r.display_name != "there" else "—" }}
-            {% if r.name_derived %}<span class="chip" title="Filled in from the email address">from email</span>{% endif %}
-          </td>
-          <td>
-            {{ r.display_company if r.display_company != "your company" else "—" }}
-            {% if r.company_derived %}<span class="chip" title="Filled in from the email domain">from email</span>{% endif %}
-          </td>
-          <td class="mono">{{ r.v.Email }}</td>
-          <td data-sort-value="{{ r.score }}">
-            <span class="prio {{ 'manual' if r.score_manual }}"
-                  title="{{ 'Set in your spreadsheet' if r.score_manual else 'Computed from company / phone / notes' }}">
-              {{ '%g' % r.score }}
-            </span>
-          </td>
-          <td>{{ r.v.MeetingDateTime or "—" }}</td>
-          <td>{{ r.v.FollowupStage or "—" }}</td>
-          <td class="truncate">{{ r.v.Notes or "—" }}</td>
-          <td>
-            {% if r.reason == "suppressed" %}
-              <span class="badge off">Suppressed</span>
-            {% elif r.reason == "blocked" %}
-              <span class="badge danger">Blocklisted</span>
-            {% else %}
-              {% if r.v.ReplyStatus %}<span class="badge done" title="Replied: {{ r.v.ReplyStatus }}">Replied</span>
-              {% elif r.v.ReminderSentAt %}<span class="badge done">Reminded</span>
-              {% elif r.v.FollowupStage %}<span class="badge stage" title="Follow-up stage {{ r.v.FollowupStage }}">FU {{ r.v.FollowupStage }}</span>
-              {% elif r.v.ColdEmailSentAt %}<span class="badge cold">Cold sent</span>
-              {% else %}<span class="badge new">New</span>{% endif %}
-            {% endif %}
-          </td>
-          <td class="right">
-            {% if r.reason != "blocked" %}
-            <form method="post" action="{{ url_for('toggle_suppress', row_idx=r.row_idx) }}" class="inline">
-              <button class="btn sm ghost" type="submit">{{ "Unsuppress" if r.reason == "suppressed" else "Suppress" }}</button>
-            </form>
-            {% endif %}
-          </td>
-        </tr>
-        {% else %}
-        <tr><td colspan="9" class="empty">No leads yet — add rows to your spreadsheet.</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-</div>
+{% include "_leads_table.html" %}
 
 {% endblock %}
 

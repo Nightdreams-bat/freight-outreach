@@ -29,6 +29,9 @@ class FakeStore:
     def add_lead(self, data):
         return 3
 
+    def remove_rows(self, row_idxs):
+        return len(list(row_idxs))
+
 
 @pytest.fixture
 def client(monkeypatch, tmp_path):
@@ -86,6 +89,7 @@ POST_ROUTES = [
     ("/settings/templates/reset", {}),
     ("/find-leads/search", {"what": "transport", "where": "Chisinau", "scrape": "on"}),
     ("/find-leads/import", {"pick": "0"}),
+    ("/find-leads/undo-import", {}),
     ("/settings", {"followup_settings": "1", "followup_enabled": "on",
                    "followup_offsets_days": "2, 5, bad, 9"}),
     ("/settings/connect-gmail", {}),
@@ -164,6 +168,100 @@ def test_find_leads_search_then_import(client):
     imp = client.post("/find-leads/import", data={"pick": "0"}, follow_redirects=True)
     assert imp.status_code == 200
     assert "Added 1" in imp.get_data(as_text=True)
+
+
+def _wait_for_search(client):
+    import time
+
+    for _ in range(100):
+        if client.get("/find-leads/status").get_json()["status"] == "done":
+            return
+        time.sleep(0.05)
+    raise AssertionError("lead search did not finish")
+
+
+class _RecordingStore:
+    email_column_missing = False
+
+    def __init__(self):
+        self.added = []
+        self.removed = []
+
+    def existing_emails(self):
+        return set()
+
+    def all_rows(self):
+        return iter(())
+
+    def add_lead(self, data):
+        self.added.append(data)
+        return 100 + len(self.added)
+
+    def remove_rows(self, row_idxs):
+        self.removed = list(row_idxs)
+        return len(self.removed)
+
+
+def test_find_leads_autoimport_splits_by_email(client, monkeypatch):
+    store = _RecordingStore()
+    monkeypatch.setattr(web_app, "ExcelStore", lambda *a, **k: store)
+    monkeypatch.setattr(web_app.lead_sourcing, "search_businesses", lambda what, where, **k: [
+        {"Company": "HasMail SRL", "Email": "a@hasmail.test", "Phone": "", "Website": "", "Address": ""},
+        {"Company": "NoMail SRL", "Email": "", "Phone": "", "Website": "", "Address": ""},
+    ])
+    monkeypatch.setattr(web_app.lead_sourcing, "enrich", lambda b, **k: b)
+
+    client.post("/find-leads/search", data={"what": "x", "where": "Chisinau", "scrape": "on"})
+    _wait_for_search(client)
+
+    autoadded = web_app._LEADS_LAST["autoadded"]
+    assert [a["Company"] for a in autoadded] == ["HasMail SRL"]
+    assert autoadded[0]["row_idx"] == 101
+    assert [a["Email"] for a in store.added] == ["a@hasmail.test"]
+
+    body = client.get("/find-leads").get_data(as_text=True)
+    assert "HasMail SRL" in body   # auto-added card
+    assert "NoMail SRL" in body    # manual review list
+
+
+def test_find_leads_autoimport_disabled(client, monkeypatch):
+    cfg = dict(BASE_CFG)
+    cfg["find_leads_autoimport"] = False
+    cfg["excel_path"] = "x.xlsx"
+    monkeypatch.setattr(web_app, "load_config", lambda: dict(cfg))
+    store = _RecordingStore()
+    monkeypatch.setattr(web_app, "ExcelStore", lambda *a, **k: store)
+    monkeypatch.setattr(web_app.lead_sourcing, "search_businesses", lambda what, where, **k: [
+        {"Company": "HasMail SRL", "Email": "a@hasmail.test", "Phone": "", "Website": "", "Address": ""},
+    ])
+    monkeypatch.setattr(web_app.lead_sourcing, "enrich", lambda b, **k: b)
+
+    client.post("/find-leads/search", data={"what": "x", "where": "Chisinau", "scrape": "on"})
+    _wait_for_search(client)
+
+    assert web_app._LEADS_LAST["autoadded"] == []
+    assert store.added == []
+    body = client.get("/find-leads").get_data(as_text=True)
+    assert "HasMail SRL" in body  # whole list stays manual
+
+
+def test_find_leads_undo_import_removes_rows(client, monkeypatch):
+    store = _RecordingStore()
+    monkeypatch.setattr(web_app, "ExcelStore", lambda *a, **k: store)
+    monkeypatch.setattr(web_app.lead_sourcing, "search_businesses", lambda what, where, **k: [
+        {"Company": "HasMail SRL", "Email": "a@hasmail.test", "Phone": "", "Website": "", "Address": ""},
+    ])
+    monkeypatch.setattr(web_app.lead_sourcing, "enrich", lambda b, **k: b)
+
+    client.post("/find-leads/search", data={"what": "x", "where": "Chisinau", "scrape": "on"})
+    _wait_for_search(client)
+    assert web_app._LEADS_LAST["autoadded"]
+
+    r = client.post("/find-leads/undo-import", data={}, follow_redirects=True)
+    assert r.status_code == 200
+    assert "Removed 1" in r.get_data(as_text=True)
+    assert store.removed == [101]
+    assert web_app._LEADS_LAST["autoadded"] == []
 
 
 def test_cross_origin_post_is_rejected(client):

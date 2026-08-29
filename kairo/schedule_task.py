@@ -1,6 +1,7 @@
-import subprocess
 import sys
 from pathlib import Path
+
+from kairo import win_subprocess
 
 # The two headless scans that can run on a Windows Task Scheduler timer.
 # keeps the historical string so an existing install's registered Task Scheduler entries survive the Kairo rename
@@ -69,7 +70,7 @@ def register_task(interval_hours, name=REMINDER_TASK_NAME, cli_flag="--reminders
         "/TN", name,
         "/TR", _task_command(cli_flag),
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True, cwd=str(working_dir))
+    result = win_subprocess.run(cmd, capture_output=True, text=True, cwd=str(working_dir))
     ok = result.returncode == 0
     if ok:
         print(f"Scheduled task '{name}' created: runs every {interval_hours}h.")
@@ -80,7 +81,7 @@ def register_task(interval_hours, name=REMINDER_TASK_NAME, cli_flag="--reminders
 
 
 def unregister_task(name=REMINDER_TASK_NAME):
-    result = subprocess.run(
+    result = win_subprocess.run(
         ["schtasks", "/Delete", "/TN", name, "/F"],
         capture_output=True, text=True,
     )
@@ -91,7 +92,7 @@ def unregister_task(name=REMINDER_TASK_NAME):
 
 def task_status(name=REMINDER_TASK_NAME):
     """Returns a dict with registered/next_run/status, or None if the task doesn't exist."""
-    result = subprocess.run(
+    result = win_subprocess.run(
         ["schtasks", "/Query", "/TN", name, "/FO", "LIST", "/V"],
         capture_output=True, text=True,
     )

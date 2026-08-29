@@ -30,6 +30,7 @@ from kairo.diagnostics import CHECK_NAMES, run_checks
 from kairo.excel_store import ExcelFileLocked, ExcelStore, sheet_headers
 from kairo.column_map import detect as detect_columns
 from kairo.gmail_oauth import run_oauth_flow
+from kairo.lead_fields import valid_email
 from kairo.schedule_task import (
     REPLY_TASK_NAME,
     register_task,
@@ -50,6 +51,25 @@ from kairo.send_tracker import (
 log = get_logger("web")
 
 SUPPRESSED_TRUE_VALUES = ("1", "true", "yes", "y")
+
+
+class _UnavailableStore:
+    """Stand-in returned to GET pages when the workbook can't be opened (locked
+    in Excel). Reads yield nothing so the page renders; writes never reach here."""
+
+    email_column_missing = True
+
+    def all_rows(self):
+        return iter(())
+
+    def rows(self):
+        return iter(())
+
+    def existing_emails(self):
+        return set()
+
+    def get_row(self, row_idx):
+        return {}
 
 # ---- Templates tab --------------------------------------------------------
 # The message library, Gmail-style: a rail of message types on the left, one
@@ -180,7 +200,7 @@ _RUN_ACTIONS = ("cold", "followups", "reminders", "replies")
 
 # Last /find-leads result, so the import step doesn't re-run the search. Single
 # user, one search at a time - a module-level slot is enough.
-_LEADS_LAST = {"what": "", "where": "", "scrape": True, "leads": []}
+_LEADS_LAST = {"what": "", "where": "", "scrape": True, "leads": [], "autoadded": []}
 
 # Find-leads search runs in a background thread so navigating away from the page
 # (or closing the tab) doesn't abort it - same pattern as the "Run now" jobs.
@@ -199,13 +219,53 @@ def _run_lead_search(what, where, scrape):
                               finished=datetime.now().strftime("%H:%M:%S"),
                               summary=f"Search failed: {e}")
         return
-    _LEADS_LAST.update(what=what, where=where, scrape=scrape, leads=leads)
+
+    autoadded = []
+    sheet_busy = False
+    cfg = load_config()
+    if leads and cfg_get(cfg, "find_leads_autoimport"):
+        try:
+            store = ExcelStore(
+                cfg["excel_path"],
+                column_map=cfg.get("column_map"),
+                disallowed_emails=cfg.get("disallowed_emails"),
+                disallowed_domains=cfg.get("disallowed_domains"),
+            )
+            existing = store.existing_emails()
+            for lead in leads:
+                email = str(lead.get("Email") or "")
+                if not valid_email(email) or email.lower() in existing:
+                    continue
+                idx = store.add_lead(lead)
+                if idx:
+                    autoadded.append({**lead, "row_idx": idx})
+                    existing.add(email.lower())
+        except ExcelFileLocked:
+            sheet_busy = True
+            autoadded = []
+        except Exception as e:  # noqa: BLE001 - auto-import is best-effort
+            log.warning(f"Find-leads auto-import failed: {e}")
+            sheet_busy = True
+            autoadded = []
+
+    _LEADS_LAST.update(what=what, where=where, scrape=scrape, leads=leads,
+                       autoadded=autoadded)
+
+    n_added = len(autoadded)
+    n_no_email = sum(1 for l in leads if not valid_email(str(l.get("Email") or "")))
+    if not leads:
+        summary = "No businesses found. Try a broader type or a larger region."
+    elif sheet_busy:
+        summary = (f"Found {len(leads)}. Couldn't write to your Excel file "
+                   f"(open in Excel?) — use Import selected below.")
+    else:
+        summary = (f"Found {len(leads)} · added {n_added} to your sheet · "
+                   f"{n_no_email} need an email")
     with _LEADS_JOB_LOCK:
         _LEADS_JOB.update(
             status="done",
             finished=datetime.now().strftime("%H:%M:%S"),
-            summary=(f"Found {len(leads)} business(es)." if leads
-                     else "No businesses found. Try a broader type or a larger region."),
+            summary=summary,
         )
 
 
@@ -391,8 +451,10 @@ def create_app():
             "templates_language": "templates",
             "templates_reset": "templates",
             "logs_page": "logs",
+            "leads_suppressed": "leads",
             "find_leads": "find_leads",
             "find_leads_search": "find_leads",
+            "find_leads_undo_import": "find_leads",
         }
         active = endpoint_to_active.get(request.endpoint)
         try:
@@ -416,14 +478,28 @@ def create_app():
             "sender_company": cfg.get("sender_company") or "",
         }
 
-    def get_config_and_store():
+    def get_config_and_store(readonly=False):
+        """Load the config and a lead store. For GET pages pass readonly=True: if
+        the workbook can't be opened for writing (open in Excel), the page still
+        renders with a best-effort empty store and a dismissible warning, instead
+        of the whole dashboard erroring out."""
         cfg = load_config()
-        store = ExcelStore(
-            cfg["excel_path"],
-            column_map=cfg.get("column_map"),
-            disallowed_emails=cfg.get("disallowed_emails"),
-            disallowed_domains=cfg.get("disallowed_domains"),
-        )
+        try:
+            store = ExcelStore(
+                cfg["excel_path"],
+                column_map=cfg.get("column_map"),
+                disallowed_emails=cfg.get("disallowed_emails"),
+                disallowed_domains=cfg.get("disallowed_domains"),
+            )
+        except ExcelFileLocked:
+            if not readonly:
+                raise
+            flash(
+                "Kairo can read your leads but can't update the file while it's open "
+                "in Excel - close it so sends can record their state.",
+                "warning",
+            )
+            store = _UnavailableStore()
         return cfg, store
 
     @app.errorhandler(ExcelFileLocked)
@@ -433,7 +509,7 @@ def create_app():
 
     @app.route("/")
     def dashboard():
-        cfg, store = get_config_and_store()
+        cfg, store = get_config_and_store(readonly=True)
         daily_cap = effective_daily_cap(cfg)
         setup_todo = []
         if not (cfg.get("sender_name") or "").strip() or not (cfg.get("sender_company") or "").strip():
@@ -462,13 +538,14 @@ def create_app():
             warmup_note=warmup_note(cfg),
         )
 
-    @app.route("/leads")
-    def leads():
-        cfg, store = get_config_and_store()
+    def _lead_rows(cfg, store, keep):
+        """Build the CRM row dicts. `keep(reason)` decides which rows to include."""
         from kairo.lead_fields import lead_company, lead_name
 
         rows = []
         for row_idx, values, reason in store.all_rows():
+            if not keep(reason):
+                continue
             name, company = lead_name(values), lead_company(values)
             rows.append({
                 "row_idx": row_idx,
@@ -481,7 +558,27 @@ def create_app():
                 "score": score_lead(values, cfg),
                 "score_manual": priority_is_manual(values),
             })
-        return render_template("leads.html", rows=rows, excel_path=cfg["excel_path"])
+        return rows
+
+    @app.route("/leads")
+    def leads():
+        cfg, store = get_config_and_store(readonly=True)
+        rows = _lead_rows(cfg, store, lambda reason: reason != "suppressed")
+        suppressed_count = sum(
+            1 for _, _, reason in store.all_rows() if reason == "suppressed"
+        )
+        return render_template(
+            "leads.html", rows=rows, excel_path=cfg["excel_path"],
+            suppressed_count=suppressed_count,
+        )
+
+    @app.route("/leads/suppressed")
+    def leads_suppressed():
+        cfg, store = get_config_and_store(readonly=True)
+        rows = _lead_rows(cfg, store, lambda reason: reason == "suppressed")
+        return render_template(
+            "leads_suppressed.html", rows=rows, excel_path=cfg["excel_path"],
+        )
 
     @app.route("/leads/<int:row_idx>/suppress", methods=["POST"])
     def toggle_suppress(row_idx):
@@ -490,11 +587,14 @@ def create_app():
         is_suppressed = str(current or "").strip().lower() in SUPPRESSED_TRUE_VALUES
         store.set_value(row_idx, "Suppressed", "" if is_suppressed else "yes")
         flash("Lead unsuppressed." if is_suppressed else "Lead suppressed.", "success")
+        ref = request.referrer or ""
+        if _host_only(ref.split("://", 1)[-1].split("/", 1)[0]) in _ALLOWED_HOSTS and "/leads" in ref:
+            return redirect(ref)
         return redirect(url_for("leads"))
 
     @app.route("/send")
     def send_page():
-        cfg, store = get_config_and_store()
+        cfg, store = get_config_and_store(readonly=True)
         by_priority = priority_sort_key(cfg)
         return render_template(
             "send.html",
@@ -747,6 +847,9 @@ def create_app():
             if "sending_limits" in request.form:
                 cfg["warmup_enabled"] = request.form.get("warmup_enabled") == "on"
 
+            if "find_leads_settings" in request.form:
+                cfg["find_leads_autoimport"] = request.form.get("find_leads_autoimport") == "on"
+
             if "hook_snippets" in request.form:
                 cfg["hook_snippets_enabled"] = request.form.get("hook_snippets_enabled") == "on"
                 for seg in ("carrier", "shipper"):
@@ -764,6 +867,36 @@ def create_app():
                     if choice and choice != "__none__":
                         column_map[logical] = choice
                 cfg["column_map"] = column_map
+
+            if "excel_path" in request.form:
+                raw_path = (request.form.get("excel_path") or "").strip()
+                if raw_path:
+                    candidate = os.path.expandvars(os.path.expanduser(raw_path))
+                    parent = os.path.dirname(candidate) or os.getcwd()
+                    if not candidate.lower().endswith(".xlsx") or not os.path.isdir(parent):
+                        flash(
+                            "That doesn't look like a path to an .xlsx file on this PC - "
+                            "kept the previous file.",
+                            "warning",
+                        )
+                    else:
+                        cfg["excel_path"] = candidate
+                        try:
+                            probe = sheet_headers(candidate)
+                        except Exception:  # noqa: BLE001
+                            probe = []
+                        if probe:
+                            flash(
+                                f"Leads file linked - found {len(probe)} column(s): "
+                                + ", ".join(str(h) for h in probe[:8]),
+                                "success",
+                            )
+                        else:
+                            flash(
+                                "Linked. No headers readable yet - Kairo will create the "
+                                "standard columns on first write.",
+                                "success",
+                            )
 
             new_key = (request.form.get("anthropic_api_key") or "").strip()
             if new_key:
@@ -811,8 +944,12 @@ def create_app():
                 filetypes=[("Excel files", "*.xlsx")],
             )
             root.destroy()
-        except Exception as e:
-            flash(f"Couldn't open the file browser: {e}", "danger")
+        except Exception as e:  # noqa: BLE001
+            log.warning(f"tkinter file picker failed: {e}")
+            flash(
+                "Couldn't open the file picker in this window - paste the path into the box instead.",
+                "warning",
+            )
             return redirect(url_for("settings"))
 
         if path:
@@ -976,21 +1113,27 @@ def create_app():
         with _LEADS_JOB_LOCK:
             job = dict(_LEADS_JOB)
         results = None
+        autoadded = _LEADS_LAST["autoadded"]
         if job["status"] == "failed":
             flash(job["summary"] or "Search failed.", "danger")
         elif job["status"] == "done":
-            _, store = get_config_and_store()
+            _, store = get_config_and_store(readonly=True)
             existing = store.existing_emails()
             leads = _LEADS_LAST["leads"]
+            added_emails = {str(a.get("Email") or "").lower() for a in autoadded}
+            # The manual list is everything that wasn't auto-added - the no-email
+            # leads, plus every lead when auto-import is off. Duplicates are still
+            # marked for clarity.
             results = [
-                {"lead": lead,
+                {"i": i, "lead": lead,
                  "duplicate": bool(lead.get("Email")) and lead["Email"].lower() in existing}
-                for lead in leads
+                for i, lead in enumerate(leads)
+                if not (lead.get("Email") and lead["Email"].lower() in added_emails)
             ]
-            if not leads:
+            if not leads and not autoadded:
                 flash(job["summary"], "warning")
         return render_template(
-            "find_leads.html", results=results, job=job,
+            "find_leads.html", results=results, job=job, autoadded=autoadded,
             what=_LEADS_LAST["what"] or job["what"],
             where=_LEADS_LAST["where"] or job["where"],
             scrape=_LEADS_LAST["scrape"],
@@ -1043,6 +1186,25 @@ def create_app():
         flash(f"Added {added} lead(s), skipped {skipped} (duplicates / no email).",
               "success" if added else "warning")
         return redirect(url_for("leads"))
+
+    @app.route("/find-leads/undo-import", methods=["POST"])
+    def find_leads_undo_import():
+        autoadded = _LEADS_LAST["autoadded"]
+        if not autoadded:
+            flash("Nothing to undo.", "warning")
+            return redirect(url_for("find_leads"))
+        try:
+            _, store = get_config_and_store()
+            n = store.remove_rows([a["row_idx"] for a in autoadded])
+        except ExcelFileLocked:
+            flash(
+                "Couldn't update your Excel file while it's open in Excel - close it and try again.",
+                "danger",
+            )
+            return redirect(url_for("find_leads"))
+        _LEADS_LAST["autoadded"] = []
+        flash(f"Removed {n} auto-added lead(s) from your sheet.", "success")
+        return redirect(url_for("find_leads"))
 
     return app
 

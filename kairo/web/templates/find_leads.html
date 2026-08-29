@@ -69,11 +69,30 @@
   })();
 </script>
 
-{% if results is not none %}
+{% if autoadded %}
 <div class="card pad-tight">
-  {% if not results %}
-    <p class="help" style="margin:12px">No businesses found. Try a broader type or a larger region.</p>
-  {% else %}
+  <h2 style="margin:0 0 4px">Added to your sheet ({{ autoadded|length }})</h2>
+  <p class="help" style="margin:0 0 12px">These had an email address and weren't already in your
+    sheet, so they were added automatically.</p>
+  <div class="table-wrap">
+    <table class="grid">
+      <thead><tr><th>Company</th><th>Email</th></tr></thead>
+      <tbody>
+        {% for a in autoadded %}
+        <tr><td>{{ a.Company }}</td><td>{{ a.Email }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <form method="post" action="{{ url_for('find_leads_undo_import') }}" style="margin-top:12px">
+    <button class="btn danger" type="submit">Undo — remove these</button>
+  </form>
+</div>
+{% endif %}
+
+{% if results %}
+<div class="card pad-tight">
+  <p class="help" style="margin:12px 12px 0">These had no email address — pick any to add anyway.</p>
   <form method="post" action="{{ url_for('find_leads_import') }}">
     <div class="table-wrap">
       <table class="grid">
@@ -85,7 +104,7 @@
           <tr {{ 'class=muted' if r.duplicate }}>
             <td>
               {% if r.duplicate %}<span class="badge cold">already in sheet</span>
-              {% else %}<input type="checkbox" name="pick" value="{{ loop.index0 }}" {{ 'checked' if r.lead.Email }}>{% endif %}
+              {% else %}<input type="checkbox" name="pick" value="{{ r.i }}" {{ 'checked' if r.lead.Email }}>{% endif %}
             </td>
             <td>{{ r.lead.Company }}</td>
             <td>{{ r.lead.Email or '—' }}</td>
@@ -99,7 +118,10 @@
     </div>
     <div style="margin-top:12px"><button class="btn primary" type="submit">Import selected</button></div>
   </form>
-  {% endif %}
+</div>
+{% elif results is not none and not autoadded %}
+<div class="card pad-tight">
+  <p class="help" style="margin:12px">No businesses found. Try a broader type or a larger region.</p>
 </div>
 {% endif %}
 

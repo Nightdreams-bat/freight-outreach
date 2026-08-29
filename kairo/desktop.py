@@ -13,13 +13,13 @@ Edge/Chrome "--app" window, and finally to a normal browser tab.
 import ctypes
 import os
 import shutil
-import subprocess
 import sys
 import threading
 import time
 import urllib.request
 import webbrowser
 
+from kairo import win_subprocess
 from kairo.logging_setup import get_logger
 from kairo.paths import data_dir
 
@@ -91,7 +91,7 @@ def _open_app_mode(url):
         return False
     profile = str(data_dir() / "webview-profile")
     try:
-        subprocess.Popen([  # noqa: S603
+        win_subprocess.popen([  # noqa: S603
             browser,
             f"--app={url}",
             f"--window-size={WIN_W},{WIN_H}",

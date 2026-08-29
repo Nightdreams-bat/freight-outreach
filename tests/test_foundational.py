@@ -136,6 +136,8 @@ def test_preexisting_workbook_gets_new_columns(tmp_path):
     for col in NEW_COLUMNS:
         assert col in store.col_index
 
+    # Construction doesn't touch the file; the first real write persists them.
+    store.set_value(2, "ReplyStatus", "awaiting")
     reopened = openpyxl.load_workbook(path)
     assert set(NEW_COLUMNS).issubset({c.value for c in reopened.active[1]})
 

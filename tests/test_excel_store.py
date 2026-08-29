@@ -1,7 +1,13 @@
 import openpyxl
 import pytest
 
-from kairo.excel_store import DATA_COLUMNS, STATE_COLUMNS, ExcelStore, sheet_headers
+from kairo.excel_store import (
+    DATA_COLUMNS,
+    STATE_COLUMNS,
+    ExcelFileLocked,
+    ExcelStore,
+    sheet_headers,
+)
 
 
 def _make(path, headers, *rows):
@@ -84,7 +90,8 @@ def test_email_only_sheet_still_works(tmp_path):
 def test_client_data_columns_never_appended(tmp_path):
     p = _make(tmp_path / "leads.xlsx", ["Full Name", "E-mail Address"],
               ["Jane", "jane@acme.test"])
-    ExcelStore(p)
+    store = ExcelStore(p)
+    store.set_value(2, "Notes", "x")  # first real write persists the state headers
     headers = {c.value for c in openpyxl.load_workbook(p).active[1]}
     # No Phone/Company column was invented for the client...
     assert "Phone" not in headers
@@ -92,6 +99,66 @@ def test_client_data_columns_never_appended(tmp_path):
     # ...but our own state columns were appended.
     for col in STATE_COLUMNS:
         assert col in headers
+
+
+def test_construction_does_not_write_missing_state_columns(tmp_path):
+    p = _make(tmp_path / "leads.xlsx", ["Name", "Email"], ["Jane", "jane@acme.test"])
+    before_bytes = p.read_bytes()
+    before_mtime = p.stat().st_mtime
+    ExcelStore(p)
+    assert p.read_bytes() == before_bytes
+    assert p.stat().st_mtime == before_mtime
+
+
+def test_state_columns_readable_before_any_write(tmp_path):
+    p = _make(tmp_path / "leads.xlsx", ["Name", "Email"], ["Jane", "jane@acme.test"])
+    store = ExcelStore(p)
+    _, v = list(store.rows())[0]
+    assert "Suppressed" in v
+    assert v["Suppressed"] in (None, "")
+    on_disk = [c.value for c in openpyxl.load_workbook(p).active[1]]
+    assert "Suppressed" not in on_disk  # still not persisted
+
+
+def test_first_write_persists_state_headers(tmp_path):
+    p = _make(tmp_path / "leads.xlsx", ["Name", "Email"], ["Jane", "jane@acme.test"])
+    store = ExcelStore(p)
+    store.set_value(2, "Suppressed", "yes")
+    on_disk = [c.value for c in openpyxl.load_workbook(p).active[1]]
+    for col in STATE_COLUMNS:
+        assert col in on_disk
+    reloaded = ExcelStore(p)
+    assert reloaded.get_row(2)["Suppressed"] == "yes"
+
+
+def test_picks_worksheet_with_email_column(tmp_path):
+    wb = openpyxl.Workbook()
+    summary = wb.active
+    summary.title = "Summary"
+    summary.append(["Region", "Total"])
+    summary.append(["North", 5])
+    contacts = wb.create_sheet("Contacts")
+    contacts.append(["Name", "Email"])
+    contacts.append(["Jane", "jane@acme.test"])
+    p = tmp_path / "leads.xlsx"
+    wb.save(p)
+
+    store = ExcelStore(p)
+    assert store.email_column_missing is False
+    _, v = list(store.rows())[0]
+    assert v["Email"] == "jane@acme.test"
+
+
+def test_save_permission_error_raises_locked(tmp_path, monkeypatch):
+    p = _make(tmp_path / "leads.xlsx", ["Name", "Email"], ["Jane", "jane@acme.test"])
+    store = ExcelStore(p)
+
+    def boom(*a, **k):
+        raise PermissionError("open in Excel")
+
+    monkeypatch.setattr(store.wb, "save", boom)
+    with pytest.raises(ExcelFileLocked):
+        store.set_value(2, "Notes", "x")
 
 
 def test_set_value_refuses_data_column(tmp_path):
@@ -146,6 +213,34 @@ def test_add_lead_writes_website_address_only_when_mapped(tmp_path):
     ws = openpyxl.load_workbook(p2).active
     written = {c.value for c in ws[idx]}
     assert "https://withweb.test" in written and "Main St" in written
+
+
+def test_remove_rows_deletes_and_keeps_header_and_others(tmp_path):
+    p = _make(tmp_path / "leads.xlsx", ["Name", "Company", "Email", "Phone"],
+              ["A", "ACo", "a@a.test", "1"],
+              ["B", "BCo", "b@b.test", "2"],
+              ["C", "CCo", "c@c.test", "3"])
+    store = ExcelStore(p)
+    i2 = store.add_lead({"Name": "D", "Company": "DCo", "Email": "d@d.test"})
+    i1 = store.add_lead({"Name": "E", "Company": "ECo", "Email": "e@e.test"})
+    assert (i2, i1) == (5, 6)
+
+    # out-of-range and the header row are ignored
+    n = store.remove_rows([i1, i2, 1, 999])
+    assert n == 2
+
+    reopened = ExcelStore(p)
+    emails = {v["Email"] for _, v, _ in reopened.all_rows()}
+    assert emails == {"a@a.test", "b@b.test", "c@c.test"}
+    on_disk = [c.value for c in openpyxl.load_workbook(p).active[1]]
+    assert on_disk[:4] == ["Name", "Company", "Email", "Phone"]
+
+
+def test_remove_rows_noop_on_empty(tmp_path):
+    p = _make(tmp_path / "leads.xlsx", ["Name", "Email"], ["A", "a@a.test"])
+    store = ExcelStore(p)
+    assert store.remove_rows([]) == 0
+    assert store.remove_rows([1]) == 0
 
 
 def test_data_and_state_column_split_is_exhaustive():
