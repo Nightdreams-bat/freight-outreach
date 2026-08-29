@@ -216,7 +216,8 @@ _LEADS_LAST = {"what": "", "where": "", "scrape": True, "leads": [], "autoadded"
 # Find-leads search runs in a background thread so navigating away from the page
 # (or closing the tab) doesn't abort it - same pattern as the "Run now" jobs.
 _LEADS_JOB = {"status": "idle", "what": "", "where": "", "scrape": True,
-              "started": None, "finished": None, "summary": None}
+              "started": None, "finished": None, "summary": None,
+              "write_blocked": False}
 _LEADS_JOB_LOCK = threading.Lock()
 
 
@@ -296,11 +297,13 @@ def _run_lead_search(what, where, scrape):
     elif not leads:
         summary = "No businesses found. Try a broader type or a larger region."
     elif sheet_missing:
-        summary = (f"Found {len(leads)}. Your leads file is missing — Kairo won't "
-                   f"recreate it; fix it under Settings, then use Import selected below.")
+        summary = (f"Found {len(leads)} — but your leads file is missing, so nothing "
+                   f"was saved. Fix the path under Settings, then use Import selected "
+                   f"below (the results are kept).")
     elif sheet_busy:
-        summary = (f"Found {len(leads)}. Couldn't write to your Excel file "
-                   f"(open in Excel?) — use Import selected below.")
+        summary = (f"Found {len(leads)} — but your leads file is open in Excel, so "
+                   f"nothing was saved. Close Excel, then use Import selected below "
+                   f"(the results are kept).")
     else:
         summary = (f"Found {len(leads)} · added {n_added} to your sheet · "
                    f"{n_no_email} need an email{blocked_note}")
@@ -309,6 +312,7 @@ def _run_lead_search(what, where, scrape):
             status="done",
             finished=datetime.now().strftime("%H:%M:%S"),
             summary=summary,
+            write_blocked=bool(sheet_missing or sheet_busy),
         )
 
 
@@ -399,6 +403,12 @@ def _run_job(action):
             _JOB["status"] = "failed" if errs else "success"
             _JOB["severity"] = "failed" if errs else severity
             _JOB["summary"] = summary + (f" ({len(errs)} error(s) - see the log)" if errs else "")
+            _JOB["finished"] = datetime.now().strftime("%H:%M:%S")
+    except (ExcelFileLocked, ExcelFileMissing) as e:
+        with _JOB_LOCK:
+            _JOB["status"] = "failed"
+            _JOB["severity"] = "warning"
+            _JOB["summary"] = f"{e} Nothing was sent - fix that and start again."
             _JOB["finished"] = datetime.now().strftime("%H:%M:%S")
     except Exception as e:  # noqa: BLE001
         with _JOB_LOCK:
@@ -565,13 +575,60 @@ def create_app():
             store = _UnavailableStore()
         return cfg, store
 
+    def writable_store(action_label="save that change"):
+        """For POST routes that must write the workbook. Returns (cfg, store) on
+        success, or (None, None) after flashing an actionable message - the caller
+        must then redirect (use _post_redirect). Unlike the bare
+        get_config_and_store(), a file that's open in Excel or missing does NOT
+        dead-end on a full error page: the operator gets a banner and lands back
+        where they were, nothing lost, so they can close Excel / fix the path and
+        click again."""
+        try:
+            return get_config_and_store()
+        except ExcelFileLocked:
+            flash(
+                f"Your leads file is open in Excel, so Kairo couldn't {action_label}. "
+                f"Close Excel and click again - nothing was lost.",
+                "warning",
+            )
+        except ExcelFileMissing:
+            cfg = load_config()
+            flash(
+                f"Kairo can't find your leads file at {cfg.get('excel_path')}. "
+                f"Fix the path under Settings (or restore the file), then try again.",
+                "danger",
+            )
+        return None, None
+
+    def _post_redirect(fallback_endpoint):
+        """Where a failed writable_store() should send the operator: back to the
+        page they came from if it's ours, else the fallback endpoint."""
+        ref = request.referrer or ""
+        host = _host_only(ref.split("://", 1)[-1].split("/", 1)[0])
+        if ref and host in _ALLOWED_HOSTS:
+            return redirect(ref)
+        return redirect(url_for(fallback_endpoint))
+
     @app.errorhandler(ExcelFileLocked)
     def handle_locked(e):
+        # A write that failed because the file is open in Excel (or the save
+        # raced a lock): flash and bounce the operator back where they were - the
+        # action just needs a retry after closing Excel, not a dead-end page.
+        if request.method not in _SAFE_METHODS:
+            flash(
+                "Your leads file is open in Excel, so Kairo couldn't save that "
+                "change. Close Excel and try again - nothing was lost.",
+                "warning",
+            )
+            return _post_redirect("dashboard")
         flash(str(e), "danger")
         return render_template("excel_locked.html"), 200
 
     @app.errorhandler(ExcelFileMissing)
     def handle_missing(e):
+        if request.method not in _SAFE_METHODS:
+            flash(str(e), "danger")
+            return _post_redirect("settings")
         flash(str(e), "danger")
         return render_template("excel_missing.html"), 200
 
@@ -650,7 +707,9 @@ def create_app():
 
     @app.route("/leads/<int:row_idx>/suppress", methods=["POST"])
     def toggle_suppress(row_idx):
-        _, store = get_config_and_store()
+        _, store = writable_store("change that lead")
+        if store is None:
+            return _post_redirect("leads")
         current = store.get_row(row_idx).get("Suppressed")
         is_suppressed = str(current or "").strip().lower() in SUPPRESSED_TRUE_VALUES
         store.set_value(row_idx, "Suppressed", "" if is_suppressed else "yes")
@@ -662,7 +721,9 @@ def create_app():
 
     @app.route("/leads/<int:row_idx>/delete", methods=["POST"])
     def delete_lead(row_idx):
-        _, store = get_config_and_store()
+        _, store = writable_store("delete that lead")
+        if store is None:
+            return _post_redirect("leads_suppressed")
         email = str(store.get_row(row_idx).get("Email") or "").strip()
         n = store.remove_rows([row_idx])
         if n:
@@ -717,6 +778,25 @@ def create_app():
     def _sync_send_redirect(action):
         """Legacy /send/<action> endpoints: every real-email action is now async.
         Kick the same background job the dashboard uses and bounce back to Send."""
+        if action != "replies":
+            # Catch a locked / missing workbook here, before a background job
+            # starts and fails with a scary red panel - the operator just needs
+            # to close Excel or fix the path.
+            try:
+                get_config_and_store()
+            except ExcelFileLocked:
+                flash(
+                    "Your leads file is open in Excel - close it, then start the send again.",
+                    "warning",
+                )
+                return redirect(url_for("send_page"))
+            except ExcelFileMissing:
+                flash(
+                    f"Kairo can't find your leads file ({load_config().get('excel_path')}). "
+                    f"Fix the path under Settings, then start the send again.",
+                    "danger",
+                )
+                return redirect(url_for("send_page"))
         started, _ = _try_start_job(action)
         if started:
             flash("Started in the background - watch the status panel on the Send page.", "success")
@@ -988,13 +1068,15 @@ def create_app():
                             "warning",
                         )
                     else:
+                        path_changed = candidate != (cfg.get("excel_path") or "")
                         cfg["excel_path"] = candidate
                         created = False
-                        if not os.path.exists(candidate):
-                            # An explicit path change is a clear "use this file"
-                            # intent, so create it now. This and first-run are the
-                            # only times Kairo creates a leads file - a deleted
-                            # one is never silently rebuilt.
+                        if not os.path.exists(candidate) and path_changed:
+                            # Pointing at a NEW path that doesn't exist yet is a
+                            # clear "use this file" intent, so create it now. This
+                            # and first-run are the only times Kairo creates a
+                            # leads file - re-saving the same path for a file the
+                            # operator deleted must NOT rebuild it.
                             try:
                                 ExcelStore(candidate, create_if_missing=True)
                                 created = True
@@ -1006,6 +1088,13 @@ def create_app():
                             probe = []
                         if created:
                             flash("Created a new leads file with the standard columns.", "success")
+                        elif not os.path.exists(candidate):
+                            flash(
+                                f"That file isn't on this PC. Kairo won't recreate a "
+                                f"deleted leads file - restore {os.path.basename(candidate)} "
+                                f"or type the path of a different .xlsx.",
+                                "danger",
+                            )
                         elif probe:
                             flash(
                                 f"Leads file linked - found {len(probe)} column(s): "
@@ -1253,6 +1342,8 @@ def create_app():
             ]
             if not leads and not autoadded:
                 flash(job["summary"], "warning")
+            elif job.get("write_blocked"):
+                flash(job["summary"], "warning")
         # Show the search that's running / just ran, not the one before it. The
         # job dict is updated the instant a new search starts; _LEADS_LAST only
         # catches up when that search finishes, so it must not win here.
@@ -1294,7 +1385,12 @@ def create_app():
 
     @app.route("/find-leads/import", methods=["POST"])
     def find_leads_import():
-        _, store = get_config_and_store()
+        # The pending results live in _LEADS_LAST and are NOT cleared here, so a
+        # failed import (file open in Excel / wrong path) can be retried straight
+        # after fixing the cause - the picks are still on the Find leads page.
+        _, store = writable_store("import those leads")
+        if store is None:
+            return redirect(url_for("find_leads"))
         picks = request.form.getlist("pick")
         leads = _LEADS_LAST["leads"]
         added = skipped = 0
@@ -1317,15 +1413,10 @@ def create_app():
         if not autoadded:
             flash("Nothing to undo.", "warning")
             return redirect(url_for("find_leads"))
-        try:
-            _, store = get_config_and_store()
-            n = store.remove_rows([a["row_idx"] for a in autoadded])
-        except ExcelFileLocked:
-            flash(
-                "Couldn't update your Excel file while it's open in Excel - close it and try again.",
-                "danger",
-            )
+        _, store = writable_store("undo that import")
+        if store is None:
             return redirect(url_for("find_leads"))
+        n = store.remove_rows([a["row_idx"] for a in autoadded])
         _LEADS_LAST["autoadded"] = []
         flash(f"Removed {n} auto-added lead(s) from your sheet.", "success")
         return redirect(url_for("find_leads"))

@@ -104,6 +104,48 @@ def test_block_adds_email_to_blocklist(client):
     assert b"Blocked" in r.data
 
 
+def test_write_action_when_file_open_in_excel_does_not_dead_end(client, monkeypatch):
+    from kairo.excel_store import ExcelFileLocked
+
+    def locked(*a, **k):
+        raise ExcelFileLocked("open in Excel")
+
+    monkeypatch.setattr(web_app, "ExcelStore", locked)
+    # GET still renders (readonly degrades to a banner)
+    assert client.get("/leads/suppressed").status_code == 200
+    # POST redirects back with a "close Excel" flash instead of a dead-end page
+    r = client.post("/leads/4/delete", follow_redirects=False)
+    assert r.status_code == 302
+    body = client.post("/leads/4/delete", follow_redirects=True).get_data(as_text=True)
+    assert "Close Excel" in body
+
+
+def test_import_when_file_missing_keeps_results_and_redirects(monkeypatch, tmp_path):
+    from kairo.excel_store import ExcelFileMissing
+    from tests.test_web_replies import BASE_CFG, FakeQueue
+
+    cfg = dict(BASE_CFG)
+    cfg["excel_path"] = str(tmp_path / "gone.xlsx")
+    monkeypatch.setattr(web_app, "reply_queue", FakeQueue())
+    monkeypatch.setattr(web_app, "load_config", lambda: dict(cfg))
+    monkeypatch.setattr(web_app, "save_config", lambda c: cfg.update(c))
+
+    def missing(*a, **k):
+        raise ExcelFileMissing(f"The leads file {cfg['excel_path']} is not on this PC.")
+
+    monkeypatch.setattr(web_app, "ExcelStore", missing)
+    web_app._LEADS_LAST.update(leads=[{"Company": "X", "Email": "x@x.test"}], autoadded=[])
+
+    application = web_app.create_app()
+    application.config.update(TESTING=True)
+    c = application.test_client()
+    r = c.post("/find-leads/import", data={"pick": "0"}, follow_redirects=False)
+    assert r.status_code == 302
+    assert "/find-leads" in r.headers["Location"]
+    # the pending search results must survive so a retry works
+    assert web_app._LEADS_LAST["leads"] == [{"Company": "X", "Email": "x@x.test"}]
+
+
 def test_toggle_moves_lead_between_pages(client):
     # Suppress the active lead -> it leaves /leads and appears on /leads/suppressed
     client.post("/leads/2/suppress", follow_redirects=True)

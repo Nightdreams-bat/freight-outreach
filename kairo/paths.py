@@ -66,21 +66,44 @@ def _seed_bundled_client_secret(dest: Path) -> None:
 
 
 def data_dir() -> Path:
-    """Folder that holds user data (config, credentials, logs, trackers)."""
+    """Folder that holds user data (config, credentials, logs, trackers).
+
+    Pure path resolution - it never creates the folder. Importing kairo.paths (or
+    anything that reads these path constants) must NOT resurrect a folder the user
+    deleted; only a real write does, via ensure_data_dir(). An hourly scheduled
+    task that merely imports the package therefore leaves a decommissioned install
+    alone."""
     global _DATA_DIR
     if _DATA_DIR is not None:
         return _DATA_DIR
     if FROZEN:
         d = _frozen_data_dir()
+    else:
+        d = Path(__file__).resolve().parent.parent
+    _DATA_DIR = d
+    return d
+
+
+_ENSURED = False
+
+
+def ensure_data_dir() -> Path:
+    """Create the data folder (and, for frozen builds, migrate old next-to-exe
+    files + seed the bundled OAuth client) if it isn't there yet. Call this once
+    from a real write entry point - app startup, a CLI action that writes - not
+    at import time."""
+    global _ENSURED
+    d = data_dir()
+    if _ENSURED:
+        return d
+    if FROZEN:
         try:
             d.mkdir(parents=True, exist_ok=True)
             _migrate_from_exe_dir(d)
             _seed_bundled_client_secret(d)
         except OSError:
             pass
-    else:
-        d = Path(__file__).resolve().parent.parent
-    _DATA_DIR = d
+    _ENSURED = True
     return d
 
 

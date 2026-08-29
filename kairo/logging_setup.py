@@ -9,8 +9,12 @@ def get_logger(name):
     if not logger.handlers:
         logger.setLevel(logging.INFO)
 
+        try:
+            LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            pass
         file_handler = RotatingFileHandler(
-            LOG_PATH, maxBytes=1_000_000, backupCount=3, encoding="utf-8"
+            LOG_PATH, maxBytes=1_000_000, backupCount=3, encoding="utf-8", delay=True
         )
         file_handler.setFormatter(
             logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")

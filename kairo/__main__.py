@@ -51,7 +51,18 @@ def main(argv=None):
     if "--selfcheck" in argv:
         _selfcheck()
         return
-    elif "--web" in argv:
+
+    # The hourly scheduled tasks (--reminders / --replies) must NOT resurrect the
+    # data folder on a PC where Kairo was uninstalled or never set up. If there's
+    # no config, there's nothing to do - stay quiet and exit clean.
+    if ("--reminders" in argv or "--replies" in argv) and not _is_configured():
+        print("Kairo is not configured on this PC - skipping the scheduled run.")
+        return
+
+    from kairo.paths import ensure_data_dir
+    ensure_data_dir()
+
+    if "--web" in argv:
         from kairo.web.app import main as run
         run()
         return
@@ -80,6 +91,11 @@ def main(argv=None):
     else:
         from kairo.desktop import run_desktop
         run_desktop()
+
+
+def _is_configured():
+    from kairo.paths import CONFIG_PATH
+    return CONFIG_PATH.exists()
 
 
 def _selfcheck():

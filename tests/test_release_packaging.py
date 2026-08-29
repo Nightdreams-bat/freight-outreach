@@ -21,9 +21,12 @@ def test_version_is_semver():
 @pytest.fixture
 def reset_paths():
     saved = paths._DATA_DIR
+    saved_ensured = paths._ENSURED
     paths._DATA_DIR = None
+    paths._ENSURED = False
     yield
     paths._DATA_DIR = saved
+    paths._ENSURED = saved_ensured
 
 
 def test_frozen_data_dir_is_appdata_kairo(monkeypatch):
@@ -39,6 +42,11 @@ def test_frozen_data_dir_uses_appdata(monkeypatch, reset_paths, tmp_path):
     monkeypatch.setattr(paths.sys, "executable", str(tmp_path / "Programs" / "Kairo" / "Kairo.exe"))
     d = paths.data_dir()
     assert d == appdata / "Kairo"
+    # data_dir() only resolves the path - it must NOT create the folder, or a
+    # background import would resurrect a folder the user deleted.
+    assert not d.exists()
+    # ensure_data_dir() is the one that creates it, on a real write entry point.
+    assert paths.ensure_data_dir() == d
     assert d.is_dir()
 
 

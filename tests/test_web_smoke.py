@@ -314,6 +314,34 @@ def test_find_leads_where_defaults_to_bucuresti(client):
     assert 'value="București"' in body
 
 
+def test_find_leads_search_keeps_results_when_the_sheet_is_missing(client, monkeypatch):
+    from kairo.excel_store import ExcelFileMissing
+
+    cfg = dict(BASE_CFG)
+    cfg["excel_path"] = "gone.xlsx"
+    monkeypatch.setattr(web_app, "load_config", lambda: dict(cfg))
+    monkeypatch.setattr(web_app.lead_sourcing, "search_businesses", lambda what, where, **k: [
+        {"Company": "HasMail SRL", "Email": "a@hasmail.test", "Website": "", "Phone": "", "Address": ""},
+    ])
+    monkeypatch.setattr(web_app.lead_sourcing, "enrich", lambda b, **k: b)
+
+    def missing(*a, **k):
+        raise ExcelFileMissing("gone.xlsx is not on this PC")
+
+    monkeypatch.setattr(web_app, "ExcelStore", missing)
+
+    client.post("/find-leads/search", data={"what": "x", "where": "București"})
+    _wait_for_search(client)
+
+    # results are kept for a manual retry, nothing auto-imported, summary explains
+    assert [l["Company"] for l in web_app._LEADS_LAST["leads"]] == ["HasMail SRL"]
+    assert web_app._LEADS_LAST["autoadded"] == []
+    assert web_app._LEADS_JOB["write_blocked"] is True
+    assert "Settings" in web_app._LEADS_JOB["summary"]
+    body = client.get("/find-leads").get_data(as_text=True)
+    assert "HasMail SRL" in body  # still importable once the path is fixed
+
+
 def test_cross_origin_post_is_rejected(client):
     r = client.post("/blocklist/domain", data={"domain": "x.com"},
                     headers={"Origin": "http://evil.example"})

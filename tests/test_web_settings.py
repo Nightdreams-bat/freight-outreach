@@ -93,6 +93,28 @@ def test_settings_saves_valid_excel_path(client, tmp_path, monkeypatch):
     assert b"Leads file linked" in r.data
 
 
+def test_resaving_the_same_path_does_not_recreate_a_deleted_file(client, tmp_path, monkeypatch):
+    # The path box is pre-filled with the current path; re-saving Settings after
+    # the operator deleted the file must NOT rebuild it (v0.1.3 intent).
+    created = []
+    monkeypatch.setattr(web_app, "ExcelStore",
+                        lambda *a, **k: created.append(a) or client.store_state["store"])
+    current = client.cfg["excel_path"]  # tmp_path / "leads.xlsx", never created on disk
+    r = client.post("/settings", data={"excel_path": current}, follow_redirects=True)
+    assert created == []
+    assert b"recreate a deleted leads file" in r.data
+
+
+def test_settings_creates_file_only_when_path_actually_changes(client, tmp_path, monkeypatch):
+    created = []
+    monkeypatch.setattr(web_app, "ExcelStore",
+                        lambda *a, **k: created.append(a[0]) or client.store_state["store"])
+    monkeypatch.setattr(web_app, "sheet_headers", lambda path: [])
+    new_path = tmp_path / "brand new.xlsx"
+    client.post("/settings", data={"excel_path": str(new_path)}, follow_redirects=True)
+    assert created == [str(new_path)]
+
+
 def test_settings_rejects_bogus_excel_path(client):
     before = client.cfg["excel_path"]
     r = client.post("/settings", data={"excel_path": r"C:\nope\missing\leads.txt"},
