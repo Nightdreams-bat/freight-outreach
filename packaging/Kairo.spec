@@ -77,7 +77,10 @@ a = Analysis(
         # site-packages and PyInstaller would otherwise vacuum them in (~hundreds of MB).
         "matplotlib", "numpy", "pandas", "scipy", "PIL", "pygame",
         "IPython", "jedi", "parso", "notebook", "zmq", "pytest",
-        "tkinter.test", "test", "unittest",
+        "tkinter.test",
+        # NB: do NOT exclude "unittest" - a transitive dep of googleapiclient
+        # imports unittest.mock under the frozen loader and the build's
+        # --selfcheck fails ("No module named 'unittest'"). It's small stdlib.
     ],
     noarchive=False,
 )
